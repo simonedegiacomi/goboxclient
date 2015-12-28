@@ -1,5 +1,7 @@
 package mydb;
 
+import org.json.JSONObject;
+
 import java.sql.Date;
 
 /**
@@ -182,6 +184,17 @@ public class DBFile {
 
     public void setVisible(boolean visible) {
         this.visible = visible;
+    }
+
+    public JSONObject toJSON () {
+        JSONObject obj = new JSONObject();
+        try {
+            obj.put("name", name);
+            obj.put("id", ID);
+            return obj;
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     @Override

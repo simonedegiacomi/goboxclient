@@ -1,6 +1,7 @@
 package mydb;
 
 import java.sql.*;
+import java.util.ArrayList;
 
 
 public class MyDB {
@@ -93,6 +94,24 @@ public class MyDB {
         newFile.setID(lastInsertedId);
     }
 
+    public DBFile[] getChildrenByFather (long fatherID) throws NotDirectoryException {
+        try {
+            PreparedStatement stmt = db.prepareStatement("SELECT * FROM file WHERE father_ID = ? ORDER BY name");
+            stmt.setLong(1, fatherID);
+            ResultSet sqlResults = stmt.executeQuery();
+            ArrayList<DBFile> results = new ArrayList<>();
+            while(sqlResults.next()) {
+                DBFile temp = new DBFile(sqlResults.getInt("ID"), fatherID,
+                        sqlResults.getString("name"), sqlResults.getBoolean("is_directory"));
+                temp.setSize(sqlResults.getLong("size"));
+                temp.setCreationDate(sqlResults.getDate("creation"));
+                temp.setLastUpdateDate(sqlResults.getDate("last_update"));
+                results.add(temp);
+            }
 
-
+            return results.toArray(new DBFile[results.size()]);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
 }
