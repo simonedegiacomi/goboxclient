@@ -39,7 +39,7 @@ public class DBFile {
      * Indicate if the file exist or if is
      * hidden because ws deleted.
      */
-    private boolean visible;
+    private boolean visible = true;
 
     /**
      * Size of the file in bytes
@@ -189,8 +189,14 @@ public class DBFile {
     public JSONObject toJSON () {
         JSONObject obj = new JSONObject();
         try {
+            obj.put("fatherId", fatherID);
             obj.put("name", name);
             obj.put("id", ID);
+            obj.put("isDirectory", isDirectory);
+            obj.put("hide", !visible);
+            //obj.put("creation", creationDate);
+            //obj.put("lastUpdate", lastUpdateDate);
+            obj.put("size", size);
             return obj;
         } catch (Exception ex) {
             return null;

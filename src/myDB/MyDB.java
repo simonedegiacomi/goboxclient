@@ -2,10 +2,13 @@ package mydb;
 
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 
 public class MyDB {
 
+    private static final Logger log = Logger.getLogger(MyDB.class.getName());
     private final Connection db;
 
     /**
@@ -19,15 +22,15 @@ public class MyDB {
     public MyDB (String path) throws Exception {
         // Connect to the database
         db = DriverManager.getConnection("jdbc:sqlite:" + path);
+        log.info("Connected to local SQLite database");
         try {
             // Initialize the tables
             initDatabase();
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (Exception ex) {
+            log.log(Level.SEVERE, ex.toString(), ex);
             // If there is any exeption with the initialization
             // close the connection
             db.close();
-            throw e;
         }
         db.setAutoCommit(true);
     }
@@ -38,6 +41,7 @@ public class MyDB {
      */
     public void close () throws SQLException {
         db.close();
+        log.info("Database disconnected");
     }
 
     /**
@@ -46,6 +50,7 @@ public class MyDB {
      * the tables fails.
      */
     private void initDatabase () throws Exception {
+        log.fine("The database is empty");
         // Prepare the statement
         Statement stmt = db.createStatement();
 
@@ -56,12 +61,14 @@ public class MyDB {
                 "father_ID int unsigned," +
                 "is_directory tinyint not null," +
                 "hide tinyint not null DEFAULT 0," +
+                "size int unsigned," +
                 "creation date not null," +
                 "last_update date not null)");
 
         // And commit the changes
         if (!db.getAutoCommit())
             db.commit();
+        log.fine("Database tables created.");
     }
 
     /**
@@ -92,6 +99,8 @@ public class MyDB {
 
         // Set the ID in the file
         newFile.setID(lastInsertedId);
+
+        log.info("New file inserted on the database");
     }
 
     public DBFile[] getChildrenByFather (long fatherID) throws NotDirectoryException {
@@ -111,6 +120,24 @@ public class MyDB {
 
             return results.toArray(new DBFile[results.size()]);
         } catch (Exception ex) {
+            log.log(Level.SEVERE, ex.toString(), ex);
+            return null;
+        }
+    }
+
+    public DBFile getFileById (long id) {
+        try {
+            if (id == 0) {
+                return new DBFile("root", 0 ,true);
+            }
+            PreparedStatement stmt = db.prepareStatement("SELECT * FROM file WHERE ID = ?");
+            stmt.setLong(1, id);
+            ResultSet res = stmt.executeQuery();
+            DBFile file = new DBFile (res.getLong("ID"), res.getLong("father_ID"), res.getString("name"), res.getBoolean("is_directory"));
+            file.setSize(res.getLong("size"));
+            return file;
+        } catch (Exception ex) {
+            log.log(Level.SEVERE, ex.toString(), ex);
             return null;
         }
     }

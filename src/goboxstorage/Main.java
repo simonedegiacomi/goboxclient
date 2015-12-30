@@ -2,22 +2,27 @@ package com.goboxstorage;
 
 import goboxstorage.Config;
 import goboxstorage.ConfigTool;
-import mydb.MyDB;
+import mydb.*;
 import webstorage.WebStorage;
+
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Main {
 
+    private static final Logger log = Logger.getLogger(Main.class.getName());
+
     public static void main(String[] args) {
         System.out.println("GoBoxStorage");
-        Config config = loadConfig();
 
         // Connect to the database
         try {
+            Config config = loadConfig();
+            log.fine("Configuration loaded");
             MyDB db = new MyDB("files.db");
             WebStorage storage = new WebStorage(config, db);
-
         } catch (Exception ex) {
-            ex.printStackTrace();
+            log.log(Level.WARNING, ex.toString(), ex);
         }
     }
 
@@ -26,6 +31,7 @@ public class Main {
             // Try to load the config
             return Config.load();
         } catch (Exception ex) {
+            log.fine("No config file found");
             // If something fails, it means that there is no config
             // file, so let's create a new config
 
@@ -35,17 +41,18 @@ public class Main {
             newConfig.setProperty("SERVER_LOGIN", "https://goboxserver-simonedegiacomi.c9users.io/api/user/login");
             newConfig.setProperty("SERVER_CHECK", "https://goboxserver-simonedegiacomi.c9users.io/api/user/check");
 
-            System.out.println("No configuration found.\n");
             // First ask the user credentials and where store the files
+            log.info("Stating configuration tool");
             ConfigTool tool = new ConfigTool(newConfig);
             // Now try to connect
             try {
                 WebStorage.login(newConfig, tool.getPassword());
-                System.out.println(newConfig.getProperty("token"));
+                log.info("Credentials verified");
                 newConfig.save();
+                log.fine("New configuration created");
                 return newConfig;
             } catch (Exception e) {
-                e.printStackTrace();
+                log.log(Level.SEVERE, e.toString(), e);
                 return null;
             }
         }
