@@ -3,13 +3,10 @@ package webstorage;
 import MyWS.MyWSClient;
 import MyWS.WSEvent;
 import MyWS.WSQuery;
-import goboxstorage.Config;
+import goboxclient.Config;
 import mydb.DBFile;
 import mydb.MyDB;
-import org.java_websocket.client.WebSocketClient;
-import org.java_websocket.handshake.ServerHandshake;
 import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 import utils.EasyHttps;
 

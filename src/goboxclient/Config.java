@@ -1,4 +1,4 @@
-package goboxstorage;
+package goboxclient;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;

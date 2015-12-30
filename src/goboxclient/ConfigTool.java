@@ -1,4 +1,4 @@
-package goboxstorage;
+package goboxclient;
 
 import javax.swing.*;
 import java.awt.*;

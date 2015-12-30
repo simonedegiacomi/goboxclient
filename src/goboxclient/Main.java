@@ -1,7 +1,7 @@
 package com.goboxstorage;
 
-import goboxstorage.Config;
-import goboxstorage.ConfigTool;
+import goboxclient.Config;
+import goboxclient.ConfigTool;
 import mydb.*;
 import webstorage.WebStorage;
 
