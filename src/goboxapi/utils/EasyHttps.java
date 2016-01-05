@@ -1,4 +1,4 @@
-package utils;
+package goboxapi.utils;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -20,7 +20,7 @@ public class EasyHttps {
         // Set the method
         conn.setRequestMethod("POST");
         conn.setDoInput(true);
-        // If the data is specified, send it
+        // If the data is specified, sendEvent it
         if (data != null) {
             // Set the output true
             conn.setDoOutput(true);

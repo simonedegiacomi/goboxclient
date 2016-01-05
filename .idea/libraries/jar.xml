@@ -1,0 +1,11 @@
+<component name="libraryTable">
+  <library name="jar">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/out/artifacts/goboxstorage_jar/lib/java-json.jar!/" />
+      <root url="jar://$PROJECT_DIR$/out/artifacts/goboxstorage_jar/lib/Java-WebSocket-1.3.0.jar!/" />
+      <root url="jar://$PROJECT_DIR$/out/artifacts/goboxstorage_jar/lib/sqlite-jdbc-3.8.11.2.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

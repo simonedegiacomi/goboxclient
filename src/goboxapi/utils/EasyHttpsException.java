@@ -1,4 +1,4 @@
-package utils;
+package goboxapi.utils;
 
 /**
  * Created by Simone on 27/12/2015.

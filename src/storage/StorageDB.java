@@ -1,14 +1,18 @@
-package mydb;
+package storage;
+
+import goboxapi.GBFile;
 
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 
-public class MyDB {
+public class StorageDB {
 
-    private static final Logger log = Logger.getLogger(MyDB.class.getName());
+    private static final Logger log = Logger.getLogger(StorageDB.class.getName());
     private final Connection db;
 
     /**
@@ -19,7 +23,7 @@ public class MyDB {
      * initialization. If any exception are trowed,
      * the object shouldn't be used
      */
-    public MyDB (String path) throws Exception {
+    public StorageDB(String path) throws Exception {
         // Connect to the database
         db = DriverManager.getConnection("jdbc:sqlite:" + path);
         log.info("Connected to local SQLite database");
@@ -58,12 +62,13 @@ public class MyDB {
         stmt.execute("CREATE TABLE IF NOT EXISTS file (" +
                 "ID integer PRIMARY KEY AUTOINCREMENT NOT NULL," +
                 "name varchar(255) not null," +
-                "father_ID int unsigned," +
+                "father_ID integer," +
+                "hash byte(20)," +
                 "is_directory tinyint not null," +
-                "hide tinyint not null DEFAULT 0," +
-                "size int unsigned," +
+                "size integer," +
                 "creation date not null," +
                 "last_update date not null)");
+
 
         // And commit the changes
         if (!db.getAutoCommit())
@@ -72,14 +77,59 @@ public class MyDB {
     }
 
     /**
+     * Find the pather of the
+     * @param file
+     */
+    public void findFather (GBFile file) {
+        // Just need to find the father, so get the path in a list
+        List<String> path = file.getListPath();
+        int length = path.size();
+        if (length <= 1) {
+            file.setFatherID(GBFile.ROOT_ID);
+            return ;
+        }
+        try {
+            PreparedStatement stmt = db.prepareStatement("SELECT ID FROM file WHERE name = ?");
+            stmt.setString(1, path.get(length - 2));
+            file.setFatherID(stmt.executeQuery().getLong("ID"));
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    public void findPath (GBFile file) {
+        LinkedList<String> path = new LinkedList<>();
+        try {
+            PreparedStatement stmt = db.prepareStatement("SELECT name, father_ID FROM file WHERE ID = ?");
+            long fatherId = file.getFatherID();
+            while (fatherId != GBFile.ROOT_ID) {
+                stmt.setLong(1, fatherId);
+                ResultSet res = stmt.executeQuery();
+                fatherId = res.getLong("father_ID");
+                path.add(0, res.getString("name"));
+                res.close();
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+
+    /**
      * Insert a new file in the database
      * @param newFile New file to insert. The object will be
      *                filled with the new information obtained
      *                inserting the data (the ID)
      * @throws Exception Exception throwed during the insertion
      */
-    public void insertFile (DBFile newFile) throws Exception {
-        // Prepare the statement
+    public void insertFile (GBFile newFile) throws Exception {
+        // If the file doesn't know his father, let's find him
+        if (newFile.getFatherID() == GBFile.UNKNOW_FATHER)
+            findFather(newFile);
+        // If the file doesn't know his pathString, let's find it
+        if(newFile.getPath() == null)
+            findPath(newFile);
+        // Prepare the statement to insert the file
         PreparedStatement stmt = db.prepareStatement("INSERT INTO FILE" +
                 "(name, father_ID, is_directory, creation, last_update)" +
                 "VALUES (?, ?, ?, ?, ?)");
@@ -88,8 +138,8 @@ public class MyDB {
         stmt.setString(1, newFile.getName());
         stmt.setLong(2, newFile.getFatherID());
         stmt.setBoolean(3, newFile.isDirectory());
-        stmt.setDate(4, newFile.getCreationDate());
-        stmt.setDate(5, newFile.getLastUpdateDate());
+        stmt.setLong(4, newFile.getCreationDate());
+        stmt.setLong(5, newFile.getLastUpdateDate());
 
         // Execute the update
         stmt.executeUpdate();
@@ -103,37 +153,56 @@ public class MyDB {
         log.info("New file inserted on the database");
     }
 
-    public DBFile[] getChildrenByFather (long fatherID) throws NotDirectoryException {
+    public void updateFile (GBFile updatedFile) {
+        try {
+            PreparedStatement stmt = db.prepareStatement("UPDATE file WHERE ID = ?" +
+                    "SET name = ? SET last_update = ? SET size = ?");
+        } catch (Exception ex) {
+
+        }
+    }
+
+    public void removeFile (GBFile fileToRemove) {
+        try {
+            PreparedStatement stmt = db.prepareStatement("DELETE FROM file WHERE ID = ?");
+            stmt.setLong(1, fileToRemove.getID());
+            stmt.executeUpdate();
+        } catch (Exception ex) {
+
+        }
+    }
+
+    public GBFile[] getChildrenByFather (long fatherID) throws StorageException {
         try {
             PreparedStatement stmt = db.prepareStatement("SELECT * FROM file WHERE father_ID = ? ORDER BY name");
             stmt.setLong(1, fatherID);
             ResultSet sqlResults = stmt.executeQuery();
-            ArrayList<DBFile> results = new ArrayList<>();
+            ArrayList<GBFile> results = new ArrayList<>();
             while(sqlResults.next()) {
-                DBFile temp = new DBFile(sqlResults.getInt("ID"), fatherID,
+                GBFile temp = new GBFile(sqlResults.getInt("ID"), fatherID,
                         sqlResults.getString("name"), sqlResults.getBoolean("is_directory"));
                 temp.setSize(sqlResults.getLong("size"));
-                temp.setCreationDate(sqlResults.getDate("creation"));
-                temp.setLastUpdateDate(sqlResults.getDate("last_update"));
+                temp.setCreationDate(sqlResults.getLong("creation"));
+                temp.setLastUpdateDate(sqlResults.getLong("last_update"));
                 results.add(temp);
             }
 
-            return results.toArray(new DBFile[results.size()]);
+            return results.toArray(new GBFile[results.size()]);
         } catch (Exception ex) {
             log.log(Level.SEVERE, ex.toString(), ex);
             return null;
         }
     }
 
-    public DBFile getFileById (long id) {
+    public GBFile getFileById (long id) {
         try {
             if (id == 0) {
-                return new DBFile("root", 0 ,true);
+                return new GBFile("root", 0 ,true);
             }
             PreparedStatement stmt = db.prepareStatement("SELECT * FROM file WHERE ID = ?");
             stmt.setLong(1, id);
             ResultSet res = stmt.executeQuery();
-            DBFile file = new DBFile (res.getLong("ID"), res.getLong("father_ID"), res.getString("name"), res.getBoolean("is_directory"));
+            GBFile file = new GBFile (res.getLong("ID"), res.getLong("father_ID"), res.getString("name"), res.getBoolean("is_directory"));
             file.setSize(res.getLong("size"));
             return file;
         } catch (Exception ex) {

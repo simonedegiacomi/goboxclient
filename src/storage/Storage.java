@@ -1,143 +1,91 @@
-package webstorage;
+package storage;
 
-import MyWS.MyWSClient;
-import MyWS.WSEvent;
-import MyWS.WSQuery;
-import goboxclient.Config;
-import mydb.DBFile;
-import mydb.MyDB;
+import goboxapi.authentication.Auth;
+import goboxapi.GBFile;
+import goboxapi.MyWS.MyWSClient;
+import goboxapi.MyWS.WSEvent;
+import goboxapi.MyWS.WSQueryAnswer;
+import configuration.Config;
+import goboxapi.client.Client;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import utils.EasyHttps;
+import goboxapi.utils.EasyHttps;
 
 import javax.net.ssl.HttpsURLConnection;
 import java.io.*;
 import java.net.URI;
 import java.net.URL;
-import java.util.HashMap;
+import java.nio.file.Files;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class WebStorage {
+public class Storage {
 
-    private static final Logger log = Logger.getLogger(WebStorage.class.getName());
+    private static final Logger log = Logger.getLogger(Storage.class.getName());
 
     private MyWSClient mainServer;
     private final Config config;
-    private final MyDB db;
-    private HashMap<String, EventListener> events;
+    private final StorageDB db;
+    private final String PATH = "files\\";
 
-    public WebStorage (Config config, MyDB db) {
-        this.config = config;
-        this.db = db;
-        // Connect to the main server
+    public Storage(Auth auth) throws StorageException {
+        this.config = Config.getInstance();
 
-        // Check if the token is still valid
         try {
-            check();
+            this.db = new StorageDB("config/gobox.db");
+        } catch (Exception ex) {
+            log.log(Level.SEVERE, ex.toString(), ex);
+            throw new StorageException("Cannot connect to the local database");
+        }
+
+        // Try to connect ot the main server to check if the
+        // token in the config is still valid
+        try {
+            JSONObject response = EasyHttps.post("https://goboxserver-simonedegiacomi.c9users.io/api/user/check",
+                    null, auth.getToken());
+            if (!response.getString("state").equals("valid"))
+                throw  new StorageException("Invalid token.");
+            // Save the new token in the config
+            auth.setToken(response.getString("newOne"));
+            config.setProperty("token", response.getString("newOne"));
             config.save();
         } catch (Exception ex) {
             log.log(Level.SEVERE, ex.toString(), ex);
+            throw new StorageException("Cannot verify the identity of the token");
         }
-        // Open the ws
+
+        // Now the token is valid, so we can connect to the main server through ws
         try {
-            connect();
-            System.out.println("WS connected");
+            mainServer = new MyWSClient(new URI("ws://goboxserver-simonedegiacomi.c9users.io/api/ws/storage"));
         } catch (Exception ex) {
-            log.log(Level.SEVERE, ex.toString(), ex);
+            throw new StorageException("Cannot connect to the main server through web socket");
         }
-    }
-
-    /**
-     * Logic to the server with the username in the config
-     * and the specified password. This method block the
-     * thread utnil the http call in complete. Once that
-     * the response is retrived, the token is saved in the
-     * config, othrerwise an exception is throwed.
-     * @param config Config
-     * @param password Password of the account
-     * @throws Exception Exception
-     */
-    public static void login (Config config, char[] password) throws Exception {
-        // Create the auth json
-        JSONObject auth = new JSONObject();
-        auth.put("username", config.getProperty("username"));
-        auth.put("password", new String(password));
-        auth.put("type", "S");
-        // Make the request
-        log.info("Checking credentials...");
-        JSONObject response = EasyHttps.post(config.getProperty("SERVER_LOGIN"),
-                auth, null);
-        config.setProperty("token", response.getString("token"));
-    }
-
-    /**
-     * Try to login with the token saved in the config
-     */
-    private void check () throws Exception {
-        System.out.println("Check called with:" + config.getProperty("token"));
-        JSONObject response = EasyHttps.post(config.getProperty("SERVER_CHECK"),
-                null, config.getProperty("token"));
-        if (response.getString("state").equals("valid"))
-            config.setProperty("token", response.getString("newOne"));
-        //else throw new Exception
-        // TODO: Create this kind of exception, relative
-        // to the account
-    }
-
-    /**
-     * Connect to the main server via ws
-     */
-    public void connect () throws Exception {
-        // Create the uri for the connection
-        URI serverUri = new URI(config.getProperty("SERVER_WS"));
-        mainServer = new MyWSClient(serverUri);
         mainServer.on("open", new WSEvent() {
             @Override
             public void onEvent(JSONObject data) {
-                System.out.println("WS opened");
-                try {
-                    JSONObject auth = new JSONObject();
-                    auth.put("token", config.getProperty("token"));
-                    mainServer.send("authentication", auth, true);
-                    System.out.println("Authentication sent");
-                } catch (Exception ex) {
-                    log.log(Level.SEVERE, ex.toString(), ex);
-                }
+                mainServer.sendEvent("authentication", auth.toJSON(), true);
+                // When the connection is established and the authentication
+                // object sent, assign the events
                 assignEvent();
-            }
-        });
-
-        mainServer.on("close", new WSEvent() {
-            @Override
-            public void onEvent(JSONObject data) {
-                System.out.println("WS -> Close");
-            }
-        });
-
-        mainServer.on("error", new WSEvent() {
-            @Override
-            public void onEvent(JSONObject data) {
-                System.out.println("WS error");
             }
         });
     }
 
     private void assignEvent () {
-
-        mainServer.onQuery("listFile", new WSQuery() {
+        // List the file inside a directory
+        mainServer.onQuery("listFile", new WSQueryAnswer() {
             @Override
             public JSONObject onQuery(JSONObject data) {
                 log.info("ListFile query");
                 try {
                     long fatherId = data.getLong("father");
                     // add information about the folder
-                    DBFile father = db.getFileById(fatherId);
+                    GBFile father = db.getFileById(fatherId);
                     JSONObject response = father.toJSON();
-                    DBFile files[] = db.getChildrenByFather(fatherId);
+                    GBFile files[] = db.getChildrenByFather(fatherId);
                     JSONArray jsonFiles = new JSONArray();
                     if (files != null)
-                        for(DBFile file : files)
+                        for(GBFile file : files)
                             jsonFiles.put(file.toJSON());
                     response.put("children", jsonFiles);
                     return response;
@@ -148,14 +96,17 @@ public class WebStorage {
             }
         });
 
-        mainServer.onQuery("createFolder", new WSQuery() {
+        // Create new folder event
+        mainServer.onQuery("createFolder", new WSQueryAnswer() {
             @Override
             public JSONObject onQuery(JSONObject data) {
                 log.info("CreateFolder query");
                 JSONObject response = new JSONObject();
                 try {
-                    DBFile newFolder = new DBFile(data.getString("name"), data.getLong("father"), true);
+                    GBFile newFolder = new GBFile(data);
                     db.insertFile(newFolder);
+                    // Create the real file
+                    Files.createDirectory(newFolder.toPath());
                     response.put("newFolderId", newFolder.getID());
                     response.put("created", true);
                     return response;
@@ -166,6 +117,8 @@ public class WebStorage {
             }
         });
 
+        // Event that indicates that a client wants to upload a file.
+        // i need to make an http request to the main server to get the file
         mainServer.on("comeToGetTheFile", new WSEvent() {
             @Override
             public void onEvent(JSONObject data) {
@@ -175,11 +128,14 @@ public class WebStorage {
                     String uploadKey = data.getString("uploadKey");
                     // Get the name of the file
                     String fileName = data.getString("name");
-                    // And the id of the folder that will contain the file
+                    // The id of the folder that will contain the file
                     long father = data.getLong("father");
                     // Insert the file in the database
-                    DBFile dbFile = new DBFile(fileName, father, false);
+                    GBFile dbFile = new GBFile(fileName, father, false);
+                    // And set the other informations
+                    dbFile.setSize(data.getLong("size"));
                     db.insertFile(dbFile);
+
                     // Make the https request to the main server
                     URL url = new URL("https://goboxserver-simonedegiacomi.c9users.io/api/transfer/fromClient");
                     HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
@@ -205,9 +161,10 @@ public class WebStorage {
                     DataInputStream fromConnection = new DataInputStream(conn.getInputStream());
 
                     // Create the stream to the disk
-                    DataOutputStream toDisk = new DataOutputStream(new FileOutputStream(String.valueOf(dbFile.getID())));
+                    DataOutputStream toDisk = new DataOutputStream(new FileOutputStream(dbFile.getPath()));
+
                     // Create a buffer to read the file
-                    byte[] buffer = new byte[256];
+                    byte[] buffer = new byte[1024];
                     int read = 0;
                     while((read = fromConnection.read(buffer)) > 0)
                         toDisk.write(buffer, 0, read);
@@ -220,6 +177,7 @@ public class WebStorage {
                 }
             }
         });
+
         mainServer.on("sendMeTheFile", new WSEvent() {
             @Override
             public void onEvent(JSONObject data) {
@@ -228,13 +186,13 @@ public class WebStorage {
                     String downloadKey = data.getString("downloadKey");
                     long file = data.getLong("id");
                     // get the file from the database
-                    DBFile dbFile = db.getFileById(file);
+                    GBFile dbFile = db.getFileById(file);
                     URL url = new URL("");
                     HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
                     conn.setDoOutput(true);
                     DataOutputStream toServer = new DataOutputStream(conn.getOutputStream());
                     // Open the file
-                    DataInputStream fromFile = new DataInputStream(new FileInputStream(""));
+                    DataInputStream fromFile = new DataInputStream(new FileInputStream(dbFile.getPath()));
                     int read = 0;
                     byte[] buffer = new byte[256];
                     while((read = fromFile.read(buffer)) > 0)
@@ -248,5 +206,9 @@ public class WebStorage {
                 }
             }
         });
+    }
+
+    public Client getInternalClient () {
+        return new InternalClient(db);
     }
 }

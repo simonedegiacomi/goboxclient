@@ -1,4 +1,4 @@
-package MyWS;
+package goboxapi.MyWS;
 
 import org.json.JSONObject;
 
