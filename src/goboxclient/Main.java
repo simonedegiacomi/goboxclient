@@ -1,13 +1,12 @@
 package webstorage;
 
-import configuration.*;
+import configuration.Config;
+import configuration.ConfigTool;
 import goboxapi.authentication.Auth;
-import goboxapi.authentication.AuthException;
-import goboxapi.client.Client;
 import goboxapi.client.StandardClient;
-import goboxclient.Sync;
+import goboxapi.client.Sync;
 import javafx.scene.control.Alert;
-import storage.*;
+import storage.Storage;
 
 import java.awt.*;
 import java.util.logging.Logger;
@@ -24,13 +23,14 @@ public class Main {
             config.load();
             afterConfigLoaded();
         } catch (Exception ex) {
+
             log.fine("No config file found");
             // If something fails, it means that there is no config
             // file, so let's create a new config
             ConfigTool tool = ConfigTool.getConfigTool(config, new ConfigTool.EventListener() {
                 @Override
                 public void onConfigComplete() {
-                    // initialize some variables in the coonfig
+                    // initialize some variables in the config
                     config.setProperty("path", "files/");
                     afterConfigLoaded();
                 }
@@ -80,9 +80,9 @@ public class Main {
         try {
             // start event listener and http server
             Storage storage = new Storage(auth);
-            System.out.println("Storage created");
+
             // start Sync
-            //Sync sync = new Sync(storage.getInternalClient());
+            Sync sync = new Sync(storage.getInternalClient());
         } catch (Exception ex) {
             ex.printStackTrace();
             System.exit(-1);

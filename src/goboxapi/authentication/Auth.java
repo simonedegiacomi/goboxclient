@@ -1,8 +1,8 @@
 package goboxapi.authentication;
 
+import goboxapi.utils.EasyHttps;
 import org.json.JSONException;
 import org.json.JSONObject;
-import goboxapi.utils.EasyHttps;
 
 /**
  * The object of this class contains the credentials

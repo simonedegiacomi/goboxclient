@@ -2,9 +2,10 @@ package storage;
 
 import goboxapi.GBFile;
 import goboxapi.client.Client;
-import goboxapi.client.ClientEventListener;
+import goboxapi.client.SyncEventListener;
 
 import java.io.InputStream;
+import java.io.OutputStream;
 
 /**
  * Created by Simone on 02/01/2016.
@@ -20,6 +21,16 @@ public class InternalClient implements Client {
     @Override
     public InputStream getFile(GBFile file) {
         return null;
+    }
+
+    @Override
+    public void getFile(GBFile file, OutputStream dst) {
+
+    }
+
+    @Override
+    public void uploadFile(GBFile file, InputStream stream) {
+
     }
 
     @Override
@@ -41,6 +52,11 @@ public class InternalClient implements Client {
     }
 
     @Override
+    public void updateFile(GBFile file, InputStream file2) {
+
+    }
+
+    @Override
     public void updateFile(GBFile file) {
         try {
             db.updateFile(file);
@@ -50,7 +66,12 @@ public class InternalClient implements Client {
     }
 
     @Override
-    public void assignEventListener(ClientEventListener listener) {
+    public void setSyncEventListener (SyncEventListener listener) {
+
+    }
+
+    @Override
+    public void assignEventListener (SyncEventListener listener) {
 
     }
 }

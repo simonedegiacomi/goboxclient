@@ -1,6 +1,7 @@
 package storage;
 
 import goboxapi.GBFile;
+import goboxapi.client.SyncEvent;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -13,7 +14,11 @@ import java.util.logging.Logger;
 public class StorageDB {
 
     private static final Logger log = Logger.getLogger(StorageDB.class.getName());
-    private final Connection db;
+
+    /**
+     * Connection to the database
+     */
+    private Connection db;
 
     /**
      * Create a new database and open the connection
@@ -69,11 +74,17 @@ public class StorageDB {
                 "creation date not null," +
                 "last_update date not null)");
 
+        // Create the file table
+        stmt.execute("CREATE TABLE IF NOT EXISTS event (" +
+                "ID integer PRIMARY KEY AUTOINCREMENT NOT NULL," +
+                "file_ID integer not null," +
+                "date integer," +
+                ")");
 
         // And commit the changes
         if (!db.getAutoCommit())
             db.commit();
-        log.fine("Database tables created.");
+        log.fine("Database tables initialized.");
     }
 
     /**
@@ -83,17 +94,22 @@ public class StorageDB {
     public void findFather (GBFile file) {
         // Just need to find the father, so get the path in a list
         List<String> path = file.getListPath();
-        int length = path.size();
-        if (length <= 1) {
+
+        // In case of the file is in the root
+        if (path.size() <= 1) {
+
+            // Set the root id father
             file.setFatherID(GBFile.ROOT_ID);
             return ;
         }
+
+        // Otherwise query the database
         try {
             PreparedStatement stmt = db.prepareStatement("SELECT ID FROM file WHERE name = ?");
-            stmt.setString(1, path.get(length - 2));
+            stmt.setString(1, path.get(path.size() - 2));
             file.setFatherID(stmt.executeQuery().getLong("ID"));
         } catch (Exception ex) {
-            ex.printStackTrace();
+            log.log(Level.WARNING, ex.toString(), ex);
         }
     }
 
@@ -122,7 +138,7 @@ public class StorageDB {
      *                inserting the data (the ID)
      * @throws Exception Exception throwed during the insertion
      */
-    public void insertFile (GBFile newFile) throws Exception {
+    public SyncEvent insertFile (GBFile newFile) throws Exception {
         // If the file doesn't know his father, let's find him
         if (newFile.getFatherID() == GBFile.UNKNOW_FATHER)
             findFather(newFile);
@@ -151,6 +167,28 @@ public class StorageDB {
         newFile.setID(lastInsertedId);
 
         log.info("New file inserted on the database");
+
+        // Create the SyncEvent to return
+        SyncEvent event = new SyncEvent(SyncEvent.CREATE_FILE, newFile);
+
+        // And add it to the right db table
+        registerEvent(event);
+
+        return event;
+    }
+
+    private void registerEvent (SyncEvent event) {
+        try {
+            PreparedStatement stmt = db.prepareStatement("INSERT INTO event (file_ID, kind, date) VALUES (?,?,?)");
+            stmt.setLong(1, event.getRelativeFile().getID());
+            stmt.setInt(2, event.getKind());
+            // For now set this date
+            // TODO: implement real date
+            stmt.setLong(3, System.currentTimeMillis());
+            stmt.executeUpdate();
+        } catch (Exception ex) {
+            log.log(Level.WARNING, ex.toString(), ex);
+        }
     }
 
     public void updateFile (GBFile updatedFile) {
@@ -208,6 +246,14 @@ public class StorageDB {
         } catch (Exception ex) {
             log.log(Level.SEVERE, ex.toString(), ex);
             return null;
+        }
+    }
+
+    private remember (GBFile file, int action) {
+        try {
+            PreparedStatement stmt = db.prepareStatement("INSERT INTO event (file_ID, action, date) VALUES (?, ?, ?)");
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
     }
 }

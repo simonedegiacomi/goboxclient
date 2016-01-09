@@ -1,13 +1,10 @@
 package goboxclient;
 
-import com.sun.xml.internal.bind.api.impl.NameConverter;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
-import java.util.List;
 
 public class FileSystemWatcher extends Thread {
 

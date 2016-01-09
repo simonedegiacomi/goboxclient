@@ -1,15 +1,16 @@
 package storage;
 
-import goboxapi.authentication.Auth;
+import configuration.Config;
 import goboxapi.GBFile;
 import goboxapi.MyWS.MyWSClient;
 import goboxapi.MyWS.WSEvent;
 import goboxapi.MyWS.WSQueryAnswer;
-import configuration.Config;
+import goboxapi.authentication.Auth;
 import goboxapi.client.Client;
+import goboxapi.client.SyncEvent;
+import goboxapi.utils.EasyHttps;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import goboxapi.utils.EasyHttps;
 
 import javax.net.ssl.HttpsURLConnection;
 import java.io.*;
@@ -102,18 +103,36 @@ public class Storage {
             public JSONObject onQuery(JSONObject data) {
                 log.info("CreateFolder query");
                 JSONObject response = new JSONObject();
+
+                // I set created to false, so if the creation
+                // of the folder or the comunication with the
+                // database fails, the response sended contains
+                // the error
+                response.put("created", false);
                 try {
                     GBFile newFolder = new GBFile(data);
-                    db.insertFile(newFolder);
+                    // Insert the file and get the event
+                    SyncEvent event = db.insertFile(newFolder);
+
                     // Create the real file
                     Files.createDirectory(newFolder.toPath());
+
+                    // Then complete the response
+
                     response.put("newFolderId", newFolder.getID());
                     response.put("created", true);
-                    return response;
+
+                    // But first, send a broadcast message to advise the other
+                    // client that a new folder is created
+
+                    // The notification will contain the new file informations
+                    mainServer.sendEventBroadcast("newFile", event.toJSON());
                 } catch (Exception ex) {
                     log.log(Level.SEVERE, ex.toString(), ex);
-                    return null;
                 }
+
+                // Finally return the response
+                return response;
             }
         });
 
@@ -172,6 +191,19 @@ public class Storage {
                     toDisk.close();
                     fromConnection.close();
                     conn.disconnect();
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
+
+        mainServer.on("removeFile", new WSEvent() {
+
+            @Override
+            public void onEvent(JSONObject data) {
+                try {
+                    GBFile fileToRemove = new GBFile(data);
+                    db.removeFile(fileToRemove);
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }

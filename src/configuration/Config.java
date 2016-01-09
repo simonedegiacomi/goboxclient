@@ -1,5 +1,7 @@
 package configuration;
 
+import goboxapi.URLBuilder;
+
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -15,12 +17,15 @@ public class Config {
     public static final int STORAGE_MODE = 1;
 
     private static final String DEFAULT_LOCATION = "config/gobox.conf";
+    private static final String DEFAULT_URLS_LOCATION = "config/urls.conf";
 
     private static final String EXECUTION_MODE = "mode";
 
     private static Config ourInstance = new Config();
 
     private Properties properties;
+
+    private URLBuilder urls;
 
     private Config () {
         properties = new Properties();
@@ -31,12 +36,26 @@ public class Config {
     }
 
     public void load () throws Exception {
+
+        // First load the configuration
+
         // Open the file
         FileInputStream in = new FileInputStream(DEFAULT_LOCATION);
-        // Load the properties
         properties.load(in);
-        // close the file stream
         in.close();
+
+        // Now loads the url, placed in another file
+        in = new FileInputStream(DEFAULT_URLS_LOCATION);
+
+        // Create a new url builder
+        urls = new URLBuilder();
+
+        // load the urls
+        urls.load(in);
+
+        // Close the stream
+        in.close();
+
     }
 
     public int getMode () {
@@ -71,5 +90,9 @@ public class Config {
 
     public void setProperty (String key, String value) {
         properties.setProperty(key, value);
+    }
+
+    public URLBuilder getUrls() {
+        return urls;
     }
 }

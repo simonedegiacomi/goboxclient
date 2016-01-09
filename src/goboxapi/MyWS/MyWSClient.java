@@ -199,7 +199,7 @@ public class MyWSClient {
         server.send(json.toString());
     }
 
-    public void SendEventBroadcast (String event, JSONObject data) {
+    public void sendEventBroadcast (String event, JSONObject data) {
         JSONObject json = new JSONObject();
         try {
             json.put("event", event);

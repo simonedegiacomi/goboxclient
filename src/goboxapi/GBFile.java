@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.sql.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Logger;
@@ -302,7 +301,9 @@ public class GBFile {
     }
 
     public File toFile () {
-        return new File(getPath());
+        if (javaFile == null)
+            javaFile = new File(getPath());
+        return javaFile;
     }
 
     public Path toPath () {
