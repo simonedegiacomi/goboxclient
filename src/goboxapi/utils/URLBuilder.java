@@ -1,6 +1,5 @@
-package goboxapi;
+package goboxapi.utils;
 
-import goboxapi.utils.URLParams;
 import org.json.JSONObject;
 
 import java.io.File;
@@ -23,9 +22,9 @@ public class URLBuilder {
     }
 
     public static URLBuilder load (InputStream in) throws IOException {
-        Properties properties = new Properties();
-        properties.load(in);
-        return properties;
+        URLBuilder url = new URLBuilder();
+        url.properties.load(in);
+        return url;
     }
 
     public URLBuilder() {
@@ -42,7 +41,7 @@ public class URLBuilder {
 
     public URL get (String what, JSONObject params) {
         try {
-            return URLParams.createURL(properties.get(what), params);
+            return URLParams.createURL(properties.get(what).toString(), params);
         } catch (Exception ex) {
             return null;
         }
