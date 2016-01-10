@@ -4,18 +4,22 @@ import goboxapi.utils.EasyHttps;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import javax.net.ssl.HttpsURLConnection;
+
 /**
  * The object of this class contains the credentials
  * of a GoBoxAccount. To use any of the API of this
  * package you need this object. Auth also provides
  * the necessary methods to talk with the server
- * to chec the data
+ * to check the data
  * Created by Degiacomi Simone on 31/12/15.
  */
 public class Auth {
+
     /**
      * Type of session, client mode
      */
+
     public static final int CLIENT = 0;
     /**
      * Type of session used to authenticate the client
@@ -132,5 +136,9 @@ public class Auth {
 
     public String getUsername() {
         return username;
+    }
+
+    public void authorize (HttpsURLConnection conn) {
+        conn.setRequestProperty("Authorization", "Bearer " + token);
     }
 }

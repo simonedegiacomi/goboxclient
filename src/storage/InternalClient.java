@@ -4,11 +4,12 @@ import goboxapi.GBFile;
 import goboxapi.client.Client;
 import goboxapi.client.SyncEventListener;
 
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 
 /**
- * Created by Simone on 02/01/2016.
+ * Created by Degiacomi Simone on 02/01/2016.
  */
 public class InternalClient implements Client {
 
@@ -20,7 +21,7 @@ public class InternalClient implements Client {
 
     @Override
     public InputStream getFile(GBFile file) {
-        return null;
+        return return new FileInputStream(file.toFile());
     }
 
     @Override

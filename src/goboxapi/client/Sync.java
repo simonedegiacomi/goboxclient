@@ -1,25 +1,28 @@
 package goboxapi.client;
 
 import configuration.Config;
+import goboxapi.GBException;
 import goboxapi.GBFile;
 import goboxclient.FileSystemWatcher;
 
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.FileAttribute;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
  * A Sync object os build on implementation of
- * goboxapi.Client, and manage the syncronization
+ * goboxapi.Client, and manage the synchronization
  * of the filesystem with the relative storage of
  * the account.
  */
 
 public class Sync {
 
+    /**
+     * Logger of this class
+     */
     private static final Logger log = Logger.getLogger(Sync.class.getName());
 
     /**
@@ -56,10 +59,10 @@ public class Sync {
         assignFileWatcherEvents();
 
         // And start a separate thread that will pool
-        // countinusly the filesystem
+        // continuously the filesystem
         watcher.start();
 
-        // Asising event listener for the SyncEvent from the storage
+        // Assing event listener for the SyncEvent from the storage
         assignSyncEventFromStorage()
     }
 
@@ -71,36 +74,47 @@ public class Sync {
      */
     private void assignFileWatcherEvents () {
         // At the beginning i download the file list, and make a control.
-        // I donwload the file from the sevrer, and new files found are trasmetted to sevrer.
-        // If  a file wa sdeleted on the client with the program nmot running, the file will
-        // redonloaded
+        // I download the file from the server, and new files found are trasmetted to sevrer.
+        // If a file was deleted on the client with the program not running, the file will
+        // redownloaded
 
         // This event is called when a new file or directory is created
         watcher.assignListener(FileSystemWatcher.FILE_CREATED, new FileSystemWatcher.Listener() {
             @Override
             public void onEvent(File newFile) {
+                log.fine("New file created in the local fs");
+                try {
+                    // Wrap the java File into a GoBoxFile
+                    GBFile wrappedFile = new GBFile(newFile);
 
+                    // Upload the file to the server
+                    client.uploadFile(wrappedFile);
 
-
-                // Wrap the java File into a GoBoxFile
-                GBFile wrappedFile = new GBFile(newFile);
-
-                // Upload the file to the server
-                client.uploadFile(wrappedFile);
+                } catch (GBException ex) {
+                    log.warning("Cannot read new file");
+                } catch (ClientException ex) {
+                    log.warning("Cannot tell the storage about the new file");
+                }
             }
         });
 
-        // Event throwed when the file is edited
+        // Event thrown when the file is edited
         watcher.assignListener(FileSystemWatcher.FILE_CHANGED, new FileSystemWatcher.Listener() {
             @Override
             public void onEvent(File editedFile) {
+                log.fine("New file updated on the local fs");
 
-                log.fine("New file updated on the localfs");
+                try {
+                    // Wrap the java File into a GoBoxFile
+                    GBFile wrappedFile = new GBFile(editedFile);
 
-                // Wrap the java File into a GoBoxFile
-                GBFile wrappedFile = new GBFile(editedFile);
-
-                client.updateFile(wrappedFile);
+                    // Call the right client method
+                    client.updateFile(wrappedFile);
+                } catch (GBException ex) {
+                    log.log(Level.WARNING, ex.toString(), ex);
+                } catch (ClientException ex) {
+                    log.log(Level.WARNING, ex.toString(), ex);
+                }
             }
         });
 
@@ -108,13 +122,18 @@ public class Sync {
         watcher.assignListener(FileSystemWatcher.FILE_DELETED, new FileSystemWatcher.Listener() {
             @Override
             public void onEvent(File deletedFile) {
+                log.fine("A file in the local fs was deleted");
 
-                log.fine("A file in the local fs is deleted");
-
-                // Wrap the file
-                GBFile wrappedFile = new GBFile(deletedFile);
-                // and remove it
-                client.removeFile(wrappedFile);
+                try {
+                    // Wrap the file
+                    GBFile wrappedFile = new GBFile(deletedFile);
+                    // and remove it
+                    client.removeFile(wrappedFile);
+                } catch (GBException ex) {
+                    log.log(Level.WARNING, ex.toString(), ex);
+                } catch (ClientException ex) {
+                    log.log(Level.WARNING, ex.toString(), ex);
+                }
             }
         });
     }

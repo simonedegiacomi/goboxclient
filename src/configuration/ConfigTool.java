@@ -1,6 +1,7 @@
 package configuration;
 
-import java.awt.*;
+
+import java.awt.GraphicsEnvironment;
 
 /**
  * Created by Degiacomi Simone on 27/12/2015.

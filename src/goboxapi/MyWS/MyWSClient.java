@@ -7,6 +7,7 @@ import org.json.JSONObject;
 
 import java.net.URI;
 import java.util.HashMap;
+import java.util.concurrent.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -49,6 +50,8 @@ public class MyWSClient {
      */
     private final HashMap<String, WSQueryResponseListener> queryResponses;
 
+    private final ExecutorService executor = Executors.newFixedThreadPool(2);
+
     public MyWSClient (URI uri) throws Exception {
         events = new HashMap<>();
         queryAnswers = new HashMap<>();
@@ -69,8 +72,6 @@ public class MyWSClient {
             @Override
             public void onMessage(String message) {
                 try {
-
-                    System.out.println(message);
 
                     // Parse the message
                     JSONObject json = new JSONObject(message);
@@ -132,6 +133,9 @@ public class MyWSClient {
                     error.onEvent(null);
             }
         };
+    }
+
+    public void connect() {
         server.connect();
     }
 
@@ -171,12 +175,43 @@ public class MyWSClient {
             json.put("data", query);
             json.put("_queryId", queryId);
         } catch (Exception ex) {
-            ex.printStackTrace();
+            log.log(Level.WARNING, ex.toString(), ex);
         }
         queryResponses.put(queryId, responseListener);
         server.send(json.toString());
-        System.out.println("Ho inviato la query:" + json.toString());
-        System.out.println("Se non sbaglio, nella query dovrebbe esserci: " + query);
+    }
+
+    /**
+     * Same ad make query, but this will return immediately a futureTask.
+     * @param queryName Name of the query
+     * @param query Parameters of the quey
+     * @return FutureTask, completed when the response  retriver
+     */
+    public FutureTask<JSONObject> makeQuery (String queryName, JSONObject query) {
+
+        // Create a new wscallable
+        final WSCallable callback = new WSCallable();
+
+        // Create a enw FutureTask, that will be used to synchronize the incomng
+        // response
+        final FutureTask<JSONObject> future = new FutureTask<>(callback);
+
+        // Make a normal query
+        makeQuery(queryName, query, new WSQueryResponseListener() {
+            @Override
+            public void onResponse(JSONObject response) {
+
+                // And when the result is retriver, set the response to the
+                // callable
+                callback.setResponse(response);
+
+                // And execute the future task
+                executor.execute(future);
+            }
+        });
+
+        // Return the new future task
+        return future;
     }
 
     /**
@@ -199,6 +234,11 @@ public class MyWSClient {
         server.send(json.toString());
     }
 
+    /**
+     * Send an event, but specify that is for all the clients
+     * @param event Event name
+     * @param data Event data
+     */
     public void sendEventBroadcast (String event, JSONObject data) {
         JSONObject json = new JSONObject();
         try {
@@ -209,7 +249,7 @@ public class MyWSClient {
         } catch (Exception ex) {
             ex.printStackTrace();
         }
-        System.out.println("Sent: " + json.toString());
+        log.fine("New broadcast message sent");
         server.send(json.toString());
     }
 }

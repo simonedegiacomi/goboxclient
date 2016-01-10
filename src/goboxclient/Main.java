@@ -7,6 +7,7 @@ import goboxapi.client.StandardClient;
 import goboxapi.client.Sync;
 import javafx.scene.control.Alert;
 import storage.Storage;
+import utils.SingleInstancer;
 
 import java.awt.*;
 import java.util.logging.Logger;
@@ -18,6 +19,12 @@ public class Main {
     private static Config config = Config.getInstance();
 
     public static void main(String[] args) {
+        SingleInstancer singler = new SingleInstancer();
+        // Close th eprogram
+        // TODO: Add a message or open the configuration of GoBox
+        if(!singler.isSingle())
+            System.exit(0);
+
         try {
             // Try to load the config
             config.load();
@@ -68,6 +75,9 @@ public class Main {
                 startStorageMode(auth);
                 break;
         }
+
+        // If there is a graphic interface add the tray icon
+        if(!GraphicsEnvironment.isHeadless())
     }
 
     private static void startClientMode (Auth auth) {
@@ -83,6 +93,7 @@ public class Main {
 
             // start Sync
             Sync sync = new Sync(storage.getInternalClient());
+
         } catch (Exception ex) {
             ex.printStackTrace();
             System.exit(-1);

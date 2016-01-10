@@ -1,6 +1,7 @@
 package storage;
 
 import goboxapi.GBFile;
+import goboxapi.client.Sync;
 import goboxapi.client.SyncEvent;
 
 import java.sql.*;
@@ -78,12 +79,13 @@ public class StorageDB {
         stmt.execute("CREATE TABLE IF NOT EXISTS event (" +
                 "ID integer PRIMARY KEY AUTOINCREMENT NOT NULL," +
                 "file_ID integer not null," +
-                "date integer," +
-                ")");
+                "kind integer not null," +
+                "date integer)");
 
         // And commit the changes
         if (!db.getAutoCommit())
             db.commit();
+
         log.fine("Database tables initialized.");
     }
 
@@ -191,23 +193,39 @@ public class StorageDB {
         }
     }
 
-    public void updateFile (GBFile updatedFile) {
+    public SyncEvent updateFile (GBFile updatedFile) {
         try {
             PreparedStatement stmt = db.prepareStatement("UPDATE file WHERE ID = ?" +
                     "SET name = ? SET last_update = ? SET size = ?");
-        } catch (Exception ex) {
+            stmt.setLong(1, updatedFile.getID());
+            stmt.setString(2, updatedFile.getName());
+            stmt.setLong(3, updatedFile.getLastUpdateDate());
+            stmt.setLong(4, updatedFile.getSize());
 
+            // Create sync event
+            SyncEvent event = new SyncEvent(SyncEvent.EDIT_FILE, updatedFile);
+            registerEvent(event);
+            return  event;
+        } catch (Exception ex) {
+            log.log(Level.WARNING, ex.toString(), ex);
         }
+        return null;
     }
 
-    public void removeFile (GBFile fileToRemove) {
+    public SyncEvent removeFile (GBFile fileToRemove) {
         try {
             PreparedStatement stmt = db.prepareStatement("DELETE FROM file WHERE ID = ?");
             stmt.setLong(1, fileToRemove.getID());
             stmt.executeUpdate();
-        } catch (Exception ex) {
 
+            // Create the sync event
+            SyncEvent event = new SyncEvent(SyncEvent.REMOVE_FILE, fileToRemove);
+            registerEvent(event);
+            return event;
+        } catch (Exception ex) {
+            log.log(Level.WARNING, ex.toString(), ex);
         }
+        return null;
     }
 
     public GBFile[] getChildrenByFather (long fatherID) throws StorageException {
@@ -246,14 +264,6 @@ public class StorageDB {
         } catch (Exception ex) {
             log.log(Level.SEVERE, ex.toString(), ex);
             return null;
-        }
-    }
-
-    private remember (GBFile file, int action) {
-        try {
-            PreparedStatement stmt = db.prepareStatement("INSERT INTO event (file_ID, action, date) VALUES (?, ?, ?)");
-        } catch (Exception ex) {
-            ex.printStackTrace();
         }
     }
 }

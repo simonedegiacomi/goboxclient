@@ -8,31 +8,37 @@ import goboxapi.MyWS.WSEvent;
 import goboxapi.MyWS.WSQueryResponseListener;
 import goboxapi.URLBuilder;
 import goboxapi.authentication.Auth;
-import goboxapi.utils.URLParams;
 import org.json.JSONObject;
-com.google.common.io.ByteStreams
-import sun.misc.IOUtils;
 
 import javax.net.ssl.HttpsURLConnection;
 import java.io.*;
-import java.net.URI;
 import java.net.URL;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
  * This is an implementation of the gobox api client
- * onterface. This client uses WebSocket to transfer
+ * interface. This client uses WebSocket to transfer
  * the file list, to authenticate and to share events
- * annd use HTTP to trasfer the files
+ * and use HTTP(s) to transfer the files.
+ *
  * Created by Degiacomi Simone on 31/12/2015.
  */
 public class StandardClient implements Client {
 
+    /**
+     * Logger of this class
+     */
     private static final Logger log = Logger.getLogger(StandardClient.class.getName());
 
+    /**
+     * Configuration of the environment
+     */
     private final Config config = Config.getInstance();
 
+    /**
+     * Object used to create the urls.
+     */
     private final URLBuilder urls = config.getUrls();
 
     /**
@@ -40,15 +46,27 @@ public class StandardClient implements Client {
      */
     private MyWSClient server;
 
-    public StandardClient(Auth auth) {
+    /**
+     * Authorization object used to make the call
+     */
+    private final Auth auth;
 
-        // Load the url
-        urls = Config.getInstance().getUrls();
+    /**
+     * Construct a sinc object, but first try to login to gobox.
+     * The constructor will block the thread util the authentication
+     * is complete
+     * @param auth Auth object that will be used to authenticate
+     */
+    public StandardClient(Auth auth) throws ClientException {
+
+        this.auth = auth;
 
         // Connect to the server
         try {
-            // Connect to the server trough webSocket
+
+            // Create the websocket client
             server = new MyWSClient(urls.get("socketStorage").toURI());
+
             // When the webSocket in opened, send the authentication object
             server.on("open", new WSEvent() {
                 @Override
@@ -57,6 +75,8 @@ public class StandardClient implements Client {
                     log.fine("Authentication trough webSocket")
 
                     // Send the authentication object
+
+                    // TODO: handle an authentication error
                     server.sendEvent("authentication", auth.toJSON(), true);
                 }
             });
@@ -68,6 +88,10 @@ public class StandardClient implements Client {
                     System.out.println(data);
                 }
             });
+
+            // Start listening on the websocket, connecting to the server
+            server.connect();
+
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
         }
@@ -76,80 +100,81 @@ public class StandardClient implements Client {
     /**
      * Download a file from the storage copying the file to the
      * dst Outputstream.
-     * Note that if the file is a folder, the file will be a zip archive
+     *
      * @param file File to download.
      * @param dst Output stream where put the content of the file.
+     * @throws ClientException
      */
     @Override
-    public void getFile (GBFile file, OutputStream dst) {
+    public void getFile (GBFile file, OutputStream dst) throws ClientException {
         try {
+
+            // Create and fill the request object
             JSONObject request = new JSONObject();
             request.put("id", file.getID());
-            URL url = URLParams.createURL(urls.get("getFile"), request);
+
+            URL url = urls.get("getFile", request);
             HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
-            ByteStreams.copy(conn.getOutputStream(), dst);
+
+            // Authorize the connection
+            auth.authorize(conn);
+
+            // Copy the file
+            ByteStreams.copy(conn.getInputStream(), dst);
+
+            // Close the connection
+            conn.disconnect();
+
+        } catch (Exception ex) {
+            log.log(Level.WARNING, ex.toString(), ex);
+            throw new ClientException(ex.toString());
+        }
+    }
+
+
+    @Override
+    public void getFile(GBFile file) throws ClientException {
+        try {
+            getFile(file, new FileOutputStream(file.toFile()));
+        } catch (Exception ex) {
+            log.log(Level.WARNING, ex.toString(), ex);
+            throw new ClientException(ex.toString());
+        }
+    }
+
+    @Override
+    public void uploadFile(GBFile file, InputStream stream) throws ClientException {
+        try {
+            URL url = urls.get("uploadFile", file.toJSON());
+
+            HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
+            auth.authorize(conn);
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Length", String.valueOf(file.getSize()));
+
+            // Send the file
+            ByteStreams.copy(stream, conn.getOutputStream());
+
             conn.disconnect();
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
+            throw new ClientException(ex.toString());
         }
     }
 
-    @Override
-    public void getFile(GBFile file) {
-        return null;
-    }
 
     @Override
-    public void uploadFile(GBFile file, Inputstream stream) {
-
-    }
-
-    @Override
-    public void uploadFile (GBFile file) {
+    public void uploadFile(GBFile file) throws ClientException {
         try {
-            if(file.isDirectory()) {
-                System.out.println("file.toJSON() " + file.toJSON());
-                server.makeQuery("createFolder", file.toJSON(), new WSQueryResponseListener() {
-                    @Override
-                    public void onResponse(JSONObject response) {
-                        try {
-                            file.setID(response.getLong("newFolderId"));
-                        } catch (Exception ex) {
-                            ex.printStackTrace();
-                        }
-                    }
-                });
-            } else {
-                // Make a request to upload the file
-                // The information of the file are inserted in the url
-
-
-                HttpsURLConnection conn = (HttpsURLConnection) URLParams.createURL("https://goboxserver-simonedegiacomi.c9users.io/api/transfer/toStorage",
-                        file.toJSON()).openConnection();
-
-                conn.setDoInput(true);
-                conn.setDoOutput(true);
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Length", String.valueOf(file.getSize()));
-                DataOutputStream out = new DataOutputStream(conn.getOutputStream());
-                // open the file
-                DataInputStream in = new DataInputStream(new FileInputStream(file.toFile()));
-                byte[] buffer = new byte[1024];
-                int read = 0;
-                while((read = in.read(buffer)) > 0)
-                    out.write(buffer, 0, read);
-                in.close();
-                out.close();
-                int responseCode = conn.getResponseCode();
-                conn.disconnect();
-            }
+            uploadFile(file, new FileInputStream(file.toFile()));
         } catch (Exception ex) {
-            ex.printStackTrace();
+            log.log(Level.WARNING, ex.toString(), ex);
+            throw new ClientException(ex.toString());
         }
     }
 
     @Override
-    public void removeFile (GBFile file) {
+    public void removeFile (GBFile file) throws ClientException{
         // Make the request trough websockets
         try {
             server.makeQuery("removeFile", file.toJSON(), new WSQueryResponseListener() {
@@ -159,7 +184,8 @@ public class StandardClient implements Client {
                 }
             });
         } catch (Exception ex) {
-            ex.printStackTrace();
+            log.log(Level.WARNING, ex.toString(), ex);
+            throw new ClientException(ex.toString());
         }
     }
 

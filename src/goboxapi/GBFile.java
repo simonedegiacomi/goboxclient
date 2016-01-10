@@ -101,20 +101,26 @@ public class GBFile {
         }
     }
 
-    public GBFile (JSONObject json) throws JSONException{
-        this.name = json.getString("name");
-        this.isDirectory = json.getBoolean("isDirectory");
-        this.size = json.getLong("size");
-        this.creationDate = json.getLong("creation");
+    public GBFile (JSONObject json) throws GBException {
 
-        this.lastUpdateDate = json.getLong("lastUpdate");
-        this.ID = json.has("id") ? json.getLong("id") : UNKNOW_ID;
-        if(json.has("fatherId"))
-            this.fatherID = json.getLong("fatherId");
-        else if(json.has("path"))
-            this.setPathByString(json.getString("path"));
-        else
-            this.fatherID = UNKNOW_FATHER;
+        try {
+            this.name = json.getString("name");
+
+            this.isDirectory = json.getBoolean("isDirectory");
+            this.size = json.getLong("size");
+            this.creationDate = json.getLong("creation");
+
+            this.lastUpdateDate = json.getLong("lastUpdate");
+            this.ID = json.has("id") ? json.getLong("id") : UNKNOW_ID;
+            if (json.has("fatherId"))
+                this.fatherID = json.getLong("fatherId");
+            else if (json.has("path"))
+                this.setPathByString(json.getString("path"));
+            else
+                this.fatherID = UNKNOW_FATHER;
+        } catch (JSONException ex) {
+            throw new GBException(ex.toString());
+        }
     }
 
     /**

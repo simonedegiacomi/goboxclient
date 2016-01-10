@@ -1,6 +1,12 @@
 package goboxapi;
 
-import java.io.*;
+import goboxapi.utils.URLParams;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Properties;
@@ -30,6 +36,14 @@ public class URLBuilder {
         try {
             return new URL(properties.getProperty(what));
         } catch (MalformedURLException ex) {
+            return null;
+        }
+    }
+
+    public URL get (String what, JSONObject params) {
+        try {
+            return URLParams.createURL(properties.get(what), params);
+        } catch (Exception ex) {
             return null;
         }
     }

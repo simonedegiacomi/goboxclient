@@ -1,10 +1,12 @@
 package storage;
 
+import com.google.common.io.ByteStreams;
 import configuration.Config;
 import goboxapi.GBFile;
 import goboxapi.MyWS.MyWSClient;
 import goboxapi.MyWS.WSEvent;
 import goboxapi.MyWS.WSQueryAnswer;
+import goboxapi.URLBuilder;
 import goboxapi.authentication.Auth;
 import goboxapi.client.Client;
 import goboxapi.client.SyncEvent;
@@ -24,14 +26,16 @@ public class Storage {
 
     private static final Logger log = Logger.getLogger(Storage.class.getName());
 
+    private final Config config = Config.getInstance();
+
+    private final URLBuilder urls = config.getUrls();
+
     private MyWSClient mainServer;
-    private final Config config;
+
     private final StorageDB db;
     private final String PATH = "files\\";
 
     public Storage(Auth auth) throws StorageException {
-        this.config = Config.getInstance();
-
         try {
             this.db = new StorageDB("config/gobox.db");
         } catch (Exception ex) {
@@ -143,17 +147,21 @@ public class Storage {
             public void onEvent(JSONObject data) {
                 log.info("New come to ceth upload request");
                 try {
+
                     // Get the uploadKey
                     String uploadKey = data.getString("uploadKey");
+
                     // Get the name of the file
                     String fileName = data.getString("name");
+
                     // The id of the folder that will contain the file
                     long father = data.getLong("father");
+
                     // Insert the file in the database
                     GBFile dbFile = new GBFile(fileName, father, false);
+
                     // And set the other informations
                     dbFile.setSize(data.getLong("size"));
-                    db.insertFile(dbFile);
 
                     // Make the https request to the main server
                     URL url = new URL("https://goboxserver-simonedegiacomi.c9users.io/api/transfer/fromClient");
@@ -176,23 +184,25 @@ public class Storage {
 
                     // get the file
                     int response = conn.getResponseCode();
-                    // Open the stream incoming from the server (that contains the file)
-                    DataInputStream fromConnection = new DataInputStream(conn.getInputStream());
 
                     // Create the stream to the disk
                     DataOutputStream toDisk = new DataOutputStream(new FileOutputStream(dbFile.getPath()));
 
-                    // Create a buffer to read the file
-                    byte[] buffer = new byte[1024];
-                    int read = 0;
-                    while((read = fromConnection.read(buffer)) > 0)
-                        toDisk.write(buffer, 0, read);
+                    // Copy the stream
+                    ByteStreams.copy(conn.getInputStream(), toDisk);
+
                     // Close file and http connection
                     toDisk.close();
-                    fromConnection.close();
                     conn.disconnect();
+
+                    // Insert the file in the database
+                    SyncEvent event = db.insertFile(dbFile);
+
+                    // The notification will contain the new file informations
+                    mainServer.sendEventBroadcast("newFile", event.toJSON());
+
                 } catch (Exception ex) {
-                    ex.printStackTrace();
+                    log.log(Level.WARNING, ex.toString(), ex);
                 }
             }
         });
@@ -203,7 +213,10 @@ public class Storage {
             public void onEvent(JSONObject data) {
                 try {
                     GBFile fileToRemove = new GBFile(data);
-                    db.removeFile(fileToRemove);
+                    SyncEvent event = db.removeFile(fileToRemove);
+
+                    // The notification will contain the deleted file
+                    mainServer.sendEventBroadcast("removeFile", event.toJSON());
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }
@@ -217,22 +230,28 @@ public class Storage {
                 try {
                     String downloadKey = data.getString("downloadKey");
                     long file = data.getLong("id");
+
                     // get the file from the database
                     GBFile dbFile = db.getFileById(file);
-                    URL url = new URL("");
+
+                    URL url = urls.get("sendFileToClient");
+
                     HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
                     conn.setDoOutput(true);
+
                     DataOutputStream toServer = new DataOutputStream(conn.getOutputStream());
+
                     // Open the file
                     DataInputStream fromFile = new DataInputStream(new FileInputStream(dbFile.getPath()));
-                    int read = 0;
-                    byte[] buffer = new byte[256];
-                    while((read = fromFile.read(buffer)) > 0)
-                        toServer.write(buffer, 0, read);
+
+                    // Send the file
+                    ByteStreams.copy(fromFile, toServer);
+
                     fromFile.close();
                     toServer.close();
                     conn.getResponseCode();
                     conn.disconnect();
+
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }
