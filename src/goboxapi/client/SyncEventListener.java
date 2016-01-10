@@ -1,7 +1,7 @@
 package goboxapi.client;
 
 /**
- * Created by Simone on 01/01/2016.
+ * Created by Degiacomi Simone on 01/01/2016.
  */
 public interface SyncEventListener {
     public void on (SyncEvent event);

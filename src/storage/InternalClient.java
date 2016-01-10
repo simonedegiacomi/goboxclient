@@ -2,6 +2,7 @@ package storage;
 
 import goboxapi.GBFile;
 import goboxapi.client.Client;
+import goboxapi.client.ClientException;
 import goboxapi.client.SyncEventListener;
 
 import java.io.FileInputStream;
@@ -13,15 +14,17 @@ import java.io.OutputStream;
  */
 public class InternalClient implements Client {
 
+
     private final StorageDB db;
 
     public InternalClient(StorageDB db) {
         this.db = db;
     }
 
+
     @Override
-    public InputStream getFile(GBFile file) {
-        return return new FileInputStream(file.toFile());
+    public void getFile(GBFile file) throws ClientException {
+
     }
 
     @Override
@@ -71,7 +74,6 @@ public class InternalClient implements Client {
 
     }
 
-    @Override
     public void assignEventListener (SyncEventListener listener) {
 
     }

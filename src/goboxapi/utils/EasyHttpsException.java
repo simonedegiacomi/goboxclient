@@ -1,7 +1,7 @@
 package goboxapi.utils;
 
 /**
- * Created by Simone on 27/12/2015.
+ * Created by Degiacomi Simone on 27/12/2015.
  */
 public class EasyHttpsException extends Exception {
     private final int responseCode;

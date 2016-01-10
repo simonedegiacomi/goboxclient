@@ -11,7 +11,7 @@ import java.net.URL;
 import java.util.Properties;
 
 /**
- * Created by simone on 09/01/16.
+ * Created by Degiacomi Simone on 09/01/16.
  */
 public class URLBuilder {
 

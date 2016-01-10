@@ -4,7 +4,7 @@ import goboxapi.GBFile;
 import org.json.JSONObject;
 
 /**
- * Created by simone on 02/01/16.
+ * Created by Degiacomi Simone on 02/01/16.
  */
 public class SyncEvent {
 

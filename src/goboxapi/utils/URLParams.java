@@ -7,12 +7,13 @@ import java.net.URLEncoder;
 import java.util.Iterator;
 
 /**
- * Created by simone on 06/01/16.
+ * Created by Degiacomi Simone on 06/01/16.
  */
 public class URLParams {
 
-    public static URL createURL (String url, JSONObject params) throws Exception {
+    public static URL createURL (String stringUrl, JSONObject params) throws Exception {
         StringBuilder builder = new StringBuilder();
+        builder.append(stringUrl);
         boolean first = true;
         Iterator<String> it = params.keys();
         while(it.hasNext()) {
@@ -29,7 +30,7 @@ public class URLParams {
         return new URL(URLEncoder.encode(builder.toString(), "UTF-8"));
     }
 
-    public static URL createURL (URL stringUrl, JSONObject params) throws Exception {
-        createURL(stringUrl.toString(), params);
+    public static URL createURL (URL url, JSONObject params) throws Exception {
+        return createURL(url.toString(), params);
     }
 }

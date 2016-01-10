@@ -39,6 +39,8 @@ public interface Client {
      */
     public void getFile (GBFile file, OutputStream dst) throws ClientException;
 
+    public void createDirectory (GBFile newDir) throws ClientException;
+
     /**
      * Send a file to the storage.
      * @param file File to send File to send. The object must have or the
@@ -71,7 +73,7 @@ public interface Client {
      * the file
      * @param file File to update
      */
-    public void updateFile (GBFile file, InputStream file) throws ClientException;
+    public void updateFile (GBFile file, InputStream stream) throws ClientException;
 
     /**
      * Update a file in the storage. The same as update,

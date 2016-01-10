@@ -3,10 +3,10 @@ package storage;
 import com.google.common.io.ByteStreams;
 import configuration.Config;
 import goboxapi.GBFile;
-import goboxapi.MyWS.MyWSClient;
-import goboxapi.MyWS.WSEvent;
-import goboxapi.MyWS.WSQueryAnswer;
-import goboxapi.URLBuilder;
+import goboxapi.myws.MyWSClient;
+import goboxapi.myws.WSEvent;
+import goboxapi.myws.WSQueryAnswer;
+import goboxapi.utils.URLBuilder;
 import goboxapi.authentication.Auth;
 import goboxapi.client.Client;
 import goboxapi.client.SyncEvent;
@@ -22,6 +22,9 @@ import java.nio.file.Files;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+/**
+ * Created by Degiacomi Simone on 24/12/2015.
+ */
 public class Storage {
 
     private static final Logger log = Logger.getLogger(Storage.class.getName());
@@ -107,12 +110,6 @@ public class Storage {
             public JSONObject onQuery(JSONObject data) {
                 log.info("CreateFolder query");
                 JSONObject response = new JSONObject();
-
-                // I set created to false, so if the creation
-                // of the folder or the comunication with the
-                // database fails, the response sended contains
-                // the error
-                response.put("created", false);
                 try {
                     GBFile newFolder = new GBFile(data);
                     // Insert the file and get the event

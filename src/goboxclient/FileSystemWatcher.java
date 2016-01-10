@@ -6,6 +6,9 @@ import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
 
+/**
+ * Created by Degiacomi Simone on 24/12/2015.
+ */
 public class FileSystemWatcher extends Thread {
 
     public static final String FILE_CREATED = StandardWatchEventKinds.ENTRY_CREATE.name();

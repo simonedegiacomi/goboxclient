@@ -1,7 +1,7 @@
 package storage;
 
 /**
- * Created by Simone on 31/12/2015.
+ * Created by Degiacomi Simone on 31/12/2015.
  */
 public class StorageException extends Exception {
     private final String message;

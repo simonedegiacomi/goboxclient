@@ -1,16 +1,15 @@
 package goboxapi;
 
 /**
- * Created by simonedegiacomi on 10/01/16.
+ * Created by Degiacomi Simone on 10/01/16.
  */
-public class GBException {
+public class GBException extends Exception {
     /**
      * Message that contains more information about the exception
      */
     private final String message;
 
     public GBException (String message) {
-        super(message);
         this.message = message;
     }
 

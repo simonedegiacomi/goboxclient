@@ -1,17 +1,21 @@
-package webstorage;
+package goboxclient;
 
 import configuration.Config;
 import configuration.ConfigTool;
 import goboxapi.authentication.Auth;
+import goboxapi.client.Client;
 import goboxapi.client.StandardClient;
-import goboxapi.client.Sync;
 import javafx.scene.control.Alert;
 import storage.Storage;
 import utils.SingleInstancer;
 
 import java.awt.*;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
+/**
+ * Created by Degiacomi Simone on 24/12/2015.
+**/
 public class Main {
 
     private static final Logger log = Logger.getLogger(Main.class.getName());
@@ -20,7 +24,7 @@ public class Main {
 
     public static void main(String[] args) {
         SingleInstancer singler = new SingleInstancer();
-        // Close th eprogram
+        // Close the program
         // TODO: Add a message or open the configuration of GoBox
         if(!singler.isSingle())
             System.exit(0);
@@ -78,11 +82,16 @@ public class Main {
 
         // If there is a graphic interface add the tray icon
         if(!GraphicsEnvironment.isHeadless())
+            addIconTray();
     }
 
     private static void startClientMode (Auth auth) {
-        StandardClient client = new StandardClient(auth);
-        Sync sync = new Sync(client);
+        try {
+            Client client = new StandardClient(auth);
+            Sync sync = new Sync(client);
+        } catch (Exception ex) {
+            log.log(Level.WARNING, ex.toString(), ex);
+        }
     }
 
     private static void startStorageMode (Auth auth) {
@@ -111,5 +120,9 @@ public class Main {
             alert.setContentText("GoBoxClient cannot be initialized.");
             alert.showAndWait();
         }
+    }
+
+    private static void addIconTray() {
+
     }
 }

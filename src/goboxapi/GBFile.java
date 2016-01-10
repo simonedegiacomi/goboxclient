@@ -50,12 +50,6 @@ public class GBFile {
     private final boolean isDirectory;
 
     /**
-     * Indicate if the file exist or if is
-     * hidden because ws deleted.
-     */
-    private boolean visible = true;
-
-    /**
      * Size of the file in bytes
      */
     private long size;
@@ -241,21 +235,12 @@ public class GBFile {
         this.creationDate = creationDate;
     }
 
-    public boolean isVisible() {
-        return visible;
-    }
-
-    public void setVisible(boolean visible) {
-        this.visible = visible;
-    }
-
     public JSONObject toJSON () {
         JSONObject obj = new JSONObject();
         try {
             obj.put("name", name);
             obj.put("id", ID);
             obj.put("isDirectory", isDirectory);
-            obj.put("hide", !visible);
             obj.put("creation", creationDate);
             obj.put("lastUpdate", lastUpdateDate);
             obj.put("size", size);
@@ -281,10 +266,20 @@ public class GBFile {
         return hash;
     }
 
+    /**
+     * Generate a new GBFile, with his fatherID equals to this id
+     * @param name Name of the new file
+     * @param isDirectory is a directory or a  file?
+     * @return The new file
+     */
     public GBFile generateChild (String name, boolean isDirectory) {
         return new GBFile(name, ID, isDirectory);
     }
 
+    /**
+     * Return the path of the file as a string
+     * @return String that rappresentate the path of the file
+     */
     public String getPath () {
         StringBuilder builder = new StringBuilder();
         for(String piece : path)
@@ -292,14 +287,27 @@ public class GBFile {
         return builder.toString();
     }
 
+    /**
+     * Return the Path as a list of 'piece'. Each 'piece' is a
+     * folder.
+     * @return List rappresentation of the path
+     */
     public List<String> getListPath() {
         return path;
     }
 
+    /**
+     * Set the path of the file, without updating the fatherID
+     * @param pieces New path of the file.
+     */
     public void setPath (List<String> pieces) {
         this.path = pieces;
     }
 
+    /**
+     * Set the new path of the file without updating the fatherID
+     * @param str String that contains the path
+     */
     public void setPathByString (String str) {
         this.path = new LinkedList<>();
         for(String piece : str.split("/"))
@@ -322,7 +330,6 @@ public class GBFile {
                 "ID=" + ID +
                 ", fatherID=" + fatherID +
                 ", isDirectory=" + isDirectory +
-                ", visible=" + visible +
                 ", size=" + size +
                 ", name='" + name + '\'' +
                 ", creationDate='" + creationDate + '\'' +

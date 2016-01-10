@@ -1,17 +1,22 @@
 package utils;
 
+import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
- * Created by simonedegiacomi on 10/01/16.
+ * Created by Degiacomi Simone on 10/01/16.
  */
 public class SingleInstancer {
+
+    private static final Logger log = Logger.getLogger(SingleInstancer.class.getName());
 
     private static final int DEFAULT_PORT = 4212;
 
     private final int port;
-    private final boolean single = false
+    private final boolean single;
 
     public SingleInstancer (int port) {
         this.port = port;
@@ -46,11 +51,16 @@ public class SingleInstancer {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                ServerSocket server = new ServerSocket(port);
-                for(;;)
-                    try {
-                        server.accept();
-                    } catch (Exception ex) {}
+                try {
+                    ServerSocket server = new ServerSocket(port);
+                    for (; ; )
+                        try {
+                            server.accept();
+                        } catch (Exception ex) {
+                        }
+                } catch (IOException ex) {
+                    log.log(Level.WARNING, ex.toString(), ex);
+                }
             }
         }).start();
     }

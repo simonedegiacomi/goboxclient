@@ -1,7 +1,6 @@
 package storage;
 
 import goboxapi.GBFile;
-import goboxapi.client.Sync;
 import goboxapi.client.SyncEvent;
 
 import java.sql.*;

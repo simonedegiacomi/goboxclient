@@ -14,9 +14,9 @@ import java.net.URL;
  * Created by Degiacomi Simone on 27/12/2015.
  */
 public class EasyHttps {
-    public static JSONObject post(String url, JSONObject data, String authorization) throws IOException, EasyHttpsException, JSONException {
+    public static JSONObject post(URL url, JSONObject data, String authorization) throws IOException, EasyHttpsException, JSONException {
         // Open the connection
-        HttpsURLConnection conn = (HttpsURLConnection) new URL(url).openConnection();
+        HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
         // Set the authorization
         if (authorization != null)
             conn.setRequestProperty("Authorization", "Bearer " + authorization);
@@ -56,4 +56,9 @@ public class EasyHttps {
         // Parse the response
         return new JSONObject(builder.toString());
     }
+
+    public static JSONObject post(String url, JSONObject data, String authorization) throws IOException, EasyHttpsException, JSONException {
+        return post(new URL(url), data, authorization);
+    }
+
 }

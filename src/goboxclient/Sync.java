@@ -90,8 +90,15 @@ public class Sync {
                     // Wrap the java File into a GoBoxFile
                     GBFile wrappedFile = new GBFile(newFile);
 
-                    // Upload the file to the server
-                    client.uploadFile(wrappedFile);
+                    if (wrappedFile.isDirectory()) {
+
+                        // Create the folder
+                        client.createDirectory(wrappedFile);
+                    } else {
+
+                        // Upload the file to the server
+                        client.uploadFile(wrappedFile);
+                    }
 
                 } catch (ClientException ex) {
                     log.warning("Cannot tell the storage about the new file");
@@ -157,9 +164,5 @@ public class Sync {
                 }
             }
         });
-    }
-
-    private void createDirectory (GBFile directory) throws IOException {
-        Files.createDirectory(directory.toPath());
     }
 }

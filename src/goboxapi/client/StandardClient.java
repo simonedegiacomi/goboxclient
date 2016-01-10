@@ -3,16 +3,17 @@ package goboxapi.client;
 import com.google.common.io.ByteStreams;
 import configuration.Config;
 import goboxapi.GBFile;
-import goboxapi.MyWS.MyWSClient;
-import goboxapi.MyWS.WSEvent;
-import goboxapi.MyWS.WSQueryResponseListener;
-import goboxapi.URLBuilder;
+import goboxapi.myws.MyWSClient;
+import goboxapi.myws.WSEvent;
+import goboxapi.myws.WSQueryResponseListener;
+import goboxapi.utils.URLBuilder;
 import goboxapi.authentication.Auth;
 import org.json.JSONObject;
 
 import javax.net.ssl.HttpsURLConnection;
 import java.io.*;
 import java.net.URL;
+import java.util.concurrent.FutureTask;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -72,7 +73,7 @@ public class StandardClient implements Client {
                 @Override
                 public void onEvent(JSONObject data) {
 
-                    log.fine("Authentication trough webSocket")
+                    log.fine("Authentication trough webSocket");
 
                     // Send the authentication object
 
@@ -125,6 +126,18 @@ public class StandardClient implements Client {
             // Close the connection
             conn.disconnect();
 
+        } catch (Exception ex) {
+            log.log(Level.WARNING, ex.toString(), ex);
+            throw new ClientException(ex.toString());
+        }
+    }
+
+    @Override
+    public void createDirectory(GBFile newDir) throws ClientException {
+        try {
+            FutureTask<JSONObject> future = server.makeQuery("createFolder", newDir.toJSON());
+            JSONObject response = future.get();
+            newDir.setID(response.getLong("newFolderId"));
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
             throw new ClientException(ex.toString());
