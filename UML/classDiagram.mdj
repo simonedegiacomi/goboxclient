@@ -599,7 +599,7 @@
 											"height": 13,
 											"autoResize": false,
 											"underline": false,
-											"text": "utils",
+											"text": "it.simonedegiacomi.utils",
 											"horizontalAlignment": 2,
 											"verticalAlignment": 5
 										},
@@ -3500,7 +3500,7 @@
 											"height": 13,
 											"autoResize": false,
 											"underline": false,
-											"text": "(from utils)",
+											"text": "(from it.simonedegiacomi.utils)",
 											"horizontalAlignment": 2,
 											"verticalAlignment": 5
 										},
@@ -3842,7 +3842,7 @@
 											"height": 13,
 											"autoResize": false,
 											"underline": false,
-											"text": "(from utils)",
+											"text": "(from it.simonedegiacomi.utils)",
 											"horizontalAlignment": 2,
 											"verticalAlignment": 5
 										},
@@ -5651,7 +5651,7 @@
 							"_parent": {
 								"$ref": "AAAAAAFSLQfjLGDYJEk="
 							},
-							"name": "utils",
+							"name": "it.simonedegiacomi.utils",
 							"ownedElements": [
 								{
 									"_type": "UMLClass",

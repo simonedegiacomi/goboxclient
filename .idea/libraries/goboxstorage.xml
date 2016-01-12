@@ -1,9 +1,0 @@
-<component name="libraryTable">
-  <library name="goboxstorage">
-    <CLASSES>
-      <root url="jar://$PROJECT_DIR$/out/artifacts/goboxstorage_jar/goboxstorage.jar!/" />
-    </CLASSES>
-    <JAVADOC />
-    <SOURCES />
-  </library>
-</component>
