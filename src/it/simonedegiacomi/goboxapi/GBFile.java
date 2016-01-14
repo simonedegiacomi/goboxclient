@@ -99,6 +99,12 @@ public class GBFile {
         }
     }
 
+    /**
+     * Create a new GBFile from a JSON that represent this file in another
+     * client or in the storage.
+     * @param json JSON with teh information of the file
+     * @throws GBException
+     */
     public GBFile (JSONObject json) throws GBException {
 
         try {
@@ -110,9 +116,9 @@ public class GBFile {
 
             this.lastUpdateDate = json.getLong("lastUpdate");
             this.ID = json.has("id") ? json.getLong("id") : UNKNOWN_ID;
-            if (json.has("fatherId"))
+            if (json.has("fatherId") && json.get("fatherId").toString().length() > 0)
                 this.fatherID = json.getLong("fatherId");
-            else if (json.has("path"))
+            else if (json.has("path") && json.getString("path").length() > 0)
                 this.setPathByString(json.getString("path"));
             else
                 this.fatherID = UNKNOWN_FATHER;
@@ -251,11 +257,10 @@ public class GBFile {
             if(fatherID != UNKNOWN_FATHER)
                 obj.put("fatherId", fatherID);
             else
-                obj.put("path", getPath());
+                obj.put("path", getPathAsString());
         } catch (Exception ex) {
             ex.printStackTrace();
         }
-        log.info("Ho creato il json " + obj.toString());
         return obj;
     }
 
@@ -282,12 +287,24 @@ public class GBFile {
 
     /**
      * Return the path of the file as a string
+     * @param prefic Prefix to add to the generated path
      * @return String that rappresentate the path of the file
      */
-    public String getPath () {
+    public String getPathAsString(String prefix) {
         StringBuilder builder = new StringBuilder();
         for(String piece : path)
-            builder.append(piece);
+            builder.append('/' + piece);
+        return prefix + builder.toString();
+    }
+
+    /**
+     * Return the path of the file as a string
+     * @return String that rappresentate the path of the file
+     */
+    public String getPathAsString() {
+        StringBuilder builder = new StringBuilder();
+        for(String piece : path)
+            builder.append('/' + piece);
         return builder.toString();
     }
 
@@ -324,7 +341,14 @@ public class GBFile {
      */
     public File toFile () {
         if (javaFile == null)
-            javaFile = new File(getPath());
+            javaFile = new File(getPathAsString());
+        return javaFile;
+    }
+
+
+    public File toFile (String prefix) {
+        if (javaFile == null)
+            javaFile = new File(getPathAsString(prefix));
         return javaFile;
     }
 
@@ -334,6 +358,14 @@ public class GBFile {
      */
     public Path toPath () {
         return toFile().toPath();
+    }
+
+    /**
+     * Return the Path object of the file
+     * @return Path reference to this file
+     */
+    public Path toPath (String prefix) {
+        return toFile(prefix).toPath();
     }
 
     @Override

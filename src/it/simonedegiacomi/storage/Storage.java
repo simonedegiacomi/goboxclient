@@ -17,7 +17,6 @@ import org.json.JSONObject;
 
 import javax.net.ssl.HttpsURLConnection;
 import java.io.*;
-import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
 import java.util.logging.Level;
@@ -61,7 +60,7 @@ public class Storage {
     /**
      * Path of the files folder
      */
-    private final String PATH = "files\\";
+    private final String PATH = "files";
 
     /**
      * Listener of the internal client.
@@ -89,7 +88,7 @@ public class Storage {
         // Try to connect ot the main server to check if the
         // token in the config is still valid
         try {
-            JSONObject response = EasyHttps.post("https://goboxserver-simonedegiacomi.c9users.io/api/user/check",
+            JSONObject response = EasyHttps.post(urls.get("authCheck"),
                     null, auth.getToken());
             if (!response.getString("state").equals("valid"))
                 throw  new StorageException("Invalid token.");
@@ -104,7 +103,7 @@ public class Storage {
 
         // Now the token is valid, so we can connect to the main server through ws
         try {
-            mainServer = new MyWSClient(new URI("ws://goboxserver-simonedegiacomi.c9users.io/api/ws/it.simonedegiacomi.storage"));
+            mainServer = new MyWSClient(urls.getURI("socketStorage"));
         } catch (Exception ex) {
             throw new StorageException("Cannot connect to the main server through web socket");
         }
@@ -161,12 +160,14 @@ public class Storage {
                 log.info("CreateFolder query");
                 JSONObject response = new JSONObject();
                 try {
+                    // Re-create the new folder from the json request
                     GBFile newFolder = new GBFile(data);
+
                     // Insert the file and get the event
                     SyncEvent event = db.insertFile(newFolder);
 
-                    // Create the real file
-                    Files.createDirectory(newFolder.toPath());
+                    // Create the real file in the FS
+                    Files.createDirectory(newFolder.toPath(PATH));
 
                     // Then complete the response
 
@@ -192,27 +193,19 @@ public class Storage {
         mainServer.on("comeToGetTheFile", new WSEventListener() {
             @Override
             public void onEvent(JSONObject data) {
-                log.info("New come to ceth upload request");
+                log.info("New come to get upload request");
                 try {
 
                     // Get the uploadKey
                     String uploadKey = data.getString("uploadKey");
 
-                    // Get the name of the file
-                    String fileName = data.getString("name");
-
-                    // The id of the folder that will contain the file
-                    long father = data.getLong("father");
-
-                    // Insert the file in the database
-                    GBFile dbFile = new GBFile(fileName, father, false);
-
-                    // And set the other informations
-                    dbFile.setSize(data.getLong("size"));
+                    // Wrap the incoming file
+                    GBFile incomingFile = new GBFile(data);
 
                     // Make the https request to the main server
                     URL url = new URL("https://goboxserver-simonedegiacomi.c9users.io/api/transfer/fromClient");
                     HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
+
                     // Abilitate input and output fro this request
                     conn.setDoOutput(true);
                     conn.setDoInput(true);
@@ -233,7 +226,7 @@ public class Storage {
                     int response = conn.getResponseCode();
 
                     // Create the stream to the disk
-                    DataOutputStream toDisk = new DataOutputStream(new FileOutputStream(dbFile.getPath()));
+                    DataOutputStream toDisk = new DataOutputStream(new FileOutputStream(incomingFile.getPathAsString(PATH)));
 
                     // Copy the stream
                     ByteStreams.copy(conn.getInputStream(), toDisk);
@@ -243,7 +236,7 @@ public class Storage {
                     conn.disconnect();
 
                     // Insert the file in the database
-                    SyncEvent event = db.insertFile(dbFile);
+                    SyncEvent event = db.insertFile(incomingFile);
 
                     // The notification will contain the new file information
                     emitEvent(event);
@@ -290,7 +283,7 @@ public class Storage {
                     DataOutputStream toServer = new DataOutputStream(conn.getOutputStream());
 
                     // Open the file
-                    DataInputStream fromFile = new DataInputStream(new FileInputStream(dbFile.getPath()));
+                    DataInputStream fromFile = new DataInputStream(new FileInputStream(dbFile.getPathAsString()));
 
                     // Send the file
                     ByteStreams.copy(fromFile, toServer);

@@ -84,12 +84,13 @@ public class Auth {
      * server is retrived.
      * @throws AuthException
      */
-    public void check() throws AuthException {
+    public boolean check() throws AuthException {
         if (token == null)
             throw new AuthException("Token is null");
         try {
             JSONObject response = EasyHttps.post("https://goboxserver-simonedegiacomi.c9users.io/api/user/check", null, token);
             token = response.getString("newOne");
+            return true;
         } catch (JSONException ex) {
             throw new AuthException("Invalid token");
         } catch (Exception ex) {

@@ -12,6 +12,7 @@ import org.json.JSONObject;
 import javax.net.ssl.HttpsURLConnection;
 import java.io.*;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.concurrent.FutureTask;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -65,7 +66,7 @@ public class StandardClient implements Client {
         try {
 
             // Create the websocket client
-            server = new MyWSClient(urls.get("socketStorage").toURI());
+            server = new MyWSClient(urls.getURI("socketClient"));
 
             // When the webSocket in opened, send the authentication object
             server.on("open", new WSEventListener() {
@@ -189,6 +190,9 @@ public class StandardClient implements Client {
             // Create a new https connection
             HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
 
+            conn.setDoInput(true);
+            conn.setDoOutput(true);
+
             // Authorize it
             auth.authorize(conn);
 
@@ -197,6 +201,11 @@ public class StandardClient implements Client {
 
             // Send the file
             ByteStreams.copy(stream, conn.getOutputStream());
+
+            int responseCode = conn.getResponseCode();
+
+            if (responseCode != 200)
+                log.warning("Response Code: " + responseCode);
 
             // Close the http connection
             conn.disconnect();
@@ -264,7 +273,7 @@ public class StandardClient implements Client {
                 // Wrap the data in a new SyncEvent
                 SyncEvent event = new SyncEvent(data);
 
-                // And call the event listener
+                // And call the listener
                 listener.on(event);
             }
         });

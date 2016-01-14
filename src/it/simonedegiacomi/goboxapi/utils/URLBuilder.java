@@ -7,6 +7,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Properties;
 
@@ -26,27 +28,12 @@ public class URLBuilder {
     private final Properties properties;
 
     /**
-     * Load the urls from a file.
-     * @param file File to read
-     * @return New instance of URLBuilder with
-     * the loaded urls.
+     * Load the urls from a string without creating a new URLBuilder
+     * @param in Stream to which read the properties
      * @throws IOException
      */
-    public static URLBuilder load (File file) throws IOException {
-        return load(new FileInputStream(file));
-    }
-
-    /**
-     * Load the urls from an input stream.
-     * @param in Input stream to read
-     * @return New instance of URLBuilder with loaded
-     * urls.
-     * @throws IOException
-     */
-    public static URLBuilder load (InputStream in) throws IOException {
-        URLBuilder url = new URLBuilder();
-        url.properties.load(in);
-        return url;
+    public void load (InputStream in) throws IOException {
+        properties.load(in);
     }
 
     /**
@@ -66,6 +53,14 @@ public class URLBuilder {
         try {
             return new URL(properties.getProperty(what));
         } catch (MalformedURLException ex) {
+            return null;
+        }
+    }
+
+    public URI getURI (String what) {
+        try {
+            return new URI(properties.getProperty(what));
+        } catch (URISyntaxException ex) {
             return null;
         }
     }

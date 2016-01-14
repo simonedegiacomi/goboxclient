@@ -71,8 +71,9 @@ public class FileSystemWatcher extends Thread {
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
 
                 // Register this folder
-                WatchKey key = dir.register(watchService, StandardWatchEventKinds.ENTRY_CREATE,
-                        StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY);
+                //WatchKey key = dir.register(watchService, StandardWatchEventKinds.ENTRY_CREATE,
+                //        StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY);
+                WatchKey key = dir.register(watchService, StandardWatchEventKinds.ENTRY_CREATE);
 
                 // Save the watch key in the map
                 keys.put(key, dir);
@@ -120,6 +121,7 @@ public class FileSystemWatcher extends Thread {
                     new Thread(new Runnable() {
                         @Override
                         public void run() {
+                            System.out.println("New thread working with " + file.toString());
                             listeners.get(kind.name()).onEvent(file);
                         }
                     }).start();

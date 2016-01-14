@@ -101,16 +101,16 @@ public class MyWSClient {
                     // Parse the message
                     JSONObject json = new JSONObject(message);
 
+                    // get the _queryId
+                    String queryId = json.getString("_queryId");
+
                     // If the message has not the queryId parameter
                     // is an simple event
-                    if(!json.has("_queryId")) {
+                    if(queryId == null || queryId.length() <= 0) {
                         events.get(json.getString("event"))
                                 .onEvent(json.getJSONObject("data"));
                         return ;
                     }
-
-                    // get the _queryId
-                    String queryId = json.getString("_queryId");
 
                     // Now, check if is a queryResponse
                     // If is a query response i MUST have an listener on the

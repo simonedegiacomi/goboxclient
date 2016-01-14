@@ -25,7 +25,7 @@ public class Config {
 
     private Properties properties;
 
-    private URLBuilder urls;
+    private URLBuilder urls = new URLBuilder();
 
     private Config () {
         properties = new Properties();
@@ -44,18 +44,17 @@ public class Config {
         properties.load(in);
         in.close();
 
-        // Now loads the url, placed in another file
-        in = new FileInputStream(DEFAULT_URLS_LOCATION);
-
-        // Create a new url builder
-        urls = new URLBuilder();
-
-        // load the urls
-        urls.load(in);
-
         // Close the stream
         in.close();
 
+    }
+
+    public void loadUrls () throws IOException {
+        // Now loads the url, placed in another file
+        InputStream in = new FileInputStream(DEFAULT_URLS_LOCATION);
+
+        // load the urls
+        urls.load(in);
     }
 
     public int getMode () {

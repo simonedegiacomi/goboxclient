@@ -50,13 +50,6 @@ public class Sync {
     private FileSystemWatcher watcher;
 
     /**
-     * This array contains the id of the file to ignore. Is used
-     * when to ignore these notification from the it.simonedegiacomi.storage that
-     * speak about the new file I (this instance) has created
-     */
-    private ArrayList<Long> filesToIgnore = new ArrayList<>();
-
-    /**
      * Create and start keep in sync the local fs with
      * the GoBox Storage. It used the Client passed as
      * arguments to communicate the events and to get
@@ -152,6 +145,13 @@ public class Sync {
                     // Wrap the java File into a GoBoxFile
                     GBFile wrappedFile = new GBFile(newFile);
 
+                    // I remove from the path of the file the prefix of the
+                    // folder in this machina, beacause maybe in the storage
+                    // the main folder that contains all the files has another name,
+                    // For now i'm doing it here, but i think i can find a better place
+                    // TODO: Find a better place to remove the local folder prefix
+                    wrappedFile.getListPath().remove(0);
+
                     if (wrappedFile.isDirectory()) {
 
                         // Create the folder
@@ -163,7 +163,7 @@ public class Sync {
                     }
 
                 } catch (ClientException ex) {
-                    log.warning("Cannot tell the it.simonedegiacomi.storage about the new file");
+                    log.warning("Cannot tell the storage about the new file");
                 }
             }
         });
@@ -220,10 +220,6 @@ public class Sync {
 
                 // Get the GBFile of this event
                 GBFile file = event.getRelativeFile();
-
-                // Check if i should ignore this event
-                if (filesToIgnore.remove(new Long(file.getID())))
-                    return;
 
                 try {
                     switch (event.getKind()) {

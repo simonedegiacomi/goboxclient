@@ -34,27 +34,25 @@ public class URLParams {
         // Use a string builder to decrease the use of memory
         StringBuilder builder = new StringBuilder();
 
-        // append the url
-        builder.append(stringUrl);
-
         // And add each params iterating the arguments object
         boolean first = true;
         Iterator<String> it = params.keys();
-        while(it.hasNext()) {
-            String key = it.next();
-            if (first) {
-                builder.append('?');
-                first = !first;
-            } else
-                builder.append('&');
-            builder.append(key);
-            builder.append('=');
-            builder.append(params.get(key).toString());
-        }
         try {
-            return new URL(URLEncoder.encode(builder.toString(), StandardCharsets.UTF_8.name()));
-        } catch (UnsupportedEncodingException e) { }
-        return null;
+            while (it.hasNext()) {
+                String key = it.next();
+                if (first) {
+                    builder.append('?');
+                    first = !first;
+                } else
+                    builder.append('&');
+                builder.append(URLEncoder.encode(key, StandardCharsets.UTF_8.name()));
+                builder.append('=');
+                builder.append(URLEncoder.encode(params.get(key).toString(), StandardCharsets.UTF_8.name()));
+            }
+            return new URL(stringUrl + builder.toString());
+        } catch (UnsupportedEncodingException ex) {
+            return null;
+        }
     }
 
     /**

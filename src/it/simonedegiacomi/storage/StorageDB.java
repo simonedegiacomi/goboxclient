@@ -83,7 +83,7 @@ public class StorageDB {
         stmt.execute("CREATE TABLE IF NOT EXISTS event (" +
                 "ID integer PRIMARY KEY AUTOINCREMENT NOT NULL," +
                 "file_ID integer not null," +
-                "kind enum('NEW_FILE', 'EDIT_FILE', 'REMOVE_FILE') not null," +
+                "kind text not null," +
                 "date integer)");
 
         // And commit the changes
@@ -149,7 +149,7 @@ public class StorageDB {
         if (newFile.getFatherID() == GBFile.UNKNOWN_FATHER)
             findFather(newFile);
         // If the file doesn't know his pathString, let's find it
-        if(newFile.getPath() == null)
+        if(newFile.getPathAsString() == null)
             findPath(newFile);
         // Prepare the statement to insert the file
         PreparedStatement stmt = db.prepareStatement("INSERT INTO FILE" +

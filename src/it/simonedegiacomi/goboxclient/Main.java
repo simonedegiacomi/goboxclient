@@ -10,6 +10,8 @@ import it.simonedegiacomi.storage.Storage;
 import it.simonedegiacomi.utils.SingleInstancer;
 
 import java.awt.*;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -23,6 +25,12 @@ public class Main {
     private static Config config = Config.getInstance();
 
     public static void main(String[] args) {
+
+        Handler consoleHandler = new ConsoleHandler();
+        consoleHandler.setLevel(Level.FINER);
+        Logger.getAnonymousLogger().addHandler(consoleHandler);
+
+
         SingleInstancer singler = new SingleInstancer();
         // Close the program
         // TODO: Add a message or open the it.simonedegiacomi.configuration of GoBox
@@ -31,6 +39,8 @@ public class Main {
         System.out.println("Single instance? " + singler.isSingle());
 
         try {
+            // Load the urls to use to contact the server
+            config.loadUrls();
             // Try to load the config
             config.load();
             afterConfigLoaded();
@@ -92,7 +102,7 @@ public class Main {
             Client client = new StandardClient(auth);
             Sync sync = new Sync(client);
 
-            sync.mergeWithStorage();
+            //sync.mergeWithStorage();
 
             sync.startSync();
 
@@ -109,6 +119,8 @@ public class Main {
 
             // start Sync
             Sync sync = new Sync(storage.getInternalClient());
+
+            sync.startSync();
 
         } catch (Exception ex) {
             ex.printStackTrace();
