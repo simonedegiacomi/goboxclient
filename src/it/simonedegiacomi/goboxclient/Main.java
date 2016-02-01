@@ -5,6 +5,7 @@ import it.simonedegiacomi.configuration.ConfigTool;
 import it.simonedegiacomi.goboxapi.authentication.Auth;
 import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.goboxapi.client.StandardClient;
+import it.simonedegiacomi.utils.EasyProxy;
 import javafx.scene.control.Alert;
 import it.simonedegiacomi.storage.Storage;
 import it.simonedegiacomi.utils.SingleInstancer;
@@ -24,6 +25,8 @@ public class Main {
 
     private static Config config = Config.getInstance();
 
+    private static Sync sync;
+
     public static void main(String[] args) {
 
         Handler consoleHandler = new ConsoleHandler();
@@ -33,7 +36,7 @@ public class Main {
 
         SingleInstancer singler = new SingleInstancer();
         // Close the program
-        // TODO: Add a message or open the it.simonedegiacomi.configuration of GoBox
+        // TODO: Add a message or open the configuration of GoBox
         //if(!singler.isSingle())
         //    System.exit(0);
         System.out.println("Single instance? " + singler.isSingle());
@@ -43,31 +46,45 @@ public class Main {
             config.loadUrls();
             // Try to load the config
             config.load();
-            afterConfigLoaded();
+
+            // Check if there is a proxy to use
+            EasyProxy.manageProxy(config);
+
+            if (config.getProperty("username") == null)
+                startConfig();
+            else
+                afterConfigLoaded();
         } catch (Exception ex) {
 
             log.warning("No config file found");
             // If something fails, it means that there is no config
             // file, so let's create a new config
-            ConfigTool tool = ConfigTool.getConfigTool(new ConfigTool.EventListener() {
-                @Override
-                public void onConfigComplete() {
-                    // initialize some variables in the config
-                    config.setProperty("path", "files/");
-                    afterConfigLoaded();
-                }
-
-                @Override
-                public void onConfigFailed() {
-                    log.warning("Configuration failed");
-                    showError();
-                    System.exit(-1);
-                }
-            });
+            startConfig();
         }
     }
 
+    private static void startConfig () {
+        ConfigTool tool = ConfigTool.getConfigTool(new ConfigTool.EventListener() {
+            @Override
+            public void onConfigComplete() {
+                // initialize some variables in the config
+                config.setProperty("path", "files/");
+                afterConfigLoaded();
+            }
+
+            @Override
+            public void onConfigFailed() {
+                log.warning("Configuration failed");
+                showError();
+                System.exit(-1);
+            }
+        });
+    }
+
     private static void afterConfigLoaded() {
+
+        // Check if there is a proxy to use
+        EasyProxy.manageProxy(config);
 
         // try the token
         Auth auth = new Auth(config.getProperty("username"));
@@ -93,14 +110,16 @@ public class Main {
         }
 
         // If there is a graphic interface add the tray icon
-        if(!GraphicsEnvironment.isHeadless())
-            addIconTray();
+        if(!GraphicsEnvironment.isHeadless()) {
+            TrayController tray = new TrayController(sync);
+            tray.showTray();
+        }
     }
 
     private static void startClientMode (Auth auth) {
         try {
             Client client = new StandardClient(auth);
-            Sync sync = new Sync(client);
+            sync = new Sync(client);
 
             //sync.mergeWithStorage();
 
@@ -117,8 +136,10 @@ public class Main {
             // start event listener and http server
             Storage storage = new Storage(auth);
 
+            storage.startStoraging();
+
             // start Sync
-            Sync sync = new Sync(storage.getInternalClient());
+            sync = new Sync(storage.getInternalClient());
 
             sync.startSync();
 
@@ -139,9 +160,5 @@ public class Main {
             alert.setContentText("GoBoxClient cannot be initialized.");
             alert.showAndWait();
         }
-    }
-
-    private static void addIconTray() {
-
     }
 }

@@ -8,10 +8,14 @@ import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.client.SyncEventListener;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -50,6 +54,11 @@ public class Sync {
     private FileSystemWatcher watcher;
 
     /**
+     * Path of the files folder
+     */
+    private final String PATH = "files";
+
+    /**
      * Create and start keep in sync the local fs with
      * the GoBox Storage. It used the Client passed as
      * arguments to communicate the events and to get
@@ -84,7 +93,7 @@ public class Sync {
     }
 
     private void mergeR (GBFile father) throws ClientException{
-        GBFile[] files = client.listDirectory(father);
+        List<GBFile> files = client.listDirectory(father);
         for(GBFile file : files) {
 
             if(!file.toFile().exists()) {
@@ -143,27 +152,15 @@ public class Sync {
                 log.fine("New file created in the local fs");
                 try {
                     // Wrap the java File into a GoBoxFile
-                    GBFile wrappedFile = new GBFile(newFile);
+                    GBFile wrappedFile = new GBFile(newFile, PATH);
 
-                    // I remove from the path of the file the prefix of the
-                    // folder in this machina, beacause maybe in the storage
-                    // the main folder that contains all the files has another name,
-                    // For now i'm doing it here, but i think i can find a better place
-                    // TODO: Find a better place to remove the local folder prefix
-                    wrappedFile.getListPath().remove(0);
-
-                    if (wrappedFile.isDirectory()) {
-
-                        // Create the folder
+                    if (wrappedFile.isDirectory())
                         client.createDirectory(wrappedFile);
-                    } else {
-
-                        // Upload the file to the server
+                    else
                         client.uploadFile(wrappedFile);
-                    }
 
                 } catch (ClientException ex) {
-                    log.warning("Cannot tell the storage about the new file");
+                    log.warning("Can't tell the storage about the new file");
                 }
             }
         });
@@ -176,7 +173,7 @@ public class Sync {
 
                 try {
                     // Wrap the java File into a GoBoxFile
-                    GBFile wrappedFile = new GBFile(editedFile);
+                    GBFile wrappedFile = new GBFile(editedFile, PATH);
 
                     // Call the right client method
                     client.updateFile(wrappedFile);
@@ -194,7 +191,7 @@ public class Sync {
 
                 try {
                     // Wrap the file
-                    GBFile wrappedFile = new GBFile(deletedFile);
+                    GBFile wrappedFile = new GBFile(deletedFile, PATH);
                     // and remove it
                     client.removeFile(wrappedFile);
                 } catch (ClientException ex) {
@@ -221,6 +218,10 @@ public class Sync {
                 // Get the GBFile of this event
                 GBFile file = event.getRelativeFile();
 
+                System.out.println("New event: " + file.toString());
+
+                watcher.ignore(file.toFile(PATH));
+
                 try {
                     switch (event.getKind()) {
                         case NEW_FILE:
@@ -231,14 +232,16 @@ public class Sync {
                                 createDirectory(file);
                             else
                                 // otherwise download the new file
-                                client.getFile(file);
+                                client.getFile(file, new FileOutputStream(file.toFile(PATH)));
                             break;
 
                         case EDIT_FILE:
+
+                            client.updateFile(file);
                             break;
 
                         case REMOVE_FILE:
-
+                            file.toFile(PATH).delete();
                             break;
                         default:
                             log.warning("New unrecognized sync event from the it.simonedegiacomi.storage");
@@ -258,17 +261,7 @@ public class Sync {
      * @throws IOException
      */
     private void createDirectory (GBFile newDir) throws IOException {
-        Files.createDirectory(newDir.toPath());
-    }
-
-    /**
-     * Remove a file on the local fs. This method, like the
-     * 'createDirectory' is called when the delete event is
-     * received from  the it.simonedegiacomi.storage
-     * @param fileToRemove File to delete
-     * @throws IOException
-     */
-    private void removeFile (GBFile fileToRemove) throws IOException {
-
+        System.out.println("I'm going to create " + newDir.getPathAsString(PATH));
+        Files.createDirectory(newDir.toPath(PATH));
     }
 }

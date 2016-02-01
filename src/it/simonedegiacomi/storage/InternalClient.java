@@ -11,6 +11,10 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -35,6 +39,8 @@ public class InternalClient implements Client {
      */
     private final Storage storage;
 
+    private final Set<GBFile> filesToIgnore = new HashSet<>();
+
     public InternalClient(Storage storage, StorageDB db) {
         this.db = db;
         this.storage = storage;
@@ -53,7 +59,7 @@ public class InternalClient implements Client {
     }
 
     @Override
-    public GBFile[] listDirectory(GBFile father) throws ClientException {
+    public List<GBFile> listDirectory(GBFile father) throws ClientException {
         try {
             return db.getChildrenByFather(father);
         } catch (Exception ex) {
@@ -64,28 +70,36 @@ public class InternalClient implements Client {
 
     @Override
     public void getFile(GBFile file) throws ClientException {
-        return ;
+        if(filesToIgnore.remove(file))
+            return;
+
     }
 
     @Override
     public void getFile(GBFile file, OutputStream dst) throws ClientException, IOException {
+        if(filesToIgnore.remove(file))
+            return;
         InputStream fileStream = new FileInputStream(file.toFile());
         ByteStreams.copy(fileStream, dst);
     }
 
     @Override
     public void createDirectory(GBFile newDir) throws ClientException {
-
+        this.uploadFile(newDir);
     }
 
     @Override
     public void uploadFile(GBFile file, InputStream stream) {
-
+        if(filesToIgnore.remove(file))
+            return;
     }
 
     @Override
     public void uploadFile(GBFile file) {
+        if(filesToIgnore.remove(file))
+            return;
         try {
+            // Just insert the file into the database, the file is already here
             SyncEvent event = db.insertFile(file);
             storage.emitEvent(event);
         } catch (Exception ex) {
@@ -95,8 +109,12 @@ public class InternalClient implements Client {
 
     @Override
     public void removeFile(GBFile file) {
+        if(filesToIgnore.remove(file))
+            return;
         try {
-            db.removeFile(file);
+            // Just remove the file, it's already gone...
+            SyncEvent event = db.removeFile(file);
+            storage.emitEvent(event);
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
         }
@@ -104,12 +122,10 @@ public class InternalClient implements Client {
 
     @Override
     public void updateFile(GBFile file, InputStream file2) {
-        uploadFile(file);
-    }
-
-    @Override
-    public void updateFile(GBFile file) {
+        if(filesToIgnore.remove(file))
+            return;
         try {
+            // The file is already updated...
             SyncEvent event = db.updateFile(file);
             storage.emitEvent(event);
         } catch (Exception ex) {
@@ -118,8 +134,16 @@ public class InternalClient implements Client {
     }
 
     @Override
-    public void setSyncEventListener (SyncEventListener listener) {
-        storage.setInternalSyncEventListener(listener);
+    public void updateFile(GBFile file) {
+        this.updateFile(file, null);
     }
 
+    @Override
+    public void setSyncEventListener (SyncEventListener listener) {
+        // Nothing to do here because alla the events are handledby the storage
+    }
+
+    public void ignore(GBFile file) {
+        filesToIgnore.add(file);
+    }
 }

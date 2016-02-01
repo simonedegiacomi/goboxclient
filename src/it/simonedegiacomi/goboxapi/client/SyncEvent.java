@@ -1,5 +1,6 @@
 package it.simonedegiacomi.goboxapi.client;
 
+import com.google.gson.Gson;
 import it.simonedegiacomi.goboxapi.GBFile;
 import org.json.JSONObject;
 
@@ -10,7 +11,7 @@ import org.json.JSONObject;
  *
  * Created by Degiacomi Simone on 02/01/16.
  */
-public class SyncEvent {
+public class SyncEvent implements Comparable {
 
     /**
      * Kinds of events
@@ -35,7 +36,7 @@ public class SyncEvent {
     public SyncEvent (JSONObject obj) {
         try {
             this.kind = EventKind.valueOf(obj.getString("kind"));
-            this.relativeFile = new GBFile(obj.getJSONObject("file"));
+            this.relativeFile = new Gson().fromJson(obj.getJSONObject("file").toString(), GBFile.class);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -65,9 +66,10 @@ public class SyncEvent {
         JSONObject obj = new JSONObject();
         try {
             obj.put("kind", kind);
-            obj.put("file", relativeFile.toJSON());
+            if (relativeFile != null)
+                obj.put("file", relativeFile.toJSON());
         } catch (Exception ex) {
-            ex.toString();
+            ex.printStackTrace();
         }
         return obj;
     }
@@ -78,5 +80,10 @@ public class SyncEvent {
      */
     public void setRelativeFile(GBFile relativeFile) {
         this.relativeFile = relativeFile;
+    }
+
+    @Override
+    public int compareTo(Object o) {
+        return o == this ? 0 : 1;
     }
 }

@@ -2,6 +2,8 @@ package it.simonedegiacomi.goboxapi;
 
 import com.google.common.hash.HashCode;
 import com.google.common.hash.Hashing;
+import com.google.gson.Gson;
+import com.google.gson.annotations.SerializedName;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -10,6 +12,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Logger;
@@ -51,7 +54,7 @@ public class GBFile {
      * Indicate if the file is a 'real' file or
      * a directory
      */
-    private final boolean isDirectory;
+    private boolean isDirectory;
 
     /**
      * Size of the file in bytes
@@ -64,14 +67,16 @@ public class GBFile {
     private String name;
 
     /**
-     * Date of ht ecration and the last update of the file
+     * Date of ht creation and the last update of the file
      */
     private long creationDate, lastUpdateDate;
 
     /**
      * Path of the file
+     * This path doesn't contains this file as last file, because Gson doesn't like
+     * this... so i need to add the file every time the getPath method is called
      */
-    private List<String> path;
+    private List<GBFile> path;
 
     /**
      * Hash of the file
@@ -79,20 +84,41 @@ public class GBFile {
     private HashCode hash;
 
     /**
-     * If the file is wrapped, this refer to the original file
+     * If the file is wrapped, this refer to the original file.
+     * This as a Gson name starting iht the underscore because this object make sense
+     * only in this FileSystem
      */
     private File javaFile;
 
-    public GBFile (File file) {
+    /**
+     * List of children of this file
+     */
+    private List<GBFile> children;
+
+    /**
+     * Create a new GBFile starting only with the name and the type of file (file or
+     * folder). All the other fields are null
+     * @param name Name of the file
+     * @param isDirectory Type of file (folder or file)
+     */
+    public GBFile (String name, boolean isDirectory) {
+        this.name = name;
+        this.isDirectory = isDirectory;
+    }
+
+    /**
+     * Create a new GBFile from a java file and a path prefix. This path prefix will
+     * be removed from the path obtained from the java file
+     * @param file Java file representation of the file
+     * @param prefix Prefix to remove from the path
+     */
+    public GBFile (File file, String prefix) {
         this.javaFile = file;
         this.name = file.getName();
         this.isDirectory = file.isDirectory();
+        this.setPathByString(file.getPath(), prefix);
         try {
-            BasicFileAttributes attrs = Files.readAttributes(file.toPath(), BasicFileAttributes.class);
-            this.size = attrs.size();
-            this.creationDate = attrs.creationTime().toMillis();
-            this.lastUpdateDate = attrs.lastAccessTime().toMillis();
-            this.setPathByString(file.getPath());
+            loadAttributes();
         } catch (IOException e) {
             // Trust me, i really care...
             e.printStackTrace();
@@ -100,24 +126,44 @@ public class GBFile {
     }
 
     /**
+     * This method loads the attributes of the file.
+     */
+    public void loadAttributes ()  throws IOException {
+        BasicFileAttributes attrs = Files.readAttributes(javaFile.toPath(), BasicFileAttributes.class);
+        this.size = attrs.size();
+        this.creationDate = attrs.creationTime().toMillis();
+        this.lastUpdateDate = attrs.lastAccessTime().toMillis();
+    }
+
+    /**
+     * Create a new file starting from the java representation. This method work just like
+     * the (file, prefix) and doesn't remove anything from the path, so be careful!
+     * @param file Java representation of the file
+     */
+    public GBFile (File file) {
+        this(file, null);
+    }
+
+    /**
      * Create a new GBFile from a JSON that represent this file in another
      * client or in the storage.
      * @param json JSON with teh information of the file
-     * @throws GBException
+     * @throws GBException throwed if the json object is not corrected
+     * @Deprecated Use Gson instead
      */
     public GBFile (JSONObject json) throws GBException {
 
         try {
             this.name = json.getString("name");
 
-            this.isDirectory = json.getBoolean("isDirectory");
-            this.size = json.getLong("size");
-            this.creationDate = json.getLong("creation");
+            this.isDirectory = json.optBoolean("isDirectory");
+            this.size = json.optLong("size");
+            this.creationDate = json.optLong("creation");
 
-            this.lastUpdateDate = json.getLong("lastUpdate");
-            this.ID = json.has("id") ? json.getLong("id") : UNKNOWN_ID;
-            if (json.has("fatherId") && json.get("fatherId").toString().length() > 0)
-                this.fatherID = json.getLong("fatherId");
+            this.lastUpdateDate = json.optLong("lastUpdate");
+            this.ID = json.has("ID") ? json.getLong("ID") : UNKNOWN_ID;
+            if (json.has("fatherID") && json.get("fatherID").toString().length() > 0)
+                this.fatherID = json.getLong("fatherID");
             else if (json.has("path") && json.getString("path").length() > 0)
                 this.setPathByString(json.getString("path"));
             else
@@ -179,8 +225,8 @@ public class GBFile {
      * extends this class should edit the ID of the file
      * @param fatherID ID of the father
      */
-    public void setFatherID(long fatherID) {
-        this.fatherID = ID;
+    public void setFatherID(long newFatherID) {
+        this.fatherID = newFatherID;
     }
 
 
@@ -229,45 +275,54 @@ public class GBFile {
         return isDirectory;
     }
 
+    /**
+     * Return the date if the last update of this file
+     * @return Date expressed in milliseconds
+     */
     public long getLastUpdateDate() {
         return lastUpdateDate;
     }
 
+    /**
+     * Set the last update of this file.
+     * @param lastUpdateDate date of the last update in
+     *                       milliseconds
+     */
     public void setLastUpdateDate(long lastUpdateDate) {
         this.lastUpdateDate = lastUpdateDate;
     }
 
+    /**
+     * Return the date of the creation of this file
+     * @return Date of the creation of this file in milliseconds
+     */
     public long getCreationDate() {
         return creationDate;
     }
 
+    /**
+     * Set the creation date
+     * @param creationDate Date of the creation in milliseconds
+     */
     public void setCreationDate(long creationDate) {
         this.creationDate = creationDate;
     }
 
     public JSONObject toJSON () {
-        JSONObject obj = new JSONObject();
         try {
-            obj.put("name", name);
-            obj.put("id", ID);
-            obj.put("isDirectory", isDirectory);
-            obj.put("creation", creationDate);
-            obj.put("lastUpdate", lastUpdateDate);
-            obj.put("size", size);
-            if(fatherID != UNKNOWN_FATHER)
-                obj.put("fatherId", fatherID);
-            else
-                obj.put("path", getPathAsString());
+            System.out.println("Path is " + path + " and gson " + new Gson().toJson(this));
+            return new JSONObject(new Gson().toJson(this));
         } catch (Exception ex) {
             ex.printStackTrace();
         }
-        return obj;
+        return null;
     }
 
     /**
      * Return the hash of the file if the file was wrapped from a File and
-     * if is not an directory
-     * @return
+     * if is not an directory.
+     * This method will block the thread until the hash is computed
+     * @return The hash of the file
      */
     public HashCode getHash () throws IOException {
         if (hash == null && !isDirectory && javaFile != null)
@@ -279,95 +334,171 @@ public class GBFile {
      * Generate a new GBFile, with his fatherID equals to this id
      * @param name Name of the new file
      * @param isDirectory is a directory or a  file?
-     * @return The new file
+     * @return The new generated file, son of this file
      */
     public GBFile generateChild (String name, boolean isDirectory) {
         return new GBFile(name, ID, isDirectory);
     }
 
     /**
-     * Return the path of the file as a string
-     * @param prefic Prefix to add to the generated path
-     * @return String that rappresentate the path of the file
+     * Return the path of the file as a string. This path contains this file as last
+     * node and the specified prefix passed as argument
+     * @param prefix Prefix to add to the generated path
+     * @return String path of the file
      */
     public String getPathAsString(String prefix) {
         StringBuilder builder = new StringBuilder();
-        for(String piece : path)
-            builder.append('/' + piece);
-        return prefix + builder.toString();
-    }
-
-    /**
-     * Return the path of the file as a string
-     * @return String that rappresentate the path of the file
-     */
-    public String getPathAsString() {
-        StringBuilder builder = new StringBuilder();
-        for(String piece : path)
-            builder.append('/' + piece);
+        if(prefix != null)
+            builder.append(prefix);
+        for(GBFile piece : getPathAsList())
+            builder.append('/').append(piece.getName());
         return builder.toString();
     }
 
     /**
-     * Return the Path as a list of 'piece'. Each 'piece' is a
-     * folder.
-     * @return List rappresentation of the path
+     * Return the path of the file as a string. This path include this file ad last node
+     * @return String path of the file
      */
-    public List<String> getListPath() {
-        return path;
+    public String getPathAsString() {
+        return getPathAsString(null);
+    }
+
+    /**
+     * Return the Path as a list of 'piece'. The last piece is this file
+     * @return List representation of the path including this file
+     */
+    public List<GBFile> getPathAsList() {
+        LinkedList<GBFile> temp = new LinkedList<>();
+        if(path != null)
+            temp.addAll(path);
+
+        temp.add(this);
+        return temp;
     }
 
     /**
      * Set the path of the file, without updating the fatherID
-     * @param pieces New path of the file.
+     * @param pieces New path of the file. This list need to contains this file
+     *               as last node
      */
-    public void setPath (List<String> pieces) {
+    public void setPathByList(List<GBFile> pieces) {
         this.path = pieces;
+        pieces.remove(pieces.size() - 1);
     }
 
     /**
-     * Set the new path of the file without updating the fatherID
+     * Set the new path of the file without updating the fatherID. This
+     * path need to contain this file as last node
      * @param str String that contains the path
      */
     public void setPathByString (String str) {
-        this.path = new LinkedList<>();
-        for(String piece : str.split("/"))
-            path.add(piece);
+        this.setPathByString(str, new String());
     }
 
     /**
-     * Return the java io File reference to this file
+     * Set the path from a string. The string prefixToRemove won't be
+     * present in the path
+     * Example:
+     *      str:                "files/new folder"
+     *      prefixToRemove:     "files"
+     *      path:               []
+     *
+     * NOTE that the path in this example is empty because the file 'new folder'
+     * will be added when any getPath will be called. This because Gson doesn't
+     * like an object that contains himself
+     *
+     * @param str String representation of the path
+     * @param prefixToRemove Prefix to remove from the path. The GBFile should have a path
+     *                       relative to the root of the storage, not relative to the FS path
+     *                       or same randomm folder
+     */
+    public void setPathByString (String str, String prefixToRemove) {
+        // Create a new list that holds the nodes
+        path = new LinkedList<>();
+
+        // Divide the path and the prefix in string nodes
+        String[] pieces = str.split("/");
+        String[] badPieces = prefixToRemove.split("/");
+
+        // skip the intials bad nodes
+        int i = 0;
+        while(i < badPieces.length && i < pieces.length && pieces[i].equals(badPieces[i]))
+            i++;
+
+        // Add all the older except the last
+        while(i < pieces.length - 1)
+            path.add(new GBFile(pieces[i++], true));
+    }
+
+    /**
+     * Return the java io.File reference to this file
      * @return Reference to this file
      */
     public File toFile () {
-        if (javaFile == null)
-            javaFile = new File(getPathAsString());
-        return javaFile;
-    }
-
-
-    public File toFile (String prefix) {
-        if (javaFile == null)
-            javaFile = new File(getPathAsString(prefix));
-        return javaFile;
+        return toFile(null);
     }
 
     /**
-     * Return the Path object of the file
-     * @return Path reference to this file
+     * Return the java file object of this file adding the specified prefix to
+     * the start of the path (of the file, this prefix doesn't make any difference
+     * to the GBFile path)
+     * If this file is a wrap of java File or this method was already called the file
+     * won't be created, even if the prefix is different
+     * @param prefix Prefix to add to the path of the file
+     * @return Java file
+     */
+    public File toFile (String prefix) {
+        return (javaFile = javaFile == null ? new File(getPathAsString(prefix)) : javaFile);
+    }
+
+    /**
+     * Return the java path of this file
+     * @return Java Path object of this file
      */
     public Path toPath () {
-        return toFile().toPath();
+        return this.toFile().toPath();
     }
 
     /**
-     * Return the Path object of the file
-     * @return Path reference to this file
+     * Return the java path of this file with the specified prefix
+     * @param prefix Prefix to add to the file path
+     * @return Java path of this file
      */
     public Path toPath (String prefix) {
-        return toFile(prefix).toPath();
+        return this.toFile(prefix).toPath();
     }
 
+    /**
+     * his method apply the information relative of this file to the file system.
+     * If you change the date calling the method 'setCreationDate' the logic representation
+     * of this file changes, but the file in the fs not change. to change that information
+     * call this method.
+     * NOTE: This method will block the thread until the file on the fs is complete updated
+     */
+    public void applyParams () {
+        // TODO: implement this...
+    }
+
+    /**
+     * Return the children of this file
+     * @return
+     */
+    public List<GBFile> getChildren() {
+        return children;
+    }
+
+    /**
+     * Set the children of this file, removing (logically) the previous
+     * @param children New list of children
+     */
+    public void setChildren(List<GBFile> children) {
+        this.children = children;
+    }
+
+    /**
+     * Return the string representation of this file
+     * @return Representation of this file
+     */
     @Override
     public String toString() {
         return "GBFile{" +
@@ -376,8 +507,11 @@ public class GBFile {
                 ", isDirectory=" + isDirectory +
                 ", size=" + size +
                 ", name='" + name + '\'' +
-                ", creationDate='" + creationDate + '\'' +
-                ", lastUpdateDate='" + lastUpdateDate + '\'' +
+                ", creationDate=" + creationDate +
+                ", lastUpdateDate=" + lastUpdateDate +
+                ", path=" + path +
+                ", hash=" + hash +
+                ", javaFile=" + javaFile +
                 '}';
     }
 }

@@ -1,6 +1,7 @@
 package it.simonedegiacomi.goboxapi.client;
 
 import com.google.common.io.ByteStreams;
+import com.google.gson.Gson;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.authentication.Auth;
@@ -13,6 +14,8 @@ import javax.net.ssl.HttpsURLConnection;
 import java.io.*;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.FutureTask;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -112,7 +115,7 @@ public class StandardClient implements Client {
 
             // Create and fill the request object
             JSONObject request = new JSONObject();
-            request.put("id", file.getID());
+            request.put("ID", file.getID());
 
             URL url = urls.get("getFile", request);
             HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
@@ -135,7 +138,7 @@ public class StandardClient implements Client {
     @Override
     public void createDirectory(GBFile newDir) throws ClientException {
         try {
-            FutureTask<JSONObject> future = server.makeQuery("createFolder", newDir.toJSON());
+            FutureTask<JSONObject> future = server.makeQuery("createFolder", new JSONObject(new Gson().toJson(newDir)));
             JSONObject response = future.get();
             newDir.setID(response.getLong("newFolderId"));
         } catch (Exception ex) {
@@ -151,19 +154,19 @@ public class StandardClient implements Client {
     }
 
     @Override
-    public GBFile[] listDirectory(GBFile father) throws ClientException {
+    public List<GBFile> listDirectory(GBFile father) throws ClientException {
 
         // Make the quey
         FutureTask<JSONObject> future = server.makeQuery("listFile", father.toJSON());
         try {
-            // Get hte response fromt he future
+            // Get hte response from the future
             JSONObject response = future.get();
 
             // Create a new array of GBFile from the response
             JSONArray children = response.getJSONArray("children");
-            GBFile[] files = new GBFile[children.length()];
-            for (int i = 0; i < files.length; i++)
-                files[i] = new GBFile(children.getJSONObject(i));
+            List<GBFile> files = new LinkedList<>();
+            for (int i = 0; i < children.length(); i++)
+                files.add(new GBFile(children.getJSONObject(i)));
             return files;
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
@@ -185,7 +188,7 @@ public class StandardClient implements Client {
     public void uploadFile(GBFile file, InputStream stream) throws ClientException {
         try {
             // Get the url to upload the file
-            URL url = urls.get("uploadFile", file.toJSON());
+            URL url = urls.get("uploadFile", new JSONObject(new Gson().toJson(file)));
 
             // Create a new https connection
             HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
@@ -209,6 +212,7 @@ public class StandardClient implements Client {
 
             // Close the http connection
             conn.disconnect();
+            stream.close();
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
             throw new ClientException(ex.toString());

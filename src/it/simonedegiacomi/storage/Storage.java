@@ -1,6 +1,8 @@
 package it.simonedegiacomi.storage;
 
 import com.google.common.io.ByteStreams;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.client.SyncEventListener;
@@ -19,6 +21,7 @@ import javax.net.ssl.HttpsURLConnection;
 import java.io.*;
 import java.net.URL;
 import java.nio.file.Files;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -62,11 +65,9 @@ public class Storage {
      */
     private final String PATH = "files";
 
-    /**
-     * Listener of the internal client.
-     * I know, the name is long, but is a clean name
-     */
-    private SyncEventListener internalSyncEventListener;
+    private final Auth auth;
+
+    private InternalClient internalClient;
 
     /**
      * Create a new it.simonedegiacomi.storage given the Auth object for
@@ -76,6 +77,8 @@ public class Storage {
      * @throws StorageException
      */
     public Storage(Auth auth) throws StorageException {
+
+        this.auth = auth;
 
         // Connect to the local databaase
         try {
@@ -119,9 +122,11 @@ public class Storage {
                 assignEvent();
             }
         });
+    }
 
+    public void startStoraging () throws Exception {
         // Open the connection and start to listen
-        mainServer.connect();
+        mainServer.connectSync();
     }
 
     /**
@@ -131,21 +136,20 @@ public class Storage {
      */
     private void assignEvent () {
 
-        // List the file inside a directory
+        /**
+         * List the files inside the directory, filling the file received from
+         * the query
+         */
         mainServer.onQuery("listFile", new WSQueryAnswer() {
             @Override
             public JSONObject onQuery(JSONObject data) {
                 log.info("ListFile query");
                 try {
                     GBFile father = new GBFile(data);
-                    JSONObject response = father.toJSON();
-                    GBFile files[] = db.getChildrenByFather(father);
-                    JSONArray jsonFiles = new JSONArray();
-                    if (files != null)
-                        for(GBFile file : files)
-                            jsonFiles.put(file.toJSON());
-                    response.put("children", jsonFiles);
-                    return response;
+
+                    GBFile detailedFile = db.getFileById(father.getID(), false, true);
+
+                    return new JSONObject(new Gson().toJson(detailedFile));
                 } catch (Exception ex) {
                     log.log(Level.SEVERE, ex.toString(), ex);
                     return null;
@@ -163,21 +167,22 @@ public class Storage {
                     // Re-create the new folder from the json request
                     GBFile newFolder = new GBFile(data);
 
-                    // Insert the file and get the event
-                    SyncEvent event = db.insertFile(newFolder);
-
                     // Create the real file in the FS
                     Files.createDirectory(newFolder.toPath(PATH));
+
+                    // Insert the file and get the event
+                    SyncEvent event = db.insertFile(newFolder);
 
                     // Then complete the response
 
                     response.put("newFolderId", newFolder.getID());
                     response.put("created", true);
 
+                    notifyInternalClient(newFolder);
                     // But first, send a broadcast message to advise the other
                     // client that a new folder is created
 
-                    // The notification will contain the new file informations
+                    // The notification will contain the new file information
                     emitEvent(event);
                 } catch (Exception ex) {
                     log.log(Level.SEVERE, ex.toString(), ex);
@@ -185,6 +190,58 @@ public class Storage {
 
                 // Finally return the response
                 return response;
+            }
+        });
+
+        mainServer.onQuery("updateFile", new WSQueryAnswer() {
+
+            @Override
+            public JSONObject onQuery (JSONObject data) {
+                JSONObject response = new JSONObject();
+                try {
+                    GBFile fileToUpdate = new GBFile(data);
+                    SyncEvent event = db.updateFile(fileToUpdate);
+
+                    emitEvent(event);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+                return response;
+            }
+        });
+
+        // Listener of the remove file event
+        mainServer.on("removeFile", new WSEventListener() {
+
+            @Override
+            public void onEvent(JSONObject data) {
+                try {
+                    GBFile fileToRemove = new GBFile(data);
+                    SyncEvent event = db.removeFile(fileToRemove);
+
+                    // The notification will contain the deleted file
+                    emitEvent(event);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
+
+        mainServer.onQuery("whatPath", new WSQueryAnswer() {
+            @Override
+            public JSONObject onQuery(JSONObject data) {
+                try {
+                    // Wrap the file
+                    GBFile file = new GBFile(data);
+
+                    db.findPath(file);
+
+                    // TODO find a better way to return a Gson
+                    return new JSONObject(new Gson().toJson(file.getPathAsList()));
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+                return null;
             }
         });
 
@@ -205,6 +262,9 @@ public class Storage {
                     // Make the https request to the main server
                     URL url = new URL("https://goboxserver-simonedegiacomi.c9users.io/api/transfer/fromClient");
                     HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
+
+                    conn.setRequestMethod("POST");
+                    auth.authorize(conn);
 
                     // Abilitate input and output fro this request
                     conn.setDoOutput(true);
@@ -247,50 +307,38 @@ public class Storage {
             }
         });
 
-        // Listener of the remove file event
-        mainServer.on("removeFile", new WSEventListener() {
-
-            @Override
-            public void onEvent(JSONObject data) {
-                try {
-                    GBFile fileToRemove = new GBFile(data);
-                    SyncEvent event = db.removeFile(fileToRemove);
-
-                    // The notification will contain the deleted file
-                    emitEvent(event);
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-            }
-        });
-
         mainServer.on("sendMeTheFile", new WSEventListener() {
             @Override
             public void onEvent(JSONObject data) {
                 log.info("New download request");
                 try {
                     String downloadKey = data.getString("downloadKey");
-                    long file = data.getLong("id");
+                    long file = data.getLong("ID");
 
                     // get the file from the database
                     GBFile dbFile = db.getFileById(file);
 
-                    URL url = urls.get("sendFileToClient");
+                    data.remove("ID");
+
+                    URL url = urls.get("sendFileToClient", data);
 
                     HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
+                    conn.setRequestMethod("POST");
+                    auth.authorize(conn);
+
                     conn.setDoOutput(true);
 
                     DataOutputStream toServer = new DataOutputStream(conn.getOutputStream());
 
                     // Open the file
-                    DataInputStream fromFile = new DataInputStream(new FileInputStream(dbFile.getPathAsString()));
+                    DataInputStream fromFile = new DataInputStream(new FileInputStream(dbFile.getPathAsString(PATH)));
 
                     // Send the file
                     ByteStreams.copy(fromFile, toServer);
 
                     fromFile.close();
                     toServer.close();
-                    conn.getResponseCode();
+                    System.out.println(conn.getResponseCode());
                     conn.disconnect();
 
                 } catch (Exception ex) {
@@ -298,16 +346,24 @@ public class Storage {
                 }
             }
         });
+
+        mainServer.onQuery("ping", new WSQueryAnswer() {
+            @Override
+            public JSONObject onQuery(JSONObject data) {
+                return new JSONObject();
+            }
+        });
+    }
+
+    private void notifyInternalClient(GBFile file) {
+        if(internalClient != null)
+            internalClient.ignore(file);
     }
 
     protected void emitEvent (SyncEvent eventToEmit) {
-        mainServer.sendEventBroadcast("syncEvent", eventToEmit.toJSON());
-        if (internalSyncEventListener != null)
-            internalSyncEventListener.on(eventToEmit);
-    }
 
-    protected void setInternalSyncEventListener (SyncEventListener listener) {
-        this.internalSyncEventListener = listener;
+        // Send the event to all the clients
+        mainServer.sendEventBroadcast("syncEvent", eventToEmit.toJSON());
     }
 
     /**
@@ -322,8 +378,6 @@ public class Storage {
      */
     public Client getInternalClient () {
 
-        // Create a new Internal Client that will use
-        //the it.simonedegiacomi.storage database
-        return new InternalClient(this, db);
+        return (internalClient = internalClient == null ? new InternalClient(this, db) : internalClient);
     }
 }

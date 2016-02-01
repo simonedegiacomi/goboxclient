@@ -5,6 +5,7 @@ import it.simonedegiacomi.goboxapi.GBFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.List;
 
 /**
  * This is the interface of the it.simonedegiacomi.goboxclient api
@@ -27,7 +28,7 @@ public interface Client {
      * @return Children of the directory
      * @throws ClientException
      */
-    public GBFile[] listDirectory (GBFile father) throws ClientException;
+    public List<GBFile> listDirectory (GBFile father) throws ClientException;
 
     /**
      * Retrive the file from the it.simonedegiacomi.storage and save it

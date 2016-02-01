@@ -67,6 +67,16 @@ public class MyWSClient {
      * Executor used to use the java FutureTask
      */
     private final ExecutorService executor = Executors.newFixedThreadPool(3);
+    
+    /**
+     * This statis method allows you to set a proxy that will be used
+     * for the new instances of this class
+     * @param ip IP of the proxy
+     * @param port Port of the proxy
+     */
+    public static void setProxy (String ip, String port) {
+
+    }
 
     /**
      * Create a new client without connecting to the sever
@@ -102,11 +112,13 @@ public class MyWSClient {
                     JSONObject json = new JSONObject(message);
 
                     // get the _queryId
-                    String queryId = json.getString("_queryId");
+                    String queryId = json.optString("_queryId");
 
                     // If the message has not the queryId parameter
                     // is an simple event
                     if(queryId == null || queryId.length() <= 0) {
+                        if(events.get(json.getString("event")) == null)
+                            return;
                         events.get(json.getString("event"))
                                 .onEvent(json.getJSONObject("data"));
                         return ;
@@ -137,7 +149,7 @@ public class MyWSClient {
                     server.send(response.toString());
                 } catch (Exception ex) {
                     log.log(Level.SEVERE, ex.toString(), ex);
-                    log.warning("An incoming message from the websocket cannot be read");
+                    log.warning("An incoming message from the websocket cannot be read: " + message);
                     System.out.println(message);
                 }
             }
@@ -166,6 +178,14 @@ public class MyWSClient {
      */
     public void connect() {
         server.connect();
+    }
+
+    /**
+     * Start the connection blocking the thread until the
+     * socket is connected (synchronized operation)
+     */
+    public void connectSync () throws InterruptedException {
+        server.connectBlocking();
     }
 
     /**

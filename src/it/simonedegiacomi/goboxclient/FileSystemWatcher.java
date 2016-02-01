@@ -1,10 +1,14 @@
 package it.simonedegiacomi.goboxclient;
 
+import com.sun.nio.file.SensitivityWatchEventModifier;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Simple File System Watcher
@@ -34,6 +38,8 @@ public class FileSystemWatcher extends Thread {
      * Map of listeners for the events
      */
     private HashMap<String, Listener> listeners;
+
+    private final Set<String> filesToIgnore = new HashSet<>();
 
     /**
      * Rot to watch
@@ -73,7 +79,7 @@ public class FileSystemWatcher extends Thread {
                 // Register this folder
                 //WatchKey key = dir.register(watchService, StandardWatchEventKinds.ENTRY_CREATE,
                 //        StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY);
-                WatchKey key = dir.register(watchService, StandardWatchEventKinds.ENTRY_CREATE);
+                WatchKey key = dir.register(watchService, new WatchEvent.Kind[]{StandardWatchEventKinds.ENTRY_CREATE}, SensitivityWatchEventModifier.HIGH);
 
                 // Save the watch key in the map
                 keys.put(key, dir);
@@ -117,6 +123,9 @@ public class FileSystemWatcher extends Thread {
                     Path changePath = dir.resolve(name);
 
                     final File file = changePath.toFile();
+
+                    if(filesToIgnore.remove(file.toString()))
+                        continue;
                     
                     new Thread(new Runnable() {
                         @Override
@@ -142,6 +151,10 @@ public class FileSystemWatcher extends Thread {
                 ex.printStackTrace();
             }
         }
+    }
+
+    public void ignore(File file) {
+        filesToIgnore.add(file.toString());
     }
 
     /**
