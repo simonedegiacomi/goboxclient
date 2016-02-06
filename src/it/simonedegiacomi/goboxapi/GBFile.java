@@ -2,17 +2,14 @@ package it.simonedegiacomi.goboxapi;
 
 import com.google.common.hash.HashCode;
 import com.google.common.hash.Hashing;
-import com.google.gson.Gson;
-import com.google.gson.annotations.SerializedName;
-import org.json.JSONException;
-import org.json.JSONObject;
+import com.j256.ormlite.field.DataType;
+import com.j256.ormlite.field.DatabaseField;
+import com.j256.ormlite.table.DatabaseTable;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Logger;
@@ -23,6 +20,7 @@ import java.util.logging.Logger;
  *
  * Created by Degiacomi Simone on 24/12/2015.
  */
+@DatabaseTable(tableName = "file")
 public class GBFile {
 
     /**
@@ -39,37 +37,49 @@ public class GBFile {
 
     /**
      * Id of the file. Is not final because when the
-     * file is created the ID is not knowed, but we now it
-     * only when is insterter on the database
+     * file is created the ID is not known, but we now it
+     * only when is inserted on the database
      */
+    @DatabaseField(id = true, generatedId = true, canBeNull = false, dataType = DataType.BIG_INTEGER)
     private long ID = UNKNOWN_ID;
 
     /**
      * Id of the father, 0 in case that the file is in
      * the root
      */
+    @DatabaseField(canBeNull = false, columnName = "father_ID")
     private long fatherID = UNKNOWN_FATHER;
 
     /**
      * Indicate if the file is a 'real' file or
      * a directory
      */
+    @DatabaseField(canBeNull = false, columnName = "is_directory")
     private boolean isDirectory;
 
     /**
      * Size of the file in bytes
      */
+    @DatabaseField
     private long size;
 
     /**
      * Name of the file
      */
+    @DatabaseField(canBeNull = false)
     private String name;
 
     /**
-     * Date of ht creation and the last update of the file
+     * Date of the creation of this file
      */
-    private long creationDate, lastUpdateDate;
+    @DatabaseField(dataType = DataType.DATE_LONG)
+    private long creationDate;
+
+    /**
+     * Date of the last update of this file
+     */
+    @DatabaseField(dataType = DataType.DATE_LONG)
+    private long lastUpdateDate;
 
     /**
      * Path of the file
@@ -85,15 +95,19 @@ public class GBFile {
 
     /**
      * If the file is wrapped, this refer to the original file.
-     * This as a Gson name starting iht the underscore because this object make sense
-     * only in this FileSystem
+     * This field shouldn't be serialized, so the 'transient' keyword
      */
-    private File javaFile;
+    private transient File javaFile;
+
+    @DatabaseField
+    private String mime;
 
     /**
      * List of children of this file
      */
     private List<GBFile> children;
+
+    private GBFile () { }
 
     /**
      * Create a new GBFile starting only with the name and the type of file (file or
@@ -121,18 +135,18 @@ public class GBFile {
             loadAttributes();
         } catch (IOException e) {
             // Trust me, i really care...
-            e.printStackTrace();
         }
     }
 
     /**
      * This method loads the attributes of the file.
      */
-    public void loadAttributes ()  throws IOException {
+    public void loadAttributes () throws IOException {
         BasicFileAttributes attrs = Files.readAttributes(javaFile.toPath(), BasicFileAttributes.class);
         this.size = attrs.size();
         this.creationDate = attrs.creationTime().toMillis();
         this.lastUpdateDate = attrs.lastAccessTime().toMillis();
+        this.mime = Files.probeContentType(javaFile.toPath());
     }
 
     /**
@@ -142,35 +156,6 @@ public class GBFile {
      */
     public GBFile (File file) {
         this(file, null);
-    }
-
-    /**
-     * Create a new GBFile from a JSON that represent this file in another
-     * client or in the storage.
-     * @param json JSON with teh information of the file
-     * @throws GBException throwed if the json object is not corrected
-     * @Deprecated Use Gson instead
-     */
-    public GBFile (JSONObject json) throws GBException {
-
-        try {
-            this.name = json.getString("name");
-
-            this.isDirectory = json.optBoolean("isDirectory");
-            this.size = json.optLong("size");
-            this.creationDate = json.optLong("creation");
-
-            this.lastUpdateDate = json.optLong("lastUpdate");
-            this.ID = json.has("ID") ? json.getLong("ID") : UNKNOWN_ID;
-            if (json.has("fatherID") && json.get("fatherID").toString().length() > 0)
-                this.fatherID = json.getLong("fatherID");
-            else if (json.has("path") && json.getString("path").length() > 0)
-                this.setPathByString(json.getString("path"));
-            else
-                this.fatherID = UNKNOWN_FATHER;
-        } catch (JSONException ex) {
-            throw new GBException(ex.toString());
-        }
     }
 
     /**
@@ -248,7 +233,7 @@ public class GBFile {
 
     /**
      * Set the size of the file. If is called, is a good idea
-     * to change also the lasyUpdateDate
+     * to change also the lastUpdateDate
      * @param size The size of the file
      */
     public void setSize(long size) {
@@ -306,16 +291,6 @@ public class GBFile {
      */
     public void setCreationDate(long creationDate) {
         this.creationDate = creationDate;
-    }
-
-    public JSONObject toJSON () {
-        try {
-            System.out.println("Path is " + path + " and gson " + new Gson().toJson(this));
-            return new JSONObject(new Gson().toJson(this));
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-        return null;
     }
 
     /**
@@ -452,23 +427,6 @@ public class GBFile {
     }
 
     /**
-     * Return the java path of this file
-     * @return Java Path object of this file
-     */
-    public Path toPath () {
-        return this.toFile().toPath();
-    }
-
-    /**
-     * Return the java path of this file with the specified prefix
-     * @param prefix Prefix to add to the file path
-     * @return Java path of this file
-     */
-    public Path toPath (String prefix) {
-        return this.toFile(prefix).toPath();
-    }
-
-    /**
      * his method apply the information relative of this file to the file system.
      * If you change the date calling the method 'setCreationDate' the logic representation
      * of this file changes, but the file in the fs not change. to change that information
@@ -493,6 +451,14 @@ public class GBFile {
      */
     public void setChildren(List<GBFile> children) {
         this.children = children;
+    }
+
+    public String getMime() {
+        return mime;
+    }
+
+    public void setMime(String mime) {
+        this.mime = mime;
     }
 
     /**

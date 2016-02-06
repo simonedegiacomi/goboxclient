@@ -14,13 +14,12 @@ import java.io.OutputStream;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
  * This client is used when the client is executed
- * on the same instance of the it.simonedegiacomi.storage
+ * on the same instance of the storage
  *
  * Created by Degiacomi Simone on 02/01/2016.
  */
@@ -34,7 +33,7 @@ public class InternalClient implements Client {
     private final StorageDB db;
 
     /**
-     * Reference to the it.simonedegiacomi.storage used to comunicate
+     * Reference to the storage used to communicate
      * new files to the other clients
      */
     private final Storage storage;
@@ -48,8 +47,8 @@ public class InternalClient implements Client {
 
 
     /**
-     * Return the state of the connection with the it.simonedegiacomi.storage. In this
-     * case this will return true, because the it.simonedegiacomi.storage is the same
+     * Return the state of the connection with the storage. In this
+     * case this will return true, because the storage is the same
      * instance
      * @return state of the connection, true
      */
@@ -59,12 +58,14 @@ public class InternalClient implements Client {
     }
 
     @Override
-    public List<GBFile> listDirectory(GBFile father) throws ClientException {
+    public GBFile[] listDirectory(GBFile father) throws ClientException {
         try {
-            return db.getChildrenByFather(father);
+            List<GBFile> fileList = db.getChildrenByFather(father);
+            GBFile[] files = new GBFile[fileList.size()];
+            return fileList.toArray(files);
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
-            return null;
+            return new GBFile[0];
         }
     }
 
@@ -72,7 +73,6 @@ public class InternalClient implements Client {
     public void getFile(GBFile file) throws ClientException {
         if(filesToIgnore.remove(file))
             return;
-
     }
 
     @Override
@@ -141,6 +141,11 @@ public class InternalClient implements Client {
     @Override
     public void setSyncEventListener (SyncEventListener listener) {
         // Nothing to do here because alla the events are handledby the storage
+    }
+
+    @Override
+    public void requestEvents(long lastHeardId) {
+
     }
 
     public void ignore(GBFile file) {

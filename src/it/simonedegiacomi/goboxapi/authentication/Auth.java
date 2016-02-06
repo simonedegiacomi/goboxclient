@@ -1,8 +1,11 @@
 package it.simonedegiacomi.goboxapi.authentication;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.utils.EasyHttps;
-import org.json.JSONException;
-import org.json.JSONObject;
+import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 
 import javax.net.ssl.HttpsURLConnection;
 import java.util.logging.Level;
@@ -27,47 +30,56 @@ public class Auth {
     /**
      * Type of session, client mode
      */
+    public enum Modality { CLIENT_MODE, STORAGE_MODE };
 
-    public static final int CLIENT = 0;
+    private Modality mode;
+
+    private String username;
+
     /**
-     * Type of session used to authenticate the client
-     * as it.simonedegiacomi.storage
+     * URLs of the gobox server. This is transient because it shouldn't be serialized
      */
-    public static final int STORAGE = 1;
+    private transient static final URLBuilder urls = Config.getInstance().getUrls();
 
-    private final String username;
-    private char[] password;
+    /**
+     * Password of the user. This field is not-null only on
+     * the login phase
+     */
+    private String password;
+
+    /**
+     * Token to use to authenticate with the server
+     */
     private String token;
-    private int mode;
-    private int id;
+
+    public Auth () { }
 
     public Auth(String username) {
         this.username = username;
     }
 
     /**
-     * Try to login with the information setted. This method
+     * Try to login with the information set. This method
      * will block the thread until the login is complete
      * @throws AuthException
      */
     public void login() throws AuthException {
         try {
             // Get the json of the authentication
-            JSONObject authJson = this.toJSON();
+            JsonElement authJson = new Gson().toJsonTree(this, Auth.class);
+
+            // remove the password
+            this.password = null;
             // Make the https request
-            JSONObject response = EasyHttps.post("https://goboxserver-simonedegiacomi.c9users.io/api/user/login", authJson, null);
-            // evalutate the response
-            String result = response.getString("result");
+            JsonObject response = (JsonObject) EasyHttps.post(urls.get("login"), authJson, null);
+            // evaluate the response
+            String result = response.get("result").getAsString();
             switch (result) {
                 case "Storage already registered":
                     throw new AuthException(result);
                 case "logged in":
                     // Save the token
-                    token = response.getString("token");
-                    // remove the password
-                    for(int i = 0;i < password.length; i++)
-                        password[i] = 0;
-                    this.password = null;
+                    token = response.get("token").getAsString();
                     break;
                 default:
                     throw new AuthException("Login failed");
@@ -81,54 +93,31 @@ public class Auth {
     /**
      * Check if the token of the object is valid. This
      * method block the thread until the response from the
-     * server is retrived.
+     * server is retrieved.
      * @throws AuthException
      */
     public boolean check() throws AuthException {
         if (token == null)
             throw new AuthException("Token is null");
         try {
-            JSONObject response = EasyHttps.post("https://goboxserver-simonedegiacomi.c9users.io/api/user/check", null, token);
-            token = response.getString("newOne");
+            JsonObject response = (JsonObject) EasyHttps.post(urls.get("authCheck"), null, token);
+            token = response.get("newOne").getAsString();
             return true;
-        } catch (JSONException ex) {
-            throw new AuthException("Invalid token");
         } catch (Exception ex) {
             throw new AuthException("Check failed");
         }
     }
 
-    /**
-     * Return the representation of the instance of this object in
-     * JSON (JSONObject)
-     * @return JSON of this object
-     */
-    public JSONObject toJSON () {
-        JSONObject authJson = new JSONObject();
-        try {
-            authJson.put("username", username);
-            if(password != null)
-                authJson.put("password", new String(password));
-            authJson.put("type", (mode == CLIENT ? "C" : "S"));
-            authJson.put("token", token);
-        } catch (JSONException ex) { }
-        return  authJson;
-    }
-
-    public int getId() {
-        return id;
-    }
-
-    public void setId(int id) {
-        this.id = id;
-    }
-
-    public int getMode() {
+    public Modality getMode() {
         return mode;
     }
 
-    public void setMode(int mode) {
+    public void setMode(Modality mode) {
         this.mode = mode;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
     }
 
     public String getToken() {
@@ -139,11 +128,7 @@ public class Auth {
         this.token = token;
     }
 
-    public char[] getPassword() {
-        return password;
-    }
-
-    public void setPassword(char[] password) {
+    public void setPassword(String password) {
         this.password = password;
     }
 

@@ -1,14 +1,14 @@
 package it.simonedegiacomi.goboxapi.utils;
 
-import org.json.JSONException;
-import org.json.JSONObject;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Iterator;
+import java.util.Map;
 
 /**
  * This class has some static method that allows you
@@ -27,29 +27,39 @@ public class URLParams {
      * @param params parameters to add in the url
      * @return new url with the parameters
      * @throws MalformedURLException
-     * @throws JSONException
      */
-    public static URL createURL (String stringUrl, JSONObject params) throws MalformedURLException, JSONException {
+    public static URL createURL (String stringUrl, JsonObject params) throws MalformedURLException {
 
         // Use a string builder to decrease the use of memory
         StringBuilder builder = new StringBuilder();
 
         // And add each params iterating the arguments object
         boolean first = true;
-        Iterator<String> it = params.keys();
         try {
-            while (it.hasNext()) {
-                String key = it.next();
+            for(Map.Entry<String, JsonElement> entry : params.entrySet()) {
                 if (first) {
                     builder.append('?');
                     first = !first;
                 } else
                     builder.append('&');
-                builder.append(URLEncoder.encode(key, StandardCharsets.UTF_8.name()));
+                builder.append(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8.name()));
                 builder.append('=');
-                builder.append(URLEncoder.encode(params.get(key).toString(), StandardCharsets.UTF_8.name()));
+                builder.append(URLEncoder.encode(entry.getValue().toString(), StandardCharsets.UTF_8.name()));
             }
+
             return new URL(stringUrl + builder.toString());
+        } catch (UnsupportedEncodingException ex) {
+            return null;
+        }
+    }
+
+    public static URL createURL (String stringUrl, JsonObject params, boolean singleParam) throws MalformedURLException {
+
+        try {
+            if(singleParam)
+                return new URL(stringUrl + "?json=" + URLEncoder.encode(params.toString(), StandardCharsets.UTF_8.name()));
+            else
+                return createURL(stringUrl, params);
         } catch (UnsupportedEncodingException ex) {
             return null;
         }
@@ -62,9 +72,8 @@ public class URLParams {
      * @param params parameters as JSONObject
      * @return The new url with the parameters
      * @throws MalformedURLException
-     * @throws JSONException
      */
-    public static URL createURL (URL url, JSONObject params) throws MalformedURLException, JSONException {
+    public static URL createURL (URL url, JsonObject params) throws MalformedURLException {
         return createURL(url.toString(), params);
     }
 }

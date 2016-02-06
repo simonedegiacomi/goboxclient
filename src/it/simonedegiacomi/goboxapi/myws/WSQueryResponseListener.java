@@ -1,6 +1,6 @@
 package it.simonedegiacomi.goboxapi.myws;
 
-import org.json.JSONObject;
+import com.google.gson.JsonElement;
 
 /**
  * Listener for the response ogf a query
@@ -11,8 +11,8 @@ public interface WSQueryResponseListener {
 
     /**
      * Method that will be called when the response of a
-     * query is retived
+     * query is retrieved
      * @param response Response of the query
      */
-    public void onResponse (JSONObject response);
+    public void onResponse (JsonElement response);
 }

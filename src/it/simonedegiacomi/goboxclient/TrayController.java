@@ -2,8 +2,6 @@ package it.simonedegiacomi.goboxclient;
 
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
-import it.simonedegiacomi.storage.Storage;
-import javafx.scene.control.cell.CheckBoxListCell;
 
 import javax.swing.*;
 import java.awt.*;

@@ -1,10 +1,9 @@
 package it.simonedegiacomi.goboxapi.utils;
 
-import org.json.JSONException;
-import org.json.JSONObject;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 
 import javax.net.ssl.HttpsURLConnection;
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -20,6 +19,8 @@ public class EasyHttps {
 
     private static final Logger log = Logger.getLogger(EasyHttps.class.getName());
 
+    private final static JsonParser parser = new JsonParser();
+
     /**
      * Make a new HTTPS request
      * @param url URL
@@ -28,9 +29,8 @@ public class EasyHttps {
      * @return Response of the request
      * @throws IOException
      * @throws EasyHttpsException
-     * @throws JSONException
      */
-    public static JSONObject post(URL url, JSONObject data, String authorization) throws IOException, EasyHttpsException, JSONException {
+    public static JsonElement post(URL url, JsonElement data, String authorization) throws IOException, EasyHttpsException {
 
         // Open the connection
         HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
@@ -60,20 +60,12 @@ public class EasyHttps {
         // If is not 200 throw a new exception
         if (response != 200)
             throw new EasyHttpsException(response);
-        // Open the reader
-        BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-        // Read all the response
-        StringBuilder builder = new StringBuilder();
-        String temp;
-        while((temp = in.readLine()) != null)
-            builder.append(temp);
-        // Close the reader and the request
-        in.close();
-        conn.disconnect();
-
 
         // Parse the response
-        return new JSONObject(builder.toString());
+        JsonElement jsonResponse = parser.parse(new InputStreamReader(conn.getInputStream()));
+        conn.disconnect();
+
+        return jsonResponse;
     }
 
     /**
@@ -84,10 +76,8 @@ public class EasyHttps {
      * @return Response of the request
      * @throws IOException
      * @throws EasyHttpsException
-     * @throws JSONException
      */
-    public static JSONObject post(String url, JSONObject data, String authorization) throws IOException, EasyHttpsException, JSONException {
+    public static JsonElement post (String url, JsonElement data, String authorization) throws IOException, EasyHttpsException {
         return post(new URL(url), data, authorization);
     }
-
 }

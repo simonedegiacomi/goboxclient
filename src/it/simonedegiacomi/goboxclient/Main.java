@@ -1,14 +1,14 @@
 package it.simonedegiacomi.goboxclient;
 
 import it.simonedegiacomi.configuration.Config;
-import it.simonedegiacomi.configuration.ConfigTool;
+import it.simonedegiacomi.configuration.LoginTool;
 import it.simonedegiacomi.goboxapi.authentication.Auth;
 import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.goboxapi.client.StandardClient;
-import it.simonedegiacomi.utils.EasyProxy;
-import javafx.scene.control.Alert;
 import it.simonedegiacomi.storage.Storage;
+import it.simonedegiacomi.utils.EasyProxy;
 import it.simonedegiacomi.utils.SingleInstancer;
+import javafx.scene.control.Alert;
 
 import java.awt.*;
 import java.util.logging.ConsoleHandler;
@@ -30,7 +30,7 @@ public class Main {
     public static void main(String[] args) {
 
         Handler consoleHandler = new ConsoleHandler();
-        consoleHandler.setLevel(Level.FINER);
+        consoleHandler.setLevel(Level.ALL);
         Logger.getAnonymousLogger().addHandler(consoleHandler);
 
 
@@ -41,39 +41,45 @@ public class Main {
         //    System.exit(0);
         System.out.println("Single instance? " + singler.isSingle());
 
+        config.addOnconfigChangeListener(new Config.OnConfigChangeListener() {
+            @Override
+            public void onChange() {
+
+                // Check if there is a proxy to use
+                EasyProxy.manageProxy(config);
+            }
+        });
+
         try {
             // Load the urls to use to contact the server
             config.loadUrls();
             // Try to load the config
             config.load();
 
-            // Check if there is a proxy to use
-            EasyProxy.manageProxy(config);
-
             if (config.getProperty("username") == null)
-                startConfig();
+                startLogin();
             else
-                afterConfigLoaded();
+                afterLogin();
         } catch (Exception ex) {
 
             log.warning("No config file found");
             // If something fails, it means that there is no config
             // file, so let's create a new config
-            startConfig();
+            startLogin();
         }
     }
 
-    private static void startConfig () {
-        ConfigTool tool = ConfigTool.getConfigTool(new ConfigTool.EventListener() {
+    private static void startLogin() {
+        LoginTool.getLoginTool(new LoginTool.EventListener() {
             @Override
-            public void onConfigComplete() {
+            public void onLoginComplete() {
                 // initialize some variables in the config
-                config.setProperty("path", "files/");
-                afterConfigLoaded();
+                config.setProperty("path", "files");
+                afterLogin();
             }
 
             @Override
-            public void onConfigFailed() {
+            public void onLoginFailed() {
                 log.warning("Configuration failed");
                 showError();
                 System.exit(-1);
@@ -81,30 +87,25 @@ public class Main {
         });
     }
 
-    private static void afterConfigLoaded() {
-
-        // Check if there is a proxy to use
-        EasyProxy.manageProxy(config);
+    private static void afterLogin() {
 
         // try the token
-        Auth auth = new Auth(config.getProperty("username"));
-        auth.setToken(config.getProperty("token"));
-        auth.setMode(Integer.parseInt(config.getProperty("mode")));
+        Auth auth = config.getAuth();
         try {
             log.fine("Checking identity");
             auth.check();
-            config.setProperty("token", auth.getToken());
             config.save();
             log.fine("Authenticated");
         } catch (Exception ex) {
             ex.printStackTrace();
         }
         System.out.println(config.getMode());
-        switch (config.getMode()) {
-            case Config.CLIENT_MODE:
+
+        switch (auth.getMode()) {
+            case CLIENT_MODE:
                 startClientMode(auth);
                 break;
-            case Config.STORAGE_MODE:
+            case STORAGE_MODE:
                 startStorageMode(auth);
                 break;
         }
@@ -121,7 +122,7 @@ public class Main {
             Client client = new StandardClient(auth);
             sync = new Sync(client);
 
-            //sync.mergeWithStorage();
+            sync.receiveNotHeardEvent();
 
             sync.startSync();
 
@@ -149,14 +150,13 @@ public class Main {
         }
     }
 
-
     private static void showError() {
         if (GraphicsEnvironment.isHeadless())
             System.out.println("Installation aborted");
         else {
             Alert alert = new Alert(Alert.AlertType.ERROR);
             alert.setTitle("Error");
-            alert.setHeaderText("Can't create the it.simonedegiacomi.configuration");
+            alert.setHeaderText("Can't create the configuration");
             alert.setContentText("GoBoxClient cannot be initialized.");
             alert.showAndWait();
         }

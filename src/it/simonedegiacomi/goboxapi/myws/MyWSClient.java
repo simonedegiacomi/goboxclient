@@ -1,13 +1,17 @@
 package it.simonedegiacomi.goboxapi.myws;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
-import org.json.JSONException;
-import org.json.JSONObject;
 
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.HashMap;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.FutureTask;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -25,6 +29,11 @@ public class MyWSClient {
      * ogger of the class
      */
     private static final Logger log = Logger.getLogger(MyWSClient.class.getName());
+
+    /**
+     * Proxy to use to connect to the web socket servers
+     */
+    private static InetSocketAddress proxy;
 
     /**
      * Websocket connection
@@ -67,15 +76,15 @@ public class MyWSClient {
      * Executor used to use the java FutureTask
      */
     private final ExecutorService executor = Executors.newFixedThreadPool(3);
-    
+
     /**
-     * This statis method allows you to set a proxy that will be used
+     * This static method allows you to set a proxy that will be used
      * for the new instances of this class
      * @param ip IP of the proxy
      * @param port Port of the proxy
      */
-    public static void setProxy (String ip, String port) {
-
+    public static void setProxy (String ip, int port) {
+        proxy = new InetSocketAddress(ip, port);
     }
 
     /**
@@ -89,6 +98,8 @@ public class MyWSClient {
         events = new HashMap<>();
         queryAnswers = new HashMap<>();
         queryResponses = new HashMap<>();
+
+        final JsonParser parser = new JsonParser();
 
         // Create the 'real' websocket client
         server = new WebSocketClient(uri) {
@@ -109,43 +120,44 @@ public class MyWSClient {
                 try {
 
                     // Parse the message
-                    JSONObject json = new JSONObject(message);
+                    JsonObject json = (JsonObject) parser.parse(message);
+
 
                     // get the _queryId
-                    String queryId = json.optString("_queryId");
+                    String queryId = json.get("_queryId").getAsString();
 
                     // If the message has not the queryId parameter
                     // is an simple event
                     if(queryId == null || queryId.length() <= 0) {
-                        if(events.get(json.getString("event")) == null)
+                        if(events.get(json.get("event").getAsString()) == null)
                             return;
-                        events.get(json.getString("event"))
-                                .onEvent(json.getJSONObject("data"));
+                        events.get(json.get("event").getAsString())
+                                .onEvent(json.get("data"));
                         return ;
                     }
 
-                    // Now, check if is a queryResponse
+                    // Now, check if is a query response
                     // If is a query response i MUST have an listener on the
                     // 'queryResponse' map, so check here:
-                    if(json.getString("event").equals("queryResponse")) {
+                    if(json.get("event").getAsString().equals("queryResponse")) {
                         // Get and remove the response listener
-                        queryResponses.remove(queryId).onResponse(json.getJSONObject("data"));
+                        queryResponses.remove(queryId).onResponse(json.get("data"));
                         return ;
                     }
 
                     // If is not a query response neither, is a query made to this program, so
                     // find the object that will answer this query.
-                    JSONObject answer = queryAnswers.get(json.getString("event"))
-                            .onQuery(json.getJSONObject("data"));
+                    JsonElement answer = queryAnswers.get(json.get("event").getAsString())
+                            .onQuery(json.get("data"));
 
-                    // When the answer is retrived, sendEvent back with the same
+                    // When the answer is retrive, sendEvent back with the same
                     // queryId
-                    JSONObject response = new JSONObject();
-                    response.put("event", "queryResponse");
-                    response.put("data", answer);
-                    response.put("_queryId", json.getString("_queryId"));
-                    response.put("forServer", false);
-                    response.put("broadcast", false);
+                    JsonObject response = new JsonObject();
+                    response.addProperty("event", "queryResponse");
+                    response.add("data", answer);
+                    response.addProperty("_queryId", json.get("_queryId").getAsString());
+                    response.addProperty("forServer", false);
+                    response.addProperty("broadcast", false);
                     server.send(response.toString());
                 } catch (Exception ex) {
                     log.log(Level.SEVERE, ex.toString(), ex);
@@ -171,6 +183,8 @@ public class MyWSClient {
                     error.onEvent(null);
             }
         };
+        if(proxy != null)
+            server.setProxy(proxy);
     }
 
     /**
@@ -189,7 +203,7 @@ public class MyWSClient {
     }
 
     /**
-     * This mathod allows you to register a new event listener
+     * This method allows you to register a new event listener
      * @param event Name of the event.
      * @param listener Listener of this event
      */
@@ -211,18 +225,16 @@ public class MyWSClient {
      * @param queryName Name of the query
      * @param query Data of the query
      * @param responseListener Listener that will call when the response of the query
-     *                         is retrived.
-     * @throws JSONException Exception in case that the request is not correct (just
-     *                          make sure you don't insert weird things in data)
+     *                         is retrieve.
      */
-    public void makeQuery (String queryName, JSONObject query, WSQueryResponseListener responseListener) {
-        JSONObject json = new JSONObject();
+    public void makeQuery (String queryName, JsonElement query, WSQueryResponseListener responseListener) {
+        JsonObject json = new JsonObject();
         String queryId = String.valueOf(System.currentTimeMillis());
         try {
-            json.put("event", queryName);
-            json.put("forServer", false);
-            json.put("data", query);
-            json.put("_queryId", queryId);
+            json.addProperty("event", queryName);
+            json.addProperty("forServer", false);
+            json.add("data", query);
+            json.addProperty("_queryId", queryId);
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
         }
@@ -236,21 +248,21 @@ public class MyWSClient {
      * @param query Parameters of the quey
      * @return FutureTask, completed when the response  retriver
      */
-    public FutureTask<JSONObject> makeQuery (String queryName, JSONObject query) {
+    public FutureTask<JsonElement> makeQuery (String queryName, JsonElement query) {
 
         // Create a new wscallable
         final WSCallable callback = new WSCallable();
 
-        // Create a enw FutureTask, that will be used to synchronize the incomng
+        // Create a new FutureTask, that will be used to synchronize the incoming
         // response
-        final FutureTask<JSONObject> future = new FutureTask<>(callback);
+        final FutureTask<JsonElement> future = new FutureTask<>(callback);
 
         // Make a normal query
         makeQuery(queryName, query, new WSQueryResponseListener() {
             @Override
-            public void onResponse(JSONObject response) {
+            public void onResponse(JsonElement response) {
 
-                // And when the result is retriver, set the response to the
+                // And when the result is retrieved, set the response to the
                 // callable
                 callback.setResponse(response);
 
@@ -267,16 +279,15 @@ public class MyWSClient {
      * Send a new event
      * @param event Name of the event
      * @param data Data that will be sended with the event
-     * @param forServer Specify if this should be catched from the server
-     * @throws JSONException Trust me, this will never be trowed
+     * @param forServer Specify if this should be catch from the server
      */
-    public void sendEvent(String event, JSONObject data, boolean forServer) {
-        JSONObject json = new JSONObject();
+    public void sendEvent(String event, JsonElement data, boolean forServer) {
+        JsonObject json = new JsonObject();
         try {
-            json.put("event", event);
-            json.put("forServer", forServer);
-            json.put("broadcast", false);
-            json.put("data", data);
+            json.addProperty("event", event);
+            json.addProperty("forServer", forServer);
+            json.addProperty("broadcast", false);
+            json.add("data", data);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -288,13 +299,13 @@ public class MyWSClient {
      * @param event Event name
      * @param data Event data
      */
-    public void sendEventBroadcast (String event, JSONObject data) {
-        JSONObject json = new JSONObject();
+    public void sendEventBroadcast (String event, JsonElement data) {
+        JsonObject json = new JsonObject();
         try {
-            json.put("event", event);
-            json.put("forServer", false);
-            json.put("broadcast", true);
-            json.put("data", data);
+            json.addProperty("event", event);
+            json.addProperty("forServer", false);
+            json.addProperty("broadcast", true);
+            json.add("data", data);
         } catch (Exception ex) {
             ex.printStackTrace();
         }

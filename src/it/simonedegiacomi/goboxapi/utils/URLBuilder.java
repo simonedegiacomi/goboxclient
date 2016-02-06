@@ -1,9 +1,8 @@
 package it.simonedegiacomi.goboxapi.utils;
 
-import org.json.JSONObject;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -46,7 +45,7 @@ public class URLBuilder {
     /**
      * Return a new url specifying the key
      * @param what The key (name of the url)
-     * @return Corrisponding url. If the url doesn't
+     * @return Corresponding url. If the url doesn't
      * exist a null pointer will be returned
      */
     public URL get (String what) {
@@ -70,12 +69,20 @@ public class URLBuilder {
      * @param what Key of the url
      * @param params Parameters to append
      * @return URL with the specified parameters. If
-     * the url dioesn't exist, a null pointer will be
+     * the url doesn't exist, a null pointer will be
      * returned
      */
-    public URL get (String what, JSONObject params) {
+    public URL get (String what, JsonElement params) {
         try {
-            return URLParams.createURL(properties.get(what).toString(), params);
+            return get(what, params, false);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    public URL get (String what, JsonElement params, boolean singleParam) {
+        try {
+            return URLParams.createURL(properties.get(what).toString(), (JsonObject) params, singleParam);
         } catch (Exception ex) {
             return null;
         }

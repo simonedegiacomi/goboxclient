@@ -1,6 +1,6 @@
 package it.simonedegiacomi.goboxapi.myws;
 
-import org.json.JSONObject;
+import com.google.gson.JsonElement;
 
 /**
  * Interface to implement to create a new event listener
@@ -15,5 +15,5 @@ public interface WSEventListener {
      * this event is received
      * @param data Data of the event
      */
-    public void onEvent (JSONObject data);
+    public void onEvent (JsonElement data);
 }

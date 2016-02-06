@@ -12,18 +12,13 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
  * A Sync object work with an implementation of
  * the Client interface, and manage the synchronization
- * of the filesystem with the relative it.simonedegiacomi.storage of
- * the account.
+ * of the filesystem with the relative storage of the account.
  *
  * Created by Degiacomi Simone on 24/12/2015
  */
@@ -37,14 +32,14 @@ public class Sync {
 
     /**
      * Client object used as API interface tp communicate
-     * with the it.simonedegiacomi.storage.
+     * with the storage.
      */
     private Client client;
 
     /**
      * Configuration of the environment
      */
-    private final Config config = Config.getInstance();
+    private static final Config config = Config.getInstance();
 
     /**
      * The FileSystemWatcher is the object that pool and
@@ -56,13 +51,13 @@ public class Sync {
     /**
      * Path of the files folder
      */
-    private final String PATH = "files";
+    private static final String PATH = config.getProperty("path");
 
     /**
      * Create and start keep in sync the local fs with
      * the GoBox Storage. It used the Client passed as
      * arguments to communicate the events and to get
-     * the changes from the it.simonedegiacomi.storage
+     * the changes from the storage
      * @param client Client used to communicate and get
      *               the files
      */
@@ -72,7 +67,7 @@ public class Sync {
 
         // Create the new watcher for the fileSystem
         try {
-            Path pathToWatch = new File("files/").toPath();
+            Path pathToWatch = new File(PATH).toPath();
             watcher = new FileSystemWatcher(pathToWatch);
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
@@ -83,61 +78,39 @@ public class Sync {
     }
 
     /**
-     * This method merge the local fs with the files of the
-     * it.simonedegiacomi.storage. This is needed when the client was offline or
-     * some files are changed while the client wasn't running.
+     *
+     * Request to the storage the 'not heard' events
      */
-    public void mergeWithStorage () throws ClientException {
-        // Download every folder and checl for the lastes version
-        mergeR(new GBFile("root", GBFile.ROOT_ID, true));
-    }
-
-    private void mergeR (GBFile father) throws ClientException{
-        List<GBFile> files = client.listDirectory(father);
-        for(GBFile file : files) {
-
-            if(!file.toFile().exists()) {
-                // If the file exist in the local fs
-            } else {
-                // If it doesn't exist
-            }
-
-            // If is a folder, go deeper
-            if(file.toFile().isDirectory())
-                mergeR(file);
-        }
+    public void receiveNotHeardEvent () {
+        long lastHeardEvent = Long.parseLong(config.getProperty("lastEvent"));
+        client.requestEvents(lastHeardEvent);
     }
 
     /**
-     * Start the watching thread and the listener from the it.simonedegiacomi.storage
+     * Start the watching thread and the listener from the storage
      */
     public void startSync () {
 
         // And start a separate thread that will pool
         // continuously the filesystem
         watcher.start();
-
-        // Assign event listener for the SyncEvent from the it.simonedegiacomi.storage
-        assignSyncEventFromStorage();
     }
 
     /**
-     * Stop the synchronization with the it.simonedegiacomi.storage
+     * Stop the synchronization with the storage
      */
     public void stopSync () {
 
         // Stop the thread that watch the local fs
         // TODO: Stop the thread
 
-        // and remove the event listener
-        client.setSyncEventListener(null);
     }
 
     /**
      * This method assign action for the possible events of
      * the fileSystemWatcher. For each event the relative
      * method of the client ( the object that wraps the API of
-     * the it.simonedegiacomi.storage) will be called.
+     * the storage) will be called.
      */
     private void assignFileWatcherEvents () {
         // At the beginning i download the file list, and make a control.
@@ -153,6 +126,7 @@ public class Sync {
                 try {
                     // Wrap the java File into a GoBoxFile
                     GBFile wrappedFile = new GBFile(newFile, PATH);
+
 
                     if (wrappedFile.isDirectory())
                         client.createDirectory(wrappedFile);
@@ -192,6 +166,7 @@ public class Sync {
                 try {
                     // Wrap the file
                     GBFile wrappedFile = new GBFile(deletedFile, PATH);
+
                     // and remove it
                     client.removeFile(wrappedFile);
                 } catch (ClientException ex) {
@@ -220,6 +195,8 @@ public class Sync {
 
                 System.out.println("New event: " + file.toString());
 
+                // Tell the file system watcher to ignore the event to this specific file
+                // otherwise a infinite loop will be generated. Very, very bad thing
                 watcher.ignore(file.toFile(PATH));
 
                 try {
@@ -244,13 +221,23 @@ public class Sync {
                             file.toFile(PATH).delete();
                             break;
                         default:
-                            log.warning("New unrecognized sync event from the it.simonedegiacomi.storage");
+                            log.warning("New unrecognized sync event from the storage");
                     }
+                    rememberEvent(event);
                 } catch (Exception ex) {
                     log.log(Level.WARNING, ex.toString(), ex);
                 }
             }
         });
+    }
+
+    private void rememberEvent (SyncEvent eventToRemember) {
+        config.setProperty("lastEvent", String.valueOf(eventToRemember.getID()));
+        try {
+            config.save();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
     }
 
     /**
@@ -262,6 +249,6 @@ public class Sync {
      */
     private void createDirectory (GBFile newDir) throws IOException {
         System.out.println("I'm going to create " + newDir.getPathAsString(PATH));
-        Files.createDirectory(newDir.toPath(PATH));
+        Files.createDirectory(newDir.toFile(PATH).toPath());
     }
 }

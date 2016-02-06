@@ -1,5 +1,6 @@
 package it.simonedegiacomi.configuration;
 
+import it.simonedegiacomi.goboxapi.authentication.Auth;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 
 import java.io.*;
@@ -12,14 +13,8 @@ import java.util.Properties;
  */
 public class Config {
 
-    public static final int CLIENT_MODE = 0;
-    public static final int STORAGE_MODE = 1;
-
-    private static final String EXECUTION_MODE = "mode";
-
     private static final String DEFAULT_LOCATION = "config/gobox.conf";
     private static final String DEFAULT_URLS_LOCATION = "/it/simonedegiacomi/resources/urls.conf";
-
 
     /**
      * Singleton instance of the config
@@ -29,12 +24,14 @@ public class Config {
     /**
      * Java properties, used as container for the properties
      */
-    private Properties properties;
+    private Properties properties = new Properties();
 
     /**
      * Container for the url
      */
     private URLBuilder urls = new URLBuilder();
+
+    private Auth auth = new Auth();
 
     /**
      * Collection of listener that are called when the apply method
@@ -42,9 +39,7 @@ public class Config {
      */
     private List<OnConfigChangeListener> listeners = new LinkedList<>();
 
-    private Config () {
-        properties = new Properties();
-    }
+    private Config () { }
 
     /**
      * Return the singleton instance of the config
@@ -60,9 +55,6 @@ public class Config {
      * @throws Exception
      */
     public void load (File file) throws Exception {
-
-        // First load the it.simonedegiacomi.configuration
-
         // Open the file
         FileInputStream in = new FileInputStream(file);
         properties.load(in);
@@ -71,6 +63,11 @@ public class Config {
         // Close the stream
         in.close();
 
+        if(properties.getProperty("token") != null) {
+            auth.setUsername(properties.getProperty("username"));
+            auth.setToken(properties.getProperty("token"));
+            auth.setMode(Auth.Modality.valueOf(properties.getProperty("mode")));
+        }
     }
 
     /**
@@ -101,11 +98,7 @@ public class Config {
     }
 
     public int getMode () {
-        return Integer.parseInt(properties.getProperty(EXECUTION_MODE));
-    }
-
-    public void setMode (int mode)  {
-        properties.setProperty(EXECUTION_MODE, String.valueOf(mode));
+        return Integer.parseInt(properties.getProperty("mode"));
     }
 
     /**
@@ -114,6 +107,12 @@ public class Config {
      * @throws Exception
      */
     public void save (File file) throws Exception {
+
+        // update the properties with the auth
+        properties.setProperty("token", auth.getToken());
+        properties.setProperty("username", auth.getUsername());
+        properties.setProperty("mode", auth.getMode().toString());
+
         // Create or open the file
         FileOutputStream out = new FileOutputStream(file);
         // Save the config
@@ -156,5 +155,13 @@ public class Config {
 
     public interface OnConfigChangeListener {
         public void onChange ();
+    }
+
+    public Auth getAuth () {
+        return auth;
+    }
+
+    public void setAuth (Auth auth) {
+        this.auth = auth;
     }
 }

@@ -1,16 +1,18 @@
 package it.simonedegiacomi.goboxapi.client;
 
-import com.google.gson.Gson;
+import com.j256.ormlite.field.DataType;
+import com.j256.ormlite.field.DatabaseField;
+import com.j256.ormlite.table.DatabaseTable;
 import it.simonedegiacomi.goboxapi.GBFile;
-import org.json.JSONObject;
 
 /**
  * This class is used to create the SyncEvent object
  * that contain the information about a new event made
- * from another client on the it.simonedegiacomi.storage
+ * from another client on the storage
  *
  * Created by Degiacomi Simone on 02/01/16.
  */
+@DatabaseTable(tableName = "event")
 public class SyncEvent implements Comparable {
 
     /**
@@ -21,25 +23,29 @@ public class SyncEvent implements Comparable {
     /**
      * Kind of this event
      */
+    @DatabaseField(canBeNull = false)
     private EventKind kind;
 
     /**
      * File associated with this event
      */
-    private GBFile relativeFile;
+    private GBFile file;
+
+    /**
+     * This exists only for the database
+     */
+    @DatabaseField(columnName = "file_ID", canBeNull = false)
+    private long fileID;
+
+    @DatabaseField(id = true, generatedId = true, canBeNull = false)
+    private long ID;
+
+    @DatabaseField(dataType = DataType.DATE_LONG)
+    private long date;
 
     public SyncEvent(EventKind kind, GBFile relativeFile) {
         this.kind = kind;
-        this.relativeFile = relativeFile;
-    }
-
-    public SyncEvent (JSONObject obj) {
-        try {
-            this.kind = EventKind.valueOf(obj.getString("kind"));
-            this.relativeFile = new Gson().fromJson(obj.getJSONObject("file").toString(), GBFile.class);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
+        setRelativeFile(relativeFile);
     }
 
     public SyncEvent(EventKind kind) {
@@ -48,30 +54,14 @@ public class SyncEvent implements Comparable {
 
     /**
      * Return the kind of the event as a string
-     * @return string representating the kind of the event
+     * @return string that represent the kind of the event
      */
     public String getKindAsString() { return kind.toString();}
 
     public EventKind getKind () { return kind; }
 
     public GBFile getRelativeFile() {
-        return relativeFile;
-    }
-
-    /**
-     * Create the JSON (JSONObject) representation of this event
-     * @return JSON representation of this event
-     */
-    public JSONObject toJSON () {
-        JSONObject obj = new JSONObject();
-        try {
-            obj.put("kind", kind);
-            if (relativeFile != null)
-                obj.put("file", relativeFile.toJSON());
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-        return obj;
+        return file;
     }
 
     /**
@@ -79,7 +69,24 @@ public class SyncEvent implements Comparable {
      * @param relativeFile File associated with this event
      */
     public void setRelativeFile(GBFile relativeFile) {
-        this.relativeFile = relativeFile;
+        this.file = relativeFile;
+        this.fileID = file.getID();
+    }
+
+    public long getID() {
+        return ID;
+    }
+
+    public void setID(long ID) {
+        this.ID = ID;
+    }
+
+    public long getDate() {
+        return date;
+    }
+
+    public void setDate(long date) {
+        this.date = date;
     }
 
     @Override

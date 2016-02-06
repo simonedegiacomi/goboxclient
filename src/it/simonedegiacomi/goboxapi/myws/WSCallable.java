@@ -1,6 +1,6 @@
 package it.simonedegiacomi.goboxapi.myws;
 
-import org.json.JSONObject;
+import com.google.gson.JsonElement;
 
 import java.util.concurrent.Callable;
 
@@ -10,24 +10,24 @@ import java.util.concurrent.Callable;
  *
  * Created by Degiacomi Simone on 10/01/16.
  */
-public class WSCallable implements Callable<JSONObject> {
+public class WSCallable implements Callable<JsonElement> {
 
     /**
-     * This field contains the response retrived from the server
+     * This field contains the response retrieve from the server
      */
-    private JSONObject response;
+    private JsonElement response;
 
     /**
      * Set the response. This method must be called befor execute the
      * call method
      * @param response
      */
-    public void setResponse (JSONObject response) {
+    public void setResponse (JsonElement response) {
         this.response = response;
     }
 
     @Override
-    public JSONObject call() throws Exception {
+    public JsonElement call() throws Exception {
 
         // This is a very hard task...
         return response;

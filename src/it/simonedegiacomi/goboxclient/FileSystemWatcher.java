@@ -79,7 +79,8 @@ public class FileSystemWatcher extends Thread {
                 // Register this folder
                 //WatchKey key = dir.register(watchService, StandardWatchEventKinds.ENTRY_CREATE,
                 //        StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY);
-                WatchKey key = dir.register(watchService, new WatchEvent.Kind[]{StandardWatchEventKinds.ENTRY_CREATE}, SensitivityWatchEventModifier.HIGH);
+                WatchKey key = dir.register(watchService, new WatchEvent.Kind[]{StandardWatchEventKinds.ENTRY_CREATE,
+                    StandardWatchEventKinds.ENTRY_DELETE}, SensitivityWatchEventModifier.HIGH);
 
                 // Save the watch key in the map
                 keys.put(key, dir);

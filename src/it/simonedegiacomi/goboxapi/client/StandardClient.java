@@ -2,20 +2,24 @@ package it.simonedegiacomi.goboxapi.client;
 
 import com.google.common.io.ByteStreams;
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.authentication.Auth;
-import it.simonedegiacomi.goboxapi.myws.*;
+import it.simonedegiacomi.goboxapi.myws.MyWSClient;
+import it.simonedegiacomi.goboxapi.myws.WSEventListener;
+import it.simonedegiacomi.goboxapi.myws.WSQueryResponseListener;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import javax.net.ssl.HttpsURLConnection;
-import java.io.*;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.FutureTask;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -36,14 +40,10 @@ public class StandardClient implements Client {
     private static final Logger log = Logger.getLogger(StandardClient.class.getName());
 
     /**
-     * Configuration of the environment
-     */
-    private final Config config = Config.getInstance();
-
-    /**
      * Object used to create the urls.
+     * TODO: Get the url builder from the constructor
      */
-    private final URLBuilder urls = config.getUrls();
+    private final URLBuilder urls = Config.getInstance().getUrls();
 
     /**
      * WebSocket connection to the server
@@ -55,8 +55,12 @@ public class StandardClient implements Client {
      */
     private final Auth auth;
 
+    private final Gson gson = new Gson();
+
+    private final Set<String> eventsToIgnore = new HashSet<>();
+
     /**
-     * Construct a sinc object, but first try to login to gobox.
+     * Construct a sync object, but first try to login to gobox.
      * The constructor will block the thread util the authentication
      * is complete
      * @param auth Auth object that will be used to authenticate
@@ -74,36 +78,37 @@ public class StandardClient implements Client {
             // When the webSocket in opened, send the authentication object
             server.on("open", new WSEventListener() {
                 @Override
-                public void onEvent(JSONObject data) {
+                public void onEvent(JsonElement data) {
 
                     log.fine("Authentication trough webSocket");
 
                     // Send the authentication object
 
                     // TODO: handle an authentication error
-                    server.sendEvent("authentication", auth.toJSON(), true);
+                    server.sendEvent("authentication", gson.toJsonTree(auth, Auth.class), true);
                 }
             });
 
             // Register the storageInfo event
             server.on("storageInfo", new WSEventListener() {
                 @Override
-                public void onEvent(JSONObject data) {
+                public void onEvent(JsonElement data) {
                     System.out.println(data);
                 }
             });
-
-            // Start listening on the websocket, connecting to the server
-            server.connect();
 
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
         }
     }
 
+    public void connect () {
+        // Start listening on the websocket, connecting to the server
+        server.connect();
+    }
+
     /**
-     * Download a file from the it.simonedegiacomi.storage copying the file to the
-     * dst Outputstream.
+     * Download a file from the storage copying the file to the output stream
      *
      * @param file File to download.
      * @param dst Output stream where put the content of the file.
@@ -114,8 +119,8 @@ public class StandardClient implements Client {
         try {
 
             // Create and fill the request object
-            JSONObject request = new JSONObject();
-            request.put("ID", file.getID());
+            JsonObject request = new JsonObject();
+            request.addProperty("ID", file.getID());
 
             URL url = urls.get("getFile", request);
             HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
@@ -138,9 +143,11 @@ public class StandardClient implements Client {
     @Override
     public void createDirectory(GBFile newDir) throws ClientException {
         try {
-            FutureTask<JSONObject> future = server.makeQuery("createFolder", new JSONObject(new Gson().toJson(newDir)));
-            JSONObject response = future.get();
-            newDir.setID(response.getLong("newFolderId"));
+            // Ignore the events from the server related to this file
+            eventsToIgnore.add(newDir.toFile().toString());
+            FutureTask<JsonElement> future = server.makeQuery("createFolder", gson.toJsonTree(newDir, GBFile.class));
+            JsonObject response = (JsonObject) future.get();
+            newDir.setID(response.get("newFolderId").getAsLong());
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
             throw new ClientException(ex.toString());
@@ -154,24 +161,21 @@ public class StandardClient implements Client {
     }
 
     @Override
-    public List<GBFile> listDirectory(GBFile father) throws ClientException {
+    public GBFile[] listDirectory(GBFile father) throws ClientException {
 
-        // Make the quey
-        FutureTask<JSONObject> future = server.makeQuery("listFile", father.toJSON());
         try {
-            // Get hte response from the future
-            JSONObject response = future.get();
+            // I know, it's long, but i couldn't resist
 
-            // Create a new array of GBFile from the response
-            JSONArray children = response.getJSONArray("children");
-            List<GBFile> files = new LinkedList<>();
-            for (int i = 0; i < children.length(); i++)
-                files.add(new GBFile(children.getJSONObject(i)));
-            return files;
+            // Let me explain, it's easy
+            // In this line you return a new array of GBFile. This array is created by Gson wrapping
+            // the incoming json from the server. When you made this request?
+            // Look at the middle of the statement, you'll find a 'server.makeQuery'. Here you make the request through ws.
+            // This request return to you a FutureTask, and you block this thread calling the 'get' method.
+            return gson.fromJson(((JsonObject) server.makeQuery("listFile", gson.toJsonTree(father, GBFile.class)).get()).getAsJsonArray("children"), GBFile[].class);
         } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
+            ex.printStackTrace();
+            return null;
         }
-        return null;
     }
 
     @Override
@@ -187,11 +191,14 @@ public class StandardClient implements Client {
     @Override
     public void uploadFile(GBFile file, InputStream stream) throws ClientException {
         try {
+
             // Get the url to upload the file
-            URL url = urls.get("uploadFile", new JSONObject(new Gson().toJson(file)));
+            URL url = urls.get("uploadFile", gson.toJsonTree(file), true);
+
 
             // Create a new https connection
             HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
+
 
             conn.setDoInput(true);
             conn.setDoOutput(true);
@@ -199,16 +206,21 @@ public class StandardClient implements Client {
             // Authorize it
             auth.authorize(conn);
 
+
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Length", String.valueOf(file.getSize()));
+
 
             // Send the file
             ByteStreams.copy(stream, conn.getOutputStream());
 
+
             int responseCode = conn.getResponseCode();
+
 
             if (responseCode != 200)
                 log.warning("Response Code: " + responseCode);
+
 
             // Close the http connection
             conn.disconnect();
@@ -218,7 +230,6 @@ public class StandardClient implements Client {
             throw new ClientException(ex.toString());
         }
     }
-
 
     @Override
     public void uploadFile(GBFile file) throws ClientException {
@@ -234,9 +245,9 @@ public class StandardClient implements Client {
     public void removeFile (GBFile file) throws ClientException{
         // Make the request trough web socket
         try {
-            server.makeQuery("removeFile", file.toJSON(), new WSQueryResponseListener() {
+            server.makeQuery("removeFile", gson.toJsonTree(file), new WSQueryResponseListener() {
                 @Override
-                public void onResponse(JSONObject response) {
+                public void onResponse(JsonElement response) {
                     log.fine("File deletion response: " + response.toString());
                 }
             });
@@ -272,14 +283,26 @@ public class StandardClient implements Client {
         // Add a new listener on the web socket
         server.on("syncEvent", new WSEventListener() {
             @Override
-            public void onEvent(JSONObject data) {
+            public void onEvent(JsonElement data) {
 
                 // Wrap the data in a new SyncEvent
-                SyncEvent event = new SyncEvent(data);
+                SyncEvent event = gson.fromJson(data, SyncEvent.class);
+
+                // Check if this is the notification for a event that i've generated.
+                if(eventsToIgnore.remove(event.getRelativeFile().toFile()))
+                    // Because i've generated this event, i ignore it
+                    return;
 
                 // And call the listener
                 listener.on(event);
             }
         });
+    }
+
+    @Override
+    public void requestEvents(long lastHeardId) {
+        JsonObject request = new JsonObject();
+        request.addProperty("ID", lastHeardId);
+        server.sendEvent("getEventsList", request, false);
     }
 }

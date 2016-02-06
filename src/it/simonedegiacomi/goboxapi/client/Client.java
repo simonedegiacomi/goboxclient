@@ -5,10 +5,9 @@ import it.simonedegiacomi.goboxapi.GBFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.List;
 
 /**
- * This is the interface of the it.simonedegiacomi.goboxclient api
+ * This is the interface of the goboxclient api
  * and contains the basic operation that a client
  * can do.
  *
@@ -28,16 +27,16 @@ public interface Client {
      * @return Children of the directory
      * @throws ClientException
      */
-    public List<GBFile> listDirectory (GBFile father) throws ClientException;
+    public GBFile[] listDirectory (GBFile father) throws ClientException;
 
     /**
-     * Retrive the file from the it.simonedegiacomi.storage and save it
+     * Retrive the file from the storage and save it
      * to the file position saved inside the GBFile
      * passed as argument
-     * @param file File to retrive. The file must have his ID
+     * @param file File to retrieve. The file must have his ID
      *             and a valid path, that will used to save
      *             the received file
-     * @throws ClientException Exception throwed in case of
+     * @throws ClientException Exception thrown in case of
      * invalid id, network error or io error while saving the
      * file to the disk
      */
@@ -46,7 +45,7 @@ public interface Client {
     /**
      * Same as getFile(GBFile) but let you specify the output
      * stream that will be used to write the incoming file
-     * from the it.simonedegiacomi.storage
+     * from the storage
      * @param file File to download, (Only the id of this object
      *             will be sued)
      * @param dst Destination of the input stream of the file
@@ -63,10 +62,10 @@ public interface Client {
     public void createDirectory (GBFile newDir) throws ClientException;
 
     /**
-     * Send a file to the it.simonedegiacomi.storage.
+     * Send a file to the storage.
      * @param file File to send File to send. The object must have or the
      *             field father id or the path.
-     * @param stream Stream of the file Stream that will be sent to the it.simonedegiacomi.storage
+     * @param stream Stream of the file Stream that will be sent to the storage
      * @throws ClientException Exception Network error or invalid father reference
      */
     public void uploadFile (GBFile file, InputStream stream) throws ClientException;
@@ -81,14 +80,14 @@ public interface Client {
     public void uploadFile (GBFile file) throws ClientException;
 
     /**
-     * Remove a file from the it.simonedegiacomi.storage
+     * Remove a file from the storage
      * @param file File to remove
      * @throws ClientException Exception thrown if the id is not valid
      */
     public void removeFile (GBFile file) throws ClientException;
 
     /**
-     * Update a file in the it.simonedegiacomi.storage.
+     * Update a file in the storage.
      * PS: If the information of the file are changed
      * update only that information, otherwise resend
      * the file
@@ -97,17 +96,24 @@ public interface Client {
     public void updateFile (GBFile file, InputStream stream) throws ClientException;
 
     /**
-     * Update a file in the it.simonedegiacomi.storage. The same as update,
+     * Update a file in the storage. The same as update,
      * but the stream is obtained from the file
      * @param file File to update
      */
     public void updateFile (GBFile file) throws ClientException;
 
     /**
-     * Set the listener for the SyncEvent received from the
-     * it.simonedegiacomi.storage
+     * Set the listener for the SyncEvent received from the storage
      * @param listener Listener that will called with the relative
      *                 event
      */
     public void setSyncEventListener (SyncEventListener listener);
+
+    /**
+     * Talk to the storage and tell to it the last ID of the event that
+     * this client has heard. The not heard event will come as normal SyncEvent.
+     * @param lastHeardId The ID of the last event you received or from you want
+     *                    the list
+     */
+    public void requestEvents (long lastHeardId);
 }

@@ -1,6 +1,5 @@
 package it.simonedegiacomi.utils;
 
-import com.sun.org.apache.xpath.internal.operations.Bool;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.myws.MyWSClient;
 
@@ -27,7 +26,7 @@ public class EasyProxy {
         System.setProperty("http.proxyPort", config.getProperty("proxyPort"));
         System.setProperty("https.proxyHost", config.getProperty("proxyIP"));
         System.setProperty("https.proxyPort", config.getProperty("proxyPort"));
-        MyWSClient.setProxy(config.getProperty("proxyIP"), config.getProperty("proxyPort"));
+        MyWSClient.setProxy(config.getProperty("proxyIP"), Integer.parseInt(config.getProperty("proxyPort")));
 
         System.out.printf("Proxy set (%s:%s)\n", config.getProperty("proxyIP"), config.getProperty("proxyPort"));
 
