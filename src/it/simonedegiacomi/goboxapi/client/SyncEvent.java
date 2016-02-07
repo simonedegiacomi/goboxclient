@@ -8,9 +8,9 @@ import it.simonedegiacomi.goboxapi.GBFile;
 /**
  * This class is used to create the SyncEvent object
  * that contain the information about a new event made
- * from another client on the storage
+ * from another client onEvent the storage
  *
- * Created by Degiacomi Simone on 02/01/16.
+ * Created by Degiacomi Simone onEvent 02/01/16.
  */
 @DatabaseTable(tableName = "event")
 public class SyncEvent implements Comparable {

@@ -18,7 +18,7 @@ import java.util.logging.Logger;
  * the necessary methods to talk with the server
  * to check the data
  *
- * Created by Degiacomi Simone on 31/12/15.
+ * Created by Degiacomi Simone onEvent 31/12/15.
  */
 public class Auth {
 
@@ -42,7 +42,7 @@ public class Auth {
     private transient static final URLBuilder urls = Config.getInstance().getUrls();
 
     /**
-     * Password of the user. This field is not-null only on
+     * Password of the user. This field is not-null only onEvent
      * the login phase
      */
     private String password;

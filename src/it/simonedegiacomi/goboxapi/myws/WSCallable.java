@@ -6,9 +6,9 @@ import java.util.concurrent.Callable;
 
 /**
  * Implementation of Callable used in my implementation
- * of web socket client for the java FutureTask
+ * of handlers socket client for the java FutureTask
  *
- * Created by Degiacomi Simone on 10/01/16.
+ * Created by Degiacomi Simone onEvent 10/01/16.
  */
 public class WSCallable implements Callable<JsonElement> {
 

@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Properties;
 
 /**
- * Created by Degiacomi Simone on 27/12/2015.
+ * Created by Degiacomi Simone onEvent 27/12/2015.
  */
 public class Config {
 

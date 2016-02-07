@@ -11,7 +11,7 @@ import java.io.OutputStream;
  * and contains the basic operation that a client
  * can do.
  *
- * Created by Degiacomi Simone on 02/01/2016.
+ * Created by Degiacomi Simone onEvent 02/01/2016.
  */
 public interface Client {
 

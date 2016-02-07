@@ -10,9 +10,11 @@ import com.j256.ormlite.table.TableUtils;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
@@ -22,7 +24,7 @@ import java.util.logging.Logger;
  * This class wrap the database in a object that
  * exposes all the method used in the GoBox Storage.
  *
- * Created by Degiacomi Simone on 23/12/2015
+ * Created by Degiacomi Simone onEvent 23/12/2015
  */
 public class StorageDB {
 
@@ -60,7 +62,7 @@ public class StorageDB {
         fileTable = DaoManager.createDao(connectionSource, GBFile.class);
         fileTable.setAutoCommit(connectionSource.getReadWriteConnection(), true);
         eventTable = DaoManager.createDao(connectionSource, SyncEvent.class);
-        eventTable.setAutoCommit(connectionSource, true);
+        eventTable.setAutoCommit(connectionSource.getReadWriteConnection(), true);
 
         log.info("Connected to local H2 database");
         try {
@@ -202,7 +204,7 @@ public class StorageDB {
 
         fileTable.create(newFile);
 
-        log.info("New file inserted on the database");
+        log.info("New file inserted onEvent the database");
 
         // Create the SyncEvent to return
         SyncEvent event = new SyncEvent(SyncEvent.EventKind.NEW_FILE, newFile);

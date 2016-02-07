@@ -4,7 +4,7 @@ package it.simonedegiacomi.configuration;
 import java.awt.*;
 
 /**
- * Created by Degiacomi Simone on 27/12/2015.
+ * Created by Degiacomi Simone onEvent 27/12/2015.
  */
 public abstract class LoginTool {
 

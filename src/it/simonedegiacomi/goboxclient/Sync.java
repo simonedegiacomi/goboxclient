@@ -20,7 +20,7 @@ import java.util.logging.Logger;
  * the Client interface, and manage the synchronization
  * of the filesystem with the relative storage of the account.
  *
- * Created by Degiacomi Simone on 24/12/2015
+ * Created by Degiacomi Simone onEvent 24/12/2015
  */
 
 public class Sync {
@@ -115,7 +115,7 @@ public class Sync {
     private void assignFileWatcherEvents () {
         // At the beginning i download the file list, and make a control.
         // I download the file from the server, and new files found are trasmetted to sevrer.
-        // If a file was deleted on the client with the program not running, the file will
+        // If a file was deleted onEvent the client with the program not running, the file will
         // redownloaded
 
         // This event is called when a new file or directory is created
@@ -143,7 +143,7 @@ public class Sync {
         watcher.assignListener(FileSystemWatcher.FILE_CHANGED, new FileSystemWatcher.Listener() {
             @Override
             public void onEvent(File editedFile) {
-                log.fine("New file updated on the local fs");
+                log.fine("New file updated onEvent the local fs");
 
                 try {
                     // Wrap the java File into a GoBoxFile
@@ -180,7 +180,7 @@ public class Sync {
      * This method set the listener of the client object
      * that will listen at the events trasmitted from
      * the it.simonedegiacomi.storage. These events are the result of the
-     * operation on the files from other clients.
+     * operation onEvent the files from other clients.
      */
     private void assignSyncEventFromStorage () {
 
@@ -241,7 +241,7 @@ public class Sync {
     }
 
     /**
-     * This method create a new directory on the local fs.
+     * This method create a new directory onEvent the local fs.
      * Normally this is called when a new folder is created
      * by another client
      * @param newDir New directory to create

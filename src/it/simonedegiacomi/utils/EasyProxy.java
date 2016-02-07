@@ -9,7 +9,7 @@ import java.net.PasswordAuthentication;
 /**
  * This class expones a method used to set the
  * proxy configuration
- * Created by Degiacomi Simone on 22/11/2015.
+ * Created by Degiacomi Simone onEvent 22/11/2015.
  */
 public class EasyProxy {
     /**

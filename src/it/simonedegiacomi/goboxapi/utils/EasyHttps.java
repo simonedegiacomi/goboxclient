@@ -13,7 +13,7 @@ import java.util.logging.Logger;
 /**
  * Tool Class used to make simply https request
  *
- * Created by Degiacomi Simone on 27/12/2015.
+ * Created by Degiacomi Simone onEvent 27/12/2015.
  */
 public class EasyHttps {
 

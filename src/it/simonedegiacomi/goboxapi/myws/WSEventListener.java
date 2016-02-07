@@ -4,9 +4,9 @@ import com.google.gson.JsonElement;
 
 /**
  * Interface to implement to create a new event listener
- * for thw eb socket client
+ * for the handlers socket client.
  *
- * Created by Degiacomi Simone on 28/12/15.
+ * Created by Degiacomi Simone onEvent 28/12/15.
  */
 public interface WSEventListener {
 

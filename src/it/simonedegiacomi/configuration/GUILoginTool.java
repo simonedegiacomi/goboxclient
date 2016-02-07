@@ -7,7 +7,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 /**
- * Created by Degiacomi Simone on 02/01/2016.
+ * Created by Degiacomi Simone onEvent 02/01/2016.
  */
 public class GUILoginTool extends LoginTool {
 

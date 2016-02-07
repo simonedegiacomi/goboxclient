@@ -1,7 +1,7 @@
 package it.simonedegiacomi.goboxapi;
 
 /**
- * Created by Degiacomi Simone on 10/01/16.
+ * Created by Degiacomi Simone onEvent 10/01/16.
  */
 public class GBException extends Exception {
     /**

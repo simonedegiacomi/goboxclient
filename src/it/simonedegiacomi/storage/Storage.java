@@ -1,10 +1,8 @@
 package it.simonedegiacomi.storage;
 
-import com.google.common.io.ByteStreams;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
@@ -13,13 +11,14 @@ import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.MyWSClient;
 import it.simonedegiacomi.goboxapi.myws.WSEventListener;
-import it.simonedegiacomi.goboxapi.myws.WSQueryAnswer;
+import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.utils.EasyHttps;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import it.simonedegiacomi.storage.handlers.ClientToStorageHandler;
+import it.simonedegiacomi.storage.handlers.FileListHandler;
+import it.simonedegiacomi.storage.handlers.FindPathHandler;
+import it.simonedegiacomi.storage.handlers.StorageToClientHandler;
 
-import javax.net.ssl.HttpsURLConnection;
-import java.io.*;
-import java.net.URL;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.logging.Level;
@@ -30,7 +29,7 @@ import java.util.logging.Logger;
  * file from the other clients and sending it to
  * other client (of the same GoBox account).
  *
- * Created by Degiacomi Simone on 24/12/2015.
+ * Created by Degiacomi Simone onEvent 24/12/2015.
  */
 public class Storage {
 
@@ -65,12 +64,13 @@ public class Storage {
      */
     private final String PATH = "files";
 
+    private EventEmitter emitter;
+
     private final Auth auth;
 
     private InternalClient internalClient;
 
-    private Gson gson = new Gson();
-    private JsonParser parser = new JsonParser();
+    private final Gson gson = new Gson();
 
     /**
      * Create a new storage given the Auth object for the appropriate account.
@@ -81,7 +81,7 @@ public class Storage {
 
         this.auth = auth;
 
-        // Connect to the local databaase
+        // Connect to the local database
         try {
             this.db = new StorageDB("./config/db");
         } catch (Exception ex) {
@@ -109,11 +109,14 @@ public class Storage {
         try {
             mainServer = new MyWSClient(urls.getURI("socketStorage"));
         } catch (Exception ex) {
-            throw new StorageException("Cannot connect to the main server through web socket");
+            throw new StorageException("Cannot connect to the main server through handlers socket");
         }
 
+        // Create the event emitter
+        emitter = new EventEmitter(mainServer);
+
         // Set the listener for the open event
-        mainServer.on("open", new WSEventListener() {
+        mainServer.onEvent("open", new WSEventListener() {
             @Override
             public void onEvent(JsonElement data) {
                 mainServer.sendEvent("authentication", gson.toJsonTree(auth, Auth.class), true);
@@ -131,36 +134,22 @@ public class Storage {
     }
 
     /**
-     * Assign the evnts listener for the incoming events
+     * Assign the events listener for the incoming events
      * and incoming query from the main server and the other
-     * clients trough web sockets.
+     * clients trough handlers sockets.
      */
     private void assignEvent () {
 
-        /**
-         * List the files inside the directory, filling the file received from
-         * the query
-         */
-        mainServer.onQuery("listFile", new WSQueryAnswer() {
+        mainServer.addQueryHandler(new FileListHandler(db));
 
-            @Override
-            public JsonElement onQuery(JsonElement data) {
-                log.info("ListFile query");
-                try {
-                    GBFile father = gson.fromJson(data, GBFile.class);
+        mainServer.addEventHandler(new ClientToStorageHandler(db));
 
-                    GBFile detailedFile = db.getFileById(father.getID(), false, true);
+        mainServer.addEventHandler(new StorageToClientHandler(db, emitter));
 
-                    return gson.toJsonTree(detailedFile, GBFile.class);
-                } catch (Exception ex) {
-                    log.log(Level.SEVERE, ex.toString(), ex);
-                    return null;
-                }
-            }
-        });
+        mainServer.addQueryHandler(new FindPathHandler(db));
 
         // Query listener for the create folder
-        mainServer.onQuery("createFolder", new WSQueryAnswer() {
+        mainServer.onQuery("createFolder", new WSQueryHandler() {
             @Override
             public JsonElement onQuery(JsonElement data) {
                 log.info("CreateFolder query");
@@ -185,7 +174,7 @@ public class Storage {
                     // client that a new folder is created
 
                     // The notification will contain the new file information
-                    emitEvent(event);
+                    emitter.emitEvent(event);
                 } catch (Exception ex) {
                     log.log(Level.SEVERE, ex.toString(), ex);
                 }
@@ -195,7 +184,7 @@ public class Storage {
             }
         });
 
-        mainServer.onQuery("updateFile", new WSQueryAnswer() {
+        mainServer.onQuery("updateFile", new WSQueryHandler() {
 
             @Override
             public JsonElement onQuery (JsonElement data) {
@@ -204,7 +193,7 @@ public class Storage {
                     GBFile fileToUpdate = gson.fromJson(data, GBFile.class);
                     SyncEvent event = db.updateFile(fileToUpdate);
 
-                    emitEvent(event);
+                    emitter.emitEvent(event);
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }
@@ -213,7 +202,7 @@ public class Storage {
         });
 
         // Listener of the remove file event
-        mainServer.on("removeFile", new WSEventListener() {
+        mainServer.onEvent("removeFile", new WSEventListener() {
 
             @Override
             public void onEvent(JsonElement data) {
@@ -222,141 +211,21 @@ public class Storage {
                     SyncEvent event = db.removeFile(fileToRemove);
 
                     // The notification will contain the deleted file
-                    emitEvent(event);
+                    emitter.emitEvent(event);
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }
             }
         });
 
-        mainServer.onQuery("whatPath", new WSQueryAnswer() {
-            @Override
-            public JsonElement onQuery (JsonElement data) {
-                try {
-                    // Wrap the file
-                    GBFile file = gson.fromJson(data, GBFile.class);
-
-                    db.findPath(file);
-
-                    return gson.toJsonTree(file.getPathAsList(), GBFile.class);
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-                return null;
-            }
-        });
-
-        // Event that indicates that a client wants to upload a file.
-        // i need to make an http request to the main server to get the file
-        mainServer.on("comeToGetTheFile", new WSEventListener() {
-            @Override
-            public void onEvent(JsonElement data) {
-                log.info("New come to get upload request");
-                try {
-
-                    // Get the uploadKey
-                    String uploadKey = ((JsonObject) data).get("uploadKey").getAsString();
-
-                    // Wrap the incoming file
-                    GBFile incomingFile = gson.fromJson(data.toString(), GBFile.class);
-
-                    // Make the https request to the main server
-                    URL url = new URL("https://goboxserver-simonedegiacomi.c9users.io/api/transfer/fromClient");
-                    HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
-
-                    conn.setRequestMethod("POST");
-                    auth.authorize(conn);
-
-                    // Abilitate input and output fro this request
-                    conn.setDoOutput(true);
-                    conn.setDoInput(true);
-
-                    // Create the json that will identify the upload
-                    JsonObject json = new JsonObject();
-                    json.addProperty("uploadKey", uploadKey);
-
-                    // Send this json
-                    // specify the length of the json
-                    conn.setRequestProperty("Content-Length", String.valueOf(json.toString().length()));
-                    PrintWriter out = new PrintWriter(conn.getOutputStream());
-                    out.println(json.toString());
-                    // Close the output stream of the request
-                    out.close();
-
-                    // get the file
-                    int response = conn.getResponseCode();
-
-                    // Create the stream to the disk
-                    DataOutputStream toDisk = new DataOutputStream(new FileOutputStream(incomingFile.getPathAsString(PATH)));
-
-                    // Copy the stream
-                    ByteStreams.copy(conn.getInputStream(), toDisk);
-
-                    // Close file and http connection
-                    toDisk.close();
-                    conn.disconnect();
-
-                    // Insert the file in the database
-                    SyncEvent event = db.insertFile(incomingFile);
-
-                    // The notification will contain the new file information
-                    emitEvent(event);
-
-                } catch (Exception ex) {
-                    log.log(Level.WARNING, ex.toString(), ex);
-                }
-            }
-        });
-
-        mainServer.on("sendMeTheFile", new WSEventListener() {
-            @Override
-            public void onEvent(JsonElement data) {
-                log.info("New download request");
-                try {
-                    JsonObject jsonData = (JsonObject) data;
-                    String downloadKey = jsonData.get("downloadKey").getAsString();
-                    long file = jsonData.get("ID").getAsLong();
-
-                    // get the file from the database
-                    GBFile dbFile = db.getFileById(file);
-
-                    jsonData.remove("ID");
-
-                    URL url = urls.get("sendFileToClient", data);
-
-                    HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
-                    conn.setRequestMethod("POST");
-                    auth.authorize(conn);
-
-                    conn.setDoOutput(true);
-
-                    DataOutputStream toServer = new DataOutputStream(conn.getOutputStream());
-
-                    // Open the file
-                    DataInputStream fromFile = new  DataInputStream(new FileInputStream(dbFile.getPathAsString(PATH)));
-
-                    // Send the file
-                    ByteStreams.copy(fromFile, toServer);
-
-                    fromFile.close();
-                    toServer.close();
-                    System.out.println(conn.getResponseCode());
-                    conn.disconnect();
-
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-            }
-        });
-
-        mainServer.onQuery("ping", new WSQueryAnswer() {
+        mainServer.onQuery("ping", new WSQueryHandler() {
             @Override
             public JsonElement onQuery(JsonElement data) {
                 return new JsonObject();
             }
         });
 
-        mainServer.onQuery("getEventsList", new WSQueryAnswer() {
+        mainServer.onQuery("getEventsList", new WSQueryHandler() {
             @Override
             public JsonElement onQuery(JsonElement data) {
                 long lastHeardId = ((JsonObject) data).get("id").getAsLong();
@@ -375,12 +244,6 @@ public class Storage {
             internalClient.ignore(file);
     }
 
-    protected void emitEvent (SyncEvent eventToEmit) {
-
-        // Send the event to all the clients
-        mainServer.sendEventBroadcast("syncEvent", gson.toJsonTree(eventToEmit, SyncEvent.class));
-    }
-
     /**
      * Create a new InternalClient that can be used to
      * create a new Sync object. This client is used to
@@ -393,5 +256,9 @@ public class Storage {
      */
     public Client getInternalClient () {
         return (internalClient = internalClient == null ? new InternalClient(this, db) : internalClient);
+    }
+
+    protected EventEmitter getEventEmitter () {
+        return emitter;
     }
 }

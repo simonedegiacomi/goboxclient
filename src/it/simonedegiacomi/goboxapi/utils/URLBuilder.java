@@ -17,7 +17,7 @@ import java.util.Properties;
  * it when created. It also can create new url appending
  * string parameters to the url.
  *
- * Created by Degiacomi Simone on 09/01/16.
+ * Created by Degiacomi Simone onEvent 09/01/16.
  */
 public class URLBuilder {
 

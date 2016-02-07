@@ -6,7 +6,7 @@ import it.simonedegiacomi.goboxapi.authentication.AuthException;
 import java.io.Console;
 
 /**
- * Created by Degiacomi Simone on 31/12/2015.
+ * Created by Degiacomi Simone onEvent 31/12/2015.
  */
 public class ConsoleLoginTool extends LoginTool {
 

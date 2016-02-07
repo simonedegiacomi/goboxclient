@@ -1,7 +1,7 @@
 package it.simonedegiacomi.configuration;
 
 /**
- * Created by Simone on 30/12/2015.
+ * Created by Simone onEvent 30/12/2015.
  */
 public class ConfigurationException extends Exception {
     private String error;

@@ -13,7 +13,7 @@ import java.util.Set;
 /**
  * Simple File System Watcher
  *
- * Created by Degiacomi Simone on 24/12/2015.
+ * Created by Degiacomi Simone onEvent 24/12/2015.
  */
 public class FileSystemWatcher extends Thread {
 

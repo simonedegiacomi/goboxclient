@@ -3,9 +3,13 @@ package it.simonedegiacomi.goboxapi.myws;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import it.simonedegiacomi.goboxapi.myws.annotations.WSEvent;
+import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
+import java.lang.annotation.IncompleteAnnotationException;
+import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.HashMap;
@@ -16,12 +20,12 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * This is an implementation of web socket based on
+ * This is an implementation of handlers socket based onEvent
  * the library 'TooTallNate/Java-WebSocket'. This
  * class add some feature like event handling and query
  * concept.
  *
- * Created by Degiacomi Simone on 28/12/15.
+ * Created by Degiacomi Simone onEvent 28/12/15.
  */
 public class MyWSClient {
 
@@ -31,7 +35,7 @@ public class MyWSClient {
     private static final Logger log = Logger.getLogger(MyWSClient.class.getName());
 
     /**
-     * Proxy to use to connect to the web socket servers
+     * Proxy to use to connect to the handlers socket servers
      */
     private static InetSocketAddress proxy;
 
@@ -61,7 +65,7 @@ public class MyWSClient {
      * Association:
      * Name of the query => Listener that answer this query
      */
-    private final HashMap<String, WSQueryAnswer> queryAnswers;
+    private final HashMap<String, WSQueryHandler> queryAnswers;
 
     /**
      * This map contains the listener for the pending request made, Do not
@@ -137,7 +141,7 @@ public class MyWSClient {
                     }
 
                     // Now, check if is a query response
-                    // If is a query response i MUST have an listener on the
+                    // If is a query response i MUST have an listener onEvent the
                     // 'queryResponse' map, so check here:
                     if(json.get("event").getAsString().equals("queryResponse")) {
                         // Get and remove the response listener
@@ -207,8 +211,26 @@ public class MyWSClient {
      * @param event Name of the event.
      * @param listener Listener of this event
      */
-    public void on (String event, WSEventListener listener) {
+    public void onEvent(String event, WSEventListener listener) {
         events.put(event, listener);
+    }
+
+    /**
+     * Register an event handler, like 'onEvent', but you don't need to specify the
+     * event name. To make this work you need to put the WSEvent notation before the 'onEvent'
+     * method.
+     * @param handler Handler to register.
+     */
+    public void addEventHandler (WSEventListener handler) {
+        try {
+            Method method = handler.getClass().getMethod("onEvent");
+            WSEvent annotation = method.getAnnotation(WSEvent.class);
+            this.onEvent(annotation.name(), handler);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            // TODO: Find a better Exception or declare a new one
+            throw new IncompleteAnnotationException(WSEvent.class, "Annotatio not found");
+        }
     }
 
     /**
@@ -216,10 +238,20 @@ public class MyWSClient {
      * @param queryName Name of the query that the method will answer
      * @param listener Listener that will call to answer the query
      */
-    public void onQuery (String queryName, WSQueryAnswer listener) {
+    public void onQuery (String queryName, WSQueryHandler listener) {
         queryAnswers.put(queryName, listener);
     }
 
+    public void addQueryHandler (WSQueryHandler handler) {
+        try {
+            Method method = handler.getClass().getMethod("onQuery");
+            WSQuery annotation = method.getAnnotation(WSQuery.class);
+            this.onQuery(annotation.name(), handler);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            throw new IncompleteAnnotationException(WSEvent.class, "Annotation not found");
+        }
+    }
     /**
      * Make a new Query.
      * @param queryName Name of the query
@@ -278,7 +310,7 @@ public class MyWSClient {
     /**
      * Send a new event
      * @param event Name of the event
-     * @param data Data that will be sended with the event
+     * @param data Data that will be sent with the event
      * @param forServer Specify if this should be catch from the server
      */
     public void sendEvent(String event, JsonElement data, boolean forServer) {

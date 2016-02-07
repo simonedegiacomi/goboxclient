@@ -3,7 +3,7 @@ package it.simonedegiacomi.goboxapi.authentication;
 /**
  * Exception of GoBox Auth
  *
- * Created by Degiacomi Simone on 31/12/15.
+ * Created by Degiacomi Simone onEvent 31/12/15.
  */
 public class AuthException extends Exception {
 

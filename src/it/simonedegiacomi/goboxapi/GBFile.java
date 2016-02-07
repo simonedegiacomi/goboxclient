@@ -18,7 +18,7 @@ import java.util.logging.Logger;
  * Class used to create the logic database representation
  * of a file.
  *
- * Created by Degiacomi Simone on 24/12/2015.
+ * Created by Degiacomi Simone onEvent 24/12/2015.
  */
 @DatabaseTable(tableName = "file")
 public class GBFile {
@@ -38,7 +38,7 @@ public class GBFile {
     /**
      * Id of the file. Is not final because when the
      * file is created the ID is not known, but we now it
-     * only when is inserted on the database
+     * only when is inserted onEvent the database
      */
     @DatabaseField(id = true, generatedId = true, canBeNull = false, dataType = DataType.BIG_INTEGER)
     private long ID = UNKNOWN_ID;
@@ -431,7 +431,7 @@ public class GBFile {
      * If you change the date calling the method 'setCreationDate' the logic representation
      * of this file changes, but the file in the fs not change. to change that information
      * call this method.
-     * NOTE: This method will block the thread until the file on the fs is complete updated
+     * NOTE: This method will block the thread until the file onEvent the fs is complete updated
      */
     public void applyParams () {
         // TODO: implement this...

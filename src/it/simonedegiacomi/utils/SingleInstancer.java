@@ -10,7 +10,7 @@ import java.util.logging.Logger;
  * This class is used to check if the program
  * is running in single instance mode
  *
- * Created by Degiacomi Simone on 10/01/16.
+ * Created by Degiacomi Simone onEvent 10/01/16.
  */
 public class SingleInstancer {
 
@@ -21,7 +21,7 @@ public class SingleInstancer {
 
     /**
      * Default port used to check if another instance
-     * is running on the same machine
+     * is running onEvent the same machine
      */
     private static final int DEFAULT_PORT = 4212;
 

@@ -14,7 +14,7 @@ import java.util.Map;
  * This class has some static method that allows you
  * to create url with string query parameters
  *
- * Created by Degiacomi Simone on 06/01/16.
+ * Created by Degiacomi Simone onEvent 06/01/16.
  */
 public class URLParams {
 

@@ -19,9 +19,9 @@ import java.util.logging.Logger;
 
 /**
  * This client is used when the client is executed
- * on the same instance of the storage
+ * onEvent the same instance of the storage
  *
- * Created by Degiacomi Simone on 02/01/2016.
+ * Created by Degiacomi Simone onEvent 02/01/2016.
  */
 public class InternalClient implements Client {
 
@@ -38,11 +38,14 @@ public class InternalClient implements Client {
      */
     private final Storage storage;
 
+    private final EventEmitter emitter;
+
     private final Set<GBFile> filesToIgnore = new HashSet<>();
 
     public InternalClient(Storage storage, StorageDB db) {
         this.db = db;
         this.storage = storage;
+        this.emitter = storage.getEventEmitter();
     }
 
 
@@ -101,7 +104,7 @@ public class InternalClient implements Client {
         try {
             // Just insert the file into the database, the file is already here
             SyncEvent event = db.insertFile(file);
-            storage.emitEvent(event);
+            emitter.emitEvent(event);
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
         }
@@ -114,7 +117,7 @@ public class InternalClient implements Client {
         try {
             // Just remove the file, it's already gone...
             SyncEvent event = db.removeFile(file);
-            storage.emitEvent(event);
+            emitter.emitEvent(event);
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
         }
@@ -127,7 +130,7 @@ public class InternalClient implements Client {
         try {
             // The file is already updated...
             SyncEvent event = db.updateFile(file);
-            storage.emitEvent(event);
+            emitter.emitEvent(event);
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
         }

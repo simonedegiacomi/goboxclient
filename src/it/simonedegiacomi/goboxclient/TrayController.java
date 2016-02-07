@@ -12,7 +12,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Created by simone on 20/01/16.
+ * Created by simone onEvent 20/01/16.
  */
 public class TrayController {
 

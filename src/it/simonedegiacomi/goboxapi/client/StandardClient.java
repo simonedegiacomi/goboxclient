@@ -30,7 +30,7 @@ import java.util.logging.Logger;
  * the file list, to authenticate and to share events
  * and use HTTP(s) to transfer the files.
  *
- * Created by Degiacomi Simone on 31/12/2015.
+ * Created by Degiacomi Simone onEvent 31/12/2015.
  */
 public class StandardClient implements Client {
 
@@ -76,7 +76,7 @@ public class StandardClient implements Client {
             server = new MyWSClient(urls.getURI("socketClient"));
 
             // When the webSocket in opened, send the authentication object
-            server.on("open", new WSEventListener() {
+            server.onEvent("open", new WSEventListener() {
                 @Override
                 public void onEvent(JsonElement data) {
 
@@ -90,7 +90,7 @@ public class StandardClient implements Client {
             });
 
             // Register the storageInfo event
-            server.on("storageInfo", new WSEventListener() {
+            server.onEvent("storageInfo", new WSEventListener() {
                 @Override
                 public void onEvent(JsonElement data) {
                     System.out.println(data);
@@ -103,7 +103,7 @@ public class StandardClient implements Client {
     }
 
     public void connect () {
-        // Start listening on the websocket, connecting to the server
+        // Start listening onEvent the websocket, connecting to the server
         server.connect();
     }
 
@@ -243,7 +243,7 @@ public class StandardClient implements Client {
 
     @Override
     public void removeFile (GBFile file) throws ClientException{
-        // Make the request trough web socket
+        // Make the request trough handlers socket
         try {
             server.makeQuery("removeFile", gson.toJsonTree(file), new WSQueryResponseListener() {
                 @Override
@@ -280,8 +280,8 @@ public class StandardClient implements Client {
         if (listener == null)
             server.removeListener("syncEvent");
 
-        // Add a new listener on the web socket
-        server.on("syncEvent", new WSEventListener() {
+        // Add a new listener onEvent the handlers socket
+        server.onEvent("syncEvent", new WSEventListener() {
             @Override
             public void onEvent(JsonElement data) {
 
