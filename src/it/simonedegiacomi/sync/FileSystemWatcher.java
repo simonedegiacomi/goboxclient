@@ -1,4 +1,4 @@
-package it.simonedegiacomi.goboxclient;
+package it.simonedegiacomi.sync;
 
 import com.sun.nio.file.SensitivityWatchEventModifier;
 
@@ -57,9 +57,6 @@ public class FileSystemWatcher extends Thread {
         listeners = new HashMap<>();
         watchService = FileSystems.getDefault().newWatchService();
 
-        // Register the already existing folder
-        registerFolder(pathToWatch);
-
     }
 
     /**
@@ -68,7 +65,6 @@ public class FileSystemWatcher extends Thread {
      * @throws IOException
      */
     private void registerFolder (Path path) throws IOException{
-
         /**
          * Walk trough the folder inside this folder
          */
@@ -77,10 +73,8 @@ public class FileSystemWatcher extends Thread {
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
 
                 // Register this folder
-                //WatchKey key = dir.register(watchService, StandardWatchEventKinds.ENTRY_CREATE,
-                //        StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY);
                 WatchKey key = dir.register(watchService, new WatchEvent.Kind[]{StandardWatchEventKinds.ENTRY_CREATE,
-                    StandardWatchEventKinds.ENTRY_DELETE}, SensitivityWatchEventModifier.HIGH);
+                    StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY}, SensitivityWatchEventModifier.HIGH);
 
                 // Save the watch key in the map
                 keys.put(key, dir);
@@ -105,6 +99,12 @@ public class FileSystemWatcher extends Thread {
      */
     @Override
     public void run () {
+        // Register the already existing folder
+        try {
+            registerFolder(pathToWatch);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
         for (;;) {
             try {
                 WatchKey watchKey = watchService.take();
@@ -115,12 +115,17 @@ public class FileSystemWatcher extends Thread {
 
                     final WatchEvent.Kind kind = event.kind();
 
+                    System.out.printf("KIND: %s ", kind.toString());
+
                     if (kind == StandardWatchEventKinds.OVERFLOW)
                         continue;
 
                     WatchEvent<Path> ev = (WatchEvent<Path>) event;
 
                     Path name = ev.context();
+                    System.out.printf(" File: %s", name);
+                    if(name.getFileName().toFile().getName().contains(".DS_Store"))
+                        continue;
                     Path changePath = dir.resolve(name);
 
                     final File file = changePath.toFile();
@@ -164,4 +169,5 @@ public class FileSystemWatcher extends Thread {
     public interface Listener {
         public void onEvent (File file);
     }
+
 }

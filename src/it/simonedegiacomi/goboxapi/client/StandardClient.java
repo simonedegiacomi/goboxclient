@@ -5,22 +5,25 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import it.simonedegiacomi.configuration.Config;
+import it.simonedegiacomi.goboxapi.GBCache;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.authentication.Auth;
 import it.simonedegiacomi.goboxapi.myws.MyWSClient;
 import it.simonedegiacomi.goboxapi.myws.WSEventListener;
 import it.simonedegiacomi.goboxapi.myws.WSQueryResponseListener;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import org.java_websocket.drafts.Draft_17;
 
 import javax.net.ssl.HttpsURLConnection;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
+import java.net.URI;
 import java.net.URL;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -30,7 +33,8 @@ import java.util.logging.Logger;
  * the file list, to authenticate and to share events
  * and use HTTP(s) to transfer the files.
  *
- * Created by Degiacomi Simone onEvent 31/12/2015.
+ * @author Degiacomi Simone
+ * Created on 31/12/2015.
  */
 public class StandardClient implements Client {
 
@@ -43,7 +47,7 @@ public class StandardClient implements Client {
      * Object used to create the urls.
      * TODO: Get the url builder from the constructor
      */
-    private final URLBuilder urls = Config.getInstance().getUrls();
+    private final URLBuilder urls = new URLBuilder();
 
     /**
      * WebSocket connection to the server
@@ -59,19 +63,28 @@ public class StandardClient implements Client {
 
     private final Set<String> eventsToIgnore = new HashSet<>();
 
+    private CountDownLatch readyCountDown = new CountDownLatch(1);
+
+    private GBCache cache = new GBCache();
+
     /**
      * Construct a sync object, but first try to login to gobox.
      * The constructor will block the thread util the authentication
      * is complete
+     *
      * @param auth Auth object that will be used to authenticate
      */
-    public StandardClient(Auth auth) throws ClientException {
-
+    public StandardClient(final Auth auth) throws ClientException {
         this.auth = auth;
+
+        try {
+            urls.load();
+        } catch (IOException ex) {
+            throw new ExceptionInInitializerError("Cannot load GoBox Server urls");
+        }
 
         // Connect to the server
         try {
-
             // Create the websocket client
             server = new MyWSClient(urls.getURI("socketClient"));
 
@@ -79,11 +92,7 @@ public class StandardClient implements Client {
             server.onEvent("open", new WSEventListener() {
                 @Override
                 public void onEvent(JsonElement data) {
-
-                    log.fine("Authentication trough webSocket");
-
                     // Send the authentication object
-
                     // TODO: handle an authentication error
                     server.sendEvent("authentication", gson.toJsonTree(auth, Auth.class), true);
                 }
@@ -93,31 +102,43 @@ public class StandardClient implements Client {
             server.onEvent("storageInfo", new WSEventListener() {
                 @Override
                 public void onEvent(JsonElement data) {
+                    readyCountDown.countDown();
                     System.out.println(data);
                 }
             });
-
         } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
+            ex.printStackTrace();
         }
     }
 
-    public void connect () {
+    @Override
+    public boolean isOnline() {
+        return server.isConnected();
+    }
+
+    public void connect() {
         // Start listening onEvent the websocket, connecting to the server
-        server.connect();
+        try {
+            System.out.println("Connecting");
+            server.connectSync();
+            System.out.println("Done");
+            readyCountDown.await();
+        } catch (InterruptedException ex) {
+            ex.printStackTrace();
+        }
     }
 
     /**
-     * Download a file from the storage copying the file to the output stream
+     * Download a file from the storage copying the file to the output stream.
+     * When the download is complete the stream is closed.
      *
      * @param file File to download.
-     * @param dst Output stream where put the content of the file.
-     * @throws ClientException
+     * @param dst  Output stream where put the content of the file.
+     * @throws ClientException Error during the download
      */
     @Override
-    public void getFile (GBFile file, OutputStream dst) throws ClientException {
+    public void getFile(GBFile file, OutputStream dst) throws ClientException {
         try {
-
             // Create and fill the request object
             JsonObject request = new JsonObject();
             request.addProperty("ID", file.getID());
@@ -128,11 +149,15 @@ public class StandardClient implements Client {
             // Authorize the connection
             auth.authorize(conn);
 
+            InputStream fromServer = conn.getInputStream();
+
             // Copy the file
             ByteStreams.copy(conn.getInputStream(), dst);
 
             // Close the connection
+            fromServer.close();
             conn.disconnect();
+            dst.close();
 
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
@@ -140,44 +165,14 @@ public class StandardClient implements Client {
         }
     }
 
-    @Override
-    public void createDirectory(GBFile newDir) throws ClientException {
-        try {
-            // Ignore the events from the server related to this file
-            eventsToIgnore.add(newDir.toFile().toString());
-            FutureTask<JsonElement> future = server.makeQuery("createFolder", gson.toJsonTree(newDir, GBFile.class));
-            JsonObject response = (JsonObject) future.get();
-            newDir.setID(response.get("newFolderId").getAsLong());
-        } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
-            throw new ClientException(ex.toString());
-        }
-    }
-
-
-    @Override
-    public boolean isOnline() {
-        return server.isConnected();
-    }
-
-    @Override
-    public GBFile[] listDirectory(GBFile father) throws ClientException {
-
-        try {
-            // I know, it's long, but i couldn't resist
-
-            // Let me explain, it's easy
-            // In this line you return a new array of GBFile. This array is created by Gson wrapping
-            // the incoming json from the server. When you made this request?
-            // Look at the middle of the statement, you'll find a 'server.makeQuery'. Here you make the request through ws.
-            // This request return to you a FutureTask, and you block this thread calling the 'get' method.
-            return gson.fromJson(((JsonObject) server.makeQuery("listFile", gson.toJsonTree(father, GBFile.class)).get()).getAsJsonArray("children"), GBFile[].class);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            return null;
-        }
-    }
-
+    /**
+     * Download the file from the server and save it in his position. If the
+     * file was created with from a javaFile or the method 'toFile' was called
+     * on it specifing a path prefix, this prefix will be used.
+     *
+     * @param file File to retrieve.
+     * @throws ClientException
+     */
     @Override
     public void getFile(GBFile file) throws ClientException {
         try {
@@ -188,41 +183,99 @@ public class StandardClient implements Client {
         }
     }
 
+    /**
+     * Create a new directory in the storage. This method also ignore the event
+     * incoming from the storage that advice the other clients about this new folder
+     *
+     * @param newDir Directory to create
+     * @throws ClientException
+     */
+    @Override
+    public void createDirectory(GBFile newDir) throws ClientException {
+        try {
+            // Ignore the events from the server related to this file
+            eventsToIgnore.add(newDir.getPathAsString());
+            FutureTask<JsonElement> future = server.makeQuery("createFolder", gson.toJsonTree(newDir, GBFile.class));
+            JsonObject response = (JsonObject) future.get();
+            newDir.setID(response.get("newFolderId").getAsLong());
+        } catch (Exception ex) {
+            log.log(Level.WARNING, ex.toString(), ex);
+            throw new ClientException(ex.toString());
+        }
+    }
+
+    /**
+     * This method retrieve the information about the specified file. This method also
+     * use an internal cache, so you can call this method multiple times without generating
+     * useless network traffic.
+     *
+     * @param father File to look at
+     * @return New GBFile with the information of the storage
+     * @throws ClientException
+     */
+    @Override
+    public GBFile getInfo(GBFile father) throws ClientException {
+        //GBFile fromCache = cache.get(father);
+        //if(fromCache != null)
+        //    return fromCache;
+        try {
+            JsonObject request = new JsonObject();
+            request.add("file", gson.toJsonTree(father, GBFile.class));
+            // TODO: change this
+            request.addProperty("findPath", true);
+            request.addProperty("findChildren", true);
+            System.out.println("INIZIO GET " + Thread.currentThread());
+
+            JsonObject response = (JsonObject) server.makeQuery("info", request).get();
+            System.out.println("Fine get" + Thread.currentThread());
+            boolean found = response.get("found").getAsBoolean();
+            if (!found)
+                return null;
+            GBFile detailedFile = gson.fromJson(response.get("file"), GBFile.class);
+//            cache.add(detailedFile);
+            return detailedFile;
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            throw new ClientException(ex.toString());
+        }
+    }
+
+    /**
+     * Upload the file to the server reading his content from the input stream passed as
+     * argument. This method also ignore the generated event sent by the storage to the other
+     * clients.
+     *
+     * @param file   File to send File to send. The object must have or the field father id or the path.
+     * @param stream Stream of the file Stream that will be sent to the storage
+     * @throws ClientException
+     */
     @Override
     public void uploadFile(GBFile file, InputStream stream) throws ClientException {
         try {
+            eventsToIgnore.add(file.getPathAsString());
 
             // Get the url to upload the file
             URL url = urls.get("uploadFile", gson.toJsonTree(file), true);
 
-
             // Create a new https connection
             HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
-
-
             conn.setDoInput(true);
             conn.setDoOutput(true);
-
             // Authorize it
             auth.authorize(conn);
-
-
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Length", String.valueOf(file.getSize()));
 
-
+            OutputStream toStorage = conn.getOutputStream();
             // Send the file
-            ByteStreams.copy(stream, conn.getOutputStream());
-
-
+            ByteStreams.copy(stream, toStorage);
             int responseCode = conn.getResponseCode();
-
-
-            if (responseCode != 200)
-                log.warning("Response Code: " + responseCode);
-
+            if (responseCode != 200) {
+                throw new ClientException("Response code of the upload: " + responseCode);
+            }
 
             // Close the http connection
+            toStorage.close();
             conn.disconnect();
             stream.close();
         } catch (Exception ex) {
@@ -231,6 +284,14 @@ public class StandardClient implements Client {
         }
     }
 
+    /**
+     * Upload the file to the storage reading the file content from the file. If the
+     * file was created with from a javaFile or the method 'toFile' was called
+     * on it specifing a path prefix, this prefix will be used.
+     *
+     * @param file File to send
+     * @throws ClientException
+     */
     @Override
     public void uploadFile(GBFile file) throws ClientException {
         try {
@@ -241,8 +302,15 @@ public class StandardClient implements Client {
         }
     }
 
+    /**
+     * Remove the file from the storage and ignore the event generated from this action.
+     *
+     * @param file File to remove
+     * @throws ClientException
+     */
     @Override
-    public void removeFile (GBFile file) throws ClientException{
+    public void removeFile(GBFile file) throws ClientException {
+        eventsToIgnore.add(file.getPathAsString());
         // Make the request trough handlers socket
         try {
             server.makeQuery("removeFile", gson.toJsonTree(file), new WSQueryResponseListener() {
@@ -268,12 +336,13 @@ public class StandardClient implements Client {
     }
 
     /**
-     * Set the listener for the event from the it.simonedegiacomi.storage.
+     * Set the listener for the event from the storage.
      * Id another listener is already set, the listener
      * will be replaced
+     *
      * @param listener Listener that will called with the relative
      */
-    public void setSyncEventListener(SyncEventListener listener) {
+    public void setSyncEventListener(final SyncEventListener listener) {
 
         // If the listener passed is null, remove the old listener
         // (or do nothing if was never set)
@@ -289,7 +358,7 @@ public class StandardClient implements Client {
                 SyncEvent event = gson.fromJson(data, SyncEvent.class);
 
                 // Check if this is the notification for a event that i've generated.
-                if(eventsToIgnore.remove(event.getRelativeFile().toFile()))
+                if (eventsToIgnore.remove(event.getRelativeFile().getPathAsString()))
                     // Because i've generated this event, i ignore it
                     return;
 

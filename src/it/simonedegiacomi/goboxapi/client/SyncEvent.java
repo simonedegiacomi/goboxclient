@@ -21,6 +21,12 @@ public class SyncEvent implements Comparable {
     public enum EventKind { NEW_FILE, EDIT_FILE, REMOVE_FILE};
 
     /**
+     * ID of the event
+     */
+    @DatabaseField(generatedId = true, canBeNull = false)
+    private long ID;
+
+    /**
      * Kind of this event
      */
     @DatabaseField(canBeNull = false)
@@ -37,11 +43,10 @@ public class SyncEvent implements Comparable {
     @DatabaseField(columnName = "file_ID", canBeNull = false)
     private long fileID;
 
-    @DatabaseField(id = true, generatedId = true, canBeNull = false)
-    private long ID;
-
-    @DatabaseField(dataType = DataType.DATE_LONG)
+    @DatabaseField
     private long date;
+
+    public SyncEvent () { }
 
     public SyncEvent(EventKind kind, GBFile relativeFile) {
         this.kind = kind;
@@ -60,7 +65,7 @@ public class SyncEvent implements Comparable {
 
     public EventKind getKind () { return kind; }
 
-    public GBFile getRelativeFile() {
+    public GBFile getRelativeFile(){
         return file;
     }
 

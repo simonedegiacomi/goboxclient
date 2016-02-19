@@ -1,6 +1,7 @@
 package it.simonedegiacomi.storage;
 
 import com.google.common.io.ByteStreams;
+import it.simonedegiacomi.goboxapi.GBCache;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.goboxapi.client.ClientException;
@@ -11,6 +12,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -21,7 +23,8 @@ import java.util.logging.Logger;
  * This client is used when the client is executed
  * onEvent the same instance of the storage
  *
- * Created by Degiacomi Simone onEvent 02/01/2016.
+ * @author Degiacomi Simone
+ * Created on 02/01/2016.
  */
 public class InternalClient implements Client {
 
@@ -40,7 +43,7 @@ public class InternalClient implements Client {
 
     private final EventEmitter emitter;
 
-    private final Set<GBFile> filesToIgnore = new HashSet<>();
+    private final Set<String> filesToIgnore = new HashSet<>();
 
     public InternalClient(Storage storage, StorageDB db) {
         this.db = db;
@@ -61,26 +64,26 @@ public class InternalClient implements Client {
     }
 
     @Override
-    public GBFile[] listDirectory(GBFile father) throws ClientException {
+    public GBFile getInfo(GBFile file) throws ClientException {
+        if(file.getID() == GBFile.UNKNOWN_ID)
+            db.findIDByPath(file);
         try {
-            List<GBFile> fileList = db.getChildrenByFather(father);
-            GBFile[] files = new GBFile[fileList.size()];
-            return fileList.toArray(files);
-        } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
-            return new GBFile[0];
+            return db.getFileById(file.getID(), true, true);
+        } catch (StorageException ex) {
+            //ex.printStackTrace();
+            return null;
         }
     }
 
     @Override
     public void getFile(GBFile file) throws ClientException {
-        if(filesToIgnore.remove(file))
+        if(shouldIgnore(file))
             return;
     }
 
     @Override
     public void getFile(GBFile file, OutputStream dst) throws ClientException, IOException {
-        if(filesToIgnore.remove(file))
+        if(shouldIgnore(file))
             return;
         InputStream fileStream = new FileInputStream(file.toFile());
         ByteStreams.copy(fileStream, dst);
@@ -93,13 +96,13 @@ public class InternalClient implements Client {
 
     @Override
     public void uploadFile(GBFile file, InputStream stream) {
-        if(filesToIgnore.remove(file))
+        if(shouldIgnore(file))
             return;
     }
 
     @Override
     public void uploadFile(GBFile file) {
-        if(filesToIgnore.remove(file))
+        if(shouldIgnore(file))
             return;
         try {
             // Just insert the file into the database, the file is already here
@@ -112,7 +115,7 @@ public class InternalClient implements Client {
 
     @Override
     public void removeFile(GBFile file) {
-        if(filesToIgnore.remove(file))
+        if(shouldIgnore(file))
             return;
         try {
             // Just remove the file, it's already gone...
@@ -125,7 +128,7 @@ public class InternalClient implements Client {
 
     @Override
     public void updateFile(GBFile file, InputStream file2) {
-        if(filesToIgnore.remove(file))
+        if(shouldIgnore(file))
             return;
         try {
             // The file is already updated...
@@ -143,15 +146,19 @@ public class InternalClient implements Client {
 
     @Override
     public void setSyncEventListener (SyncEventListener listener) {
-        // Nothing to do here because alla the events are handledby the storage
+        // Nothing to do here because alla the events are handled by the storage
     }
 
     @Override
     public void requestEvents(long lastHeardId) {
-
+        // Not implemented yet
     }
 
     public void ignore(GBFile file) {
-        filesToIgnore.add(file);
+        filesToIgnore.add(file.getPathAsString());
+    }
+
+    private boolean shouldIgnore (GBFile file) {
+        return filesToIgnore.remove(file.getPathAsString());
     }
 }

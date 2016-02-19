@@ -13,11 +13,11 @@ import java.net.PasswordAuthentication;
  */
 public class EasyProxy {
     /**
-     * Apply the proxy configurationfrom the Config class.
+     * Apply the proxy configuration from the Config class.
      **/
-    public static void manageProxy(Config config) {
+    public static void manageProxy(final Config config) {
 
-        // Check if the proxy is setted
+        // Check if the proxy is set
         if(!Boolean.parseBoolean(config.getProperty("useProxy")))
             return ;
 

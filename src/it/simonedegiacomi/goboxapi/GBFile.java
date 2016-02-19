@@ -5,6 +5,8 @@ import com.google.common.hash.Hashing;
 import com.j256.ormlite.field.DataType;
 import com.j256.ormlite.field.DatabaseField;
 import com.j256.ormlite.table.DatabaseTable;
+import org.apache.tika.Tika;
+
 
 import java.io.File;
 import java.io.IOException;
@@ -31,16 +33,17 @@ public class GBFile {
     /**
      * The ID of the ROOT directory (well.. file)
      */
-    public static final long ROOT_ID = 0;
+    public static final long ROOT_ID = 1;
     public static final long UNKNOWN_ID = -1;
     public static final long UNKNOWN_FATHER = UNKNOWN_ID;
+    public static final GBFile ROOT_FILE = new GBFile(ROOT_ID, UNKNOWN_FATHER, "root", true);
 
     /**
      * Id of the file. Is not final because when the
      * file is created the ID is not known, but we now it
      * only when is inserted onEvent the database
      */
-    @DatabaseField(id = true, generatedId = true, canBeNull = false, dataType = DataType.BIG_INTEGER)
+    @DatabaseField(generatedId = true, canBeNull = false)
     private long ID = UNKNOWN_ID;
 
     /**
@@ -72,13 +75,13 @@ public class GBFile {
     /**
      * Date of the creation of this file
      */
-    @DatabaseField(dataType = DataType.DATE_LONG)
+    @DatabaseField(columnName = "creation")
     private long creationDate;
 
     /**
      * Date of the last update of this file
      */
-    @DatabaseField(dataType = DataType.DATE_LONG)
+    @DatabaseField(columnName = "last_update")
     private long lastUpdateDate;
 
     /**
@@ -99,7 +102,7 @@ public class GBFile {
      */
     private transient File javaFile;
 
-    @DatabaseField
+    @DatabaseField(columnName = "mime", dataType = DataType.STRING)
     private String mime;
 
     /**
@@ -108,6 +111,10 @@ public class GBFile {
     private List<GBFile> children;
 
     private GBFile () { }
+
+    public GBFile (long id) {
+        this.ID = Math.max(UNKNOWN_ID, id);
+    }
 
     /**
      * Create a new GBFile starting only with the name and the type of file (file or
@@ -122,7 +129,10 @@ public class GBFile {
 
     /**
      * Create a new GBFile from a java file and a path prefix. This path prefix will
-     * be removed from the path obtained from the java file
+     * be removed from the path obtained from the java file and will not be included in the path,
+     * this because the prefix doesn't make sense in the GoBox Storage. But, because you may need it,
+     * when you call the method 'toFile' you'll get the same file you pass now tot he constructor (so
+     * with the path prefix)
      * @param file Java file representation of the file
      * @param prefix Prefix to remove from the path
      */
@@ -135,6 +145,7 @@ public class GBFile {
             loadAttributes();
         } catch (IOException e) {
             // Trust me, i really care...
+            e.printStackTrace();
         }
     }
 
@@ -146,7 +157,8 @@ public class GBFile {
         this.size = attrs.size();
         this.creationDate = attrs.creationTime().toMillis();
         this.lastUpdateDate = attrs.lastAccessTime().toMillis();
-        this.mime = Files.probeContentType(javaFile.toPath());
+        if(!javaFile.isDirectory())
+            this.mime = new Tika().detect(javaFile);
     }
 
     /**
@@ -367,7 +379,7 @@ public class GBFile {
      * @param str String that contains the path
      */
     public void setPathByString (String str) {
-        this.setPathByString(str, new String());
+        this.setPathByString(str, null);
     }
 
     /**
@@ -385,7 +397,7 @@ public class GBFile {
      * @param str String representation of the path
      * @param prefixToRemove Prefix to remove from the path. The GBFile should have a path
      *                       relative to the root of the storage, not relative to the FS path
-     *                       or same randomm folder
+     *                       or same random folder
      */
     public void setPathByString (String str, String prefixToRemove) {
         // Create a new list that holds the nodes
@@ -393,13 +405,18 @@ public class GBFile {
 
         // Divide the path and the prefix in string nodes
         String[] pieces = str.split("/");
-        String[] badPieces = prefixToRemove.split("/");
+        String[] badPieces = prefixToRemove == null ? new String[0] : prefixToRemove.split("/");
 
         // skip the intials bad nodes
         int i = 0;
         while(i < badPieces.length && i < pieces.length && pieces[i].equals(badPieces[i]))
             i++;
 
+        if(i == pieces.length) {
+            // All the path is the file! this means that this is the root!
+            this.ID = ROOT_ID;
+            return;
+        }
         // Add all the older except the last
         while(i < pieces.length - 1)
             path.add(new GBFile(pieces[i++], true));

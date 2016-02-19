@@ -8,6 +8,7 @@ import com.j256.ormlite.jdbc.JdbcDatabaseConnection;
 import com.j256.ormlite.support.ConnectionSource;
 import com.j256.ormlite.table.TableUtils;
 import it.simonedegiacomi.goboxapi.GBFile;
+import it.simonedegiacomi.goboxapi.Sharing;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 
 import java.sql.Connection;
@@ -41,6 +42,8 @@ public class StorageDB {
 
     private Dao<SyncEvent, Long> eventTable;
 
+    private Dao<Sharing, Long> sharingTable;
+
     /**
      * Create a new database and open the connection
      * @param path Path to the database
@@ -61,14 +64,17 @@ public class StorageDB {
         // Create the DAO object. I'll use this object to simplify the insertion of the GBFiles
         fileTable = DaoManager.createDao(connectionSource, GBFile.class);
         fileTable.setAutoCommit(connectionSource.getReadWriteConnection(), true);
+
         eventTable = DaoManager.createDao(connectionSource, SyncEvent.class);
         eventTable.setAutoCommit(connectionSource.getReadWriteConnection(), true);
+
+        sharingTable = DaoManager.createDao(connectionSource, Sharing.class);
+        sharingTable.setAutoCommit(connectionSource.getReadWriteConnection(), true);
 
         log.info("Connected to local H2 database");
         try {
             // Initialize the tables
             initDatabase();
-            connectionSource.close();
         } catch (Exception ex) {
             ex.printStackTrace();
             log.log(Level.SEVERE, ex.toString(), ex);
@@ -102,12 +108,16 @@ public class StorageDB {
         // Create the event table
         TableUtils.createTableIfNotExists(connectionSource, SyncEvent.class);
 
+        // Create the sharing table
+        TableUtils.createTableIfNotExists(connectionSource, Sharing.class);
+
         // Check if the root file is already in the database
         if(fileTable.queryForId(GBFile.ROOT_ID) == null) {
             GBFile root = new GBFile("root", true);
             root.setID(GBFile.ROOT_ID);
             root.setFatherID(GBFile.UNKNOWN_FATHER); // I'm not sure about it...
             fileTable.create(root);
+            System.out.println(root);
         }
 
         log.fine("Database tables initialized.");
@@ -124,8 +134,7 @@ public class StorageDB {
      *
      * TL DR use this method to find the father
      */
-    public void findID (GBFile file) {
-        // Just need to find the father, so get the path in a list
+    public void findIDByPath (GBFile file) {
         List<GBFile> path = file.getPathAsList();
 
         try {
@@ -145,7 +154,7 @@ public class StorageDB {
                 ResultSet res = stmt.executeQuery();
 
                 // If there is no result
-                if(!res.isBeforeFirst())
+                if(!res.next())
                     return;
                 fatherOfSomeone = res.getLong("ID");
                 res.close();
@@ -158,36 +167,32 @@ public class StorageDB {
     }
 
     /**
-     * Find the path of the file and set it into the file
+     * Find the path of the file. This method works only if the father ID of the
+     * GBFile is set. However, if you call this method and the path field in the GBFile
+     * is set, the method 'findIDByPath' will be called.
      * @param file File that doesn't know his path
      */
-    public void findPath (GBFile file) {
-        file.setPathByList(findPathAsList(file));
-    }
+    public void findPath(GBFile file) throws StorageException {
 
-    /**
-     * Find thge path of the file. This method works only if the father ID of the
-     * GBFile is set
-     * @param file File that doesn't know his path
-     * @return Array of GBFiles that are the nodes in hierarchy order
-     */
-    public List<GBFile> findPathAsList(GBFile file) {
+        if(file.getFatherID() == GBFile.UNKNOWN_ID) {
+            findIDByPath(file);
+            return ;
+        }
 
         // Create a new temporary list
         List<GBFile> path = new LinkedList<>();
-
 
         long fatherId = file.getFatherID();
         while (fatherId != GBFile.ROOT_ID) {
             GBFile node = this.getFileById(fatherId);
             fatherId = node.getFatherID();
             path.add(0, node);
-        }
+         }
 
-        // add in the last position the file
+        // Add also the file because the GBFile.setPath wants it
         path.add(file);
 
-        return path;
+        file.setPathByList(path);
     }
 
     /**
@@ -200,7 +205,7 @@ public class StorageDB {
     public SyncEvent insertFile (GBFile newFile) throws Exception {
         // If the file doesn't know his father, let's find his
         if (newFile.getFatherID() == GBFile.UNKNOWN_FATHER)
-            findID(newFile);
+            findIDByPath(newFile);
 
         fileTable.create(newFile);
 
@@ -236,7 +241,7 @@ public class StorageDB {
         try {
             // If the file doesn't know his id, let's find it
             if(updatedFile.getID() == GBFile.UNKNOWN_ID)
-                findID(updatedFile);
+                findIDByPath(updatedFile);
 
             // Update the file table
             fileTable.update(updatedFile);
@@ -260,7 +265,7 @@ public class StorageDB {
         try {
             // If the file doesn't know his id, let's find it
             if(fileToRemove.getID() == GBFile.UNKNOWN_ID)
-                findID(fileToRemove);
+                findIDByPath(fileToRemove);
 
             // Remove from the database
             fileTable.deleteById(fileToRemove.getID());
@@ -282,29 +287,23 @@ public class StorageDB {
      * Query the database to find the children of a directory. this method works only if
      * the ID of the file is set
      * @param fatherID ID of the father directory
-     * @return Array of children
      * @throws StorageException
      */
-    public List<GBFile> getChildrenByFather (GBFile father) throws StorageException {
+    public void findChildrenByFather(GBFile father) throws StorageException {
         long fatherID = father.getID();
         List<GBFile> children = new ArrayList<>();
         try {
-            PreparedStatement stmt = db.prepareStatement("SELECT * FROM file WHERE father_ID = ? ORDER BY name");
-            stmt.setLong(1, fatherID);
-            ResultSet sqlResults = stmt.executeQuery();
 
-            while(sqlResults.next()) {
-                GBFile temp = new GBFile(sqlResults.getInt("ID"), fatherID,
-                        sqlResults.getString("name"), sqlResults.getBoolean("is_directory"));
-                temp.setSize(sqlResults.getLong("size"));
-                temp.setCreationDate(sqlResults.getLong("creation"));
-                temp.setLastUpdateDate(sqlResults.getLong("last_update"));
-                children.add(temp);
-            }
+            GenericRawResults<GBFile> rawChildren = fileTable.queryRaw("SELECT * FROM file WHERE father_ID = ? ORDER BY name",
+                    fileTable.getRawRowMapper(), String.valueOf(fatherID));
+
+            for(GBFile child : rawChildren)
+                children.add(child);
+
         } catch (Exception ex) {
             log.log(Level.SEVERE, ex.toString(), ex);
         }
-        return children;
+        father.setChildren(children);
     }
 
     /**
@@ -313,18 +312,25 @@ public class StorageDB {
      * @param children If true, insert in the file also his children
      * @return File retrieved from the database
      */
-    public GBFile getFileById (long id, boolean path, boolean children) {
+    public GBFile getFileById (long id, boolean path, boolean children) throws StorageException {
         try {
             // Get the GBFile
             GBFile file = fileTable.queryForId(id);
+
+            // If the file is null throw a new exception
+            if(file == null)
+                throw new StorageException(StorageException.FILE_NOT_FOUND);
+
+            // Get additional information if need
             if(children && file.isDirectory())
-                file.setChildren(this.getChildrenByFather(file));
+                findChildrenByFather(file);
             if(path)
-                file.setPathByList(this.findPathAsList(file));
+                findPath(file);
             return file;
         } catch (Exception ex) {
-            log.log(Level.SEVERE, ex.toString(), ex);
-            return null;
+            // TODO divide the case when the file is not found and where there is a real problem
+
+            throw new StorageException(StorageException.FILE_NOT_FOUND);
         }
     }
 
@@ -334,7 +340,7 @@ public class StorageDB {
      * @param id ID of the file
      * @return The wrapped GBFile
      */
-    public GBFile getFileById (long id) {
+    public GBFile getFileById (long id) throws StorageException {
         return this.getFileById(id, false, false);
     }
 
@@ -361,5 +367,19 @@ public class StorageDB {
             ex.printStackTrace();
         }
         return events;
+    }
+
+    public boolean isShared (GBFile file) {
+        boolean exist;
+        try {
+            PreparedStatement stmt = db.prepareStatement("SELECT ID FROM sharing WHERE file_ID = ?");
+            stmt.setLong(1, file.getID());
+            ResultSet res = stmt.executeQuery();
+            exist = res.next();
+            res.close();
+        } catch (Exception ex) {
+            exist =  false;
+        }
+        return exist;
     }
 }

@@ -3,24 +3,16 @@ package it.simonedegiacomi.storage;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.reflect.TypeToken;
 import it.simonedegiacomi.configuration.Config;
-import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.authentication.Auth;
 import it.simonedegiacomi.goboxapi.client.Client;
-import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.MyWSClient;
 import it.simonedegiacomi.goboxapi.myws.WSEventListener;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.utils.EasyHttps;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
-import it.simonedegiacomi.storage.handlers.ClientToStorageHandler;
-import it.simonedegiacomi.storage.handlers.FileListHandler;
-import it.simonedegiacomi.storage.handlers.FindPathHandler;
-import it.simonedegiacomi.storage.handlers.StorageToClientHandler;
+import it.simonedegiacomi.storage.handlers.*;
 
-import java.nio.file.Files;
-import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -29,7 +21,8 @@ import java.util.logging.Logger;
  * file from the other clients and sending it to
  * other client (of the same GoBox account).
  *
- * Created by Degiacomi Simone onEvent 24/12/2015.
+ * @author Degiacomi Simone
+ * Created on 24/12/2015.
  */
 public class Storage {
 
@@ -60,13 +53,9 @@ public class Storage {
     private final StorageDB db;
 
     /**
-     * Path of the files folder
+     * Object used to notify the other clients
      */
-    private final String PATH = "files";
-
     private EventEmitter emitter;
-
-    private final Auth auth;
 
     private InternalClient internalClient;
 
@@ -77,9 +66,7 @@ public class Storage {
      * @param auth Authentication to use with the main server
      * @throws StorageException
      */
-    public Storage(Auth auth) throws StorageException {
-
-        this.auth = auth;
+    public Storage(final Auth auth) throws StorageException {
 
         // Connect to the local database
         try {
@@ -140,83 +127,26 @@ public class Storage {
      */
     private void assignEvent () {
 
-        mainServer.addQueryHandler(new FileListHandler(db));
+        // Handler for the file list query
+        mainServer.addQueryHandler(new FileInfoHandler(db));
 
-        mainServer.addEventHandler(new ClientToStorageHandler(db));
+        // Handler that create new directory
+        mainServer.addQueryHandler(new CreateFolderHandler(db, emitter, internalClient));
 
-        mainServer.addEventHandler(new StorageToClientHandler(db, emitter));
+        // Handler that send a file to a client
+        mainServer.addEventHandler(new StorageToClientHandler(db));
 
-        mainServer.addQueryHandler(new FindPathHandler(db));
+        // Handler that receive the incoming file from a client
+        mainServer.addEventHandler(new ClientToStorageHandler(db, emitter, internalClient));
 
-        // Query listener for the create folder
-        mainServer.onQuery("createFolder", new WSQueryHandler() {
-            @Override
-            public JsonElement onQuery(JsonElement data) {
-                log.info("CreateFolder query");
-                JsonObject response = new JsonObject();
-                try {
-                    // Re-create the new folder from the json request
-                    GBFile newFolder = gson.fromJson(data, GBFile.class);
+        // Handler that remove files
+        mainServer.addQueryHandler(new RemoveFileHandler(db, emitter, internalClient));
 
-                    // Create the real file in the FS
-                    Files.createDirectory(newFolder.toFile(PATH).toPath());
+        // Handler that copy or cut files
+        mainServer.addQueryHandler(new CopyOrCutHandler(db, emitter, internalClient));
 
-                    // Insert the file and get the event
-                    SyncEvent event = db.insertFile(newFolder);
-
-                    // Then complete the response
-
-                    response.addProperty("newFolderId", newFolder.getID());
-                    response.addProperty("created", true);
-
-                    notifyInternalClient(newFolder);
-                    // But first, send a broadcast message to advise the other
-                    // client that a new folder is created
-
-                    // The notification will contain the new file information
-                    emitter.emitEvent(event);
-                } catch (Exception ex) {
-                    log.log(Level.SEVERE, ex.toString(), ex);
-                }
-
-                // Finally return the response
-                return response;
-            }
-        });
-
-        mainServer.onQuery("updateFile", new WSQueryHandler() {
-
-            @Override
-            public JsonElement onQuery (JsonElement data) {
-                JsonObject response = new JsonObject();
-                try {
-                    GBFile fileToUpdate = gson.fromJson(data, GBFile.class);
-                    SyncEvent event = db.updateFile(fileToUpdate);
-
-                    emitter.emitEvent(event);
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-                return response;
-            }
-        });
-
-        // Listener of the remove file event
-        mainServer.onEvent("removeFile", new WSEventListener() {
-
-            @Override
-            public void onEvent(JsonElement data) {
-                try {
-                    GBFile fileToRemove = gson.fromJson(data, GBFile.class);
-                    SyncEvent event = db.removeFile(fileToRemove);
-
-                    // The notification will contain the deleted file
-                    emitter.emitEvent(event);
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-            }
-        });
+        // Search handler
+        mainServer.addQueryHandler(new SearchHandler(db));
 
         mainServer.onQuery("ping", new WSQueryHandler() {
             @Override
@@ -224,35 +154,15 @@ public class Storage {
                 return new JsonObject();
             }
         });
-
-        mainServer.onQuery("getEventsList", new WSQueryHandler() {
-            @Override
-            public JsonElement onQuery(JsonElement data) {
-                long lastHeardId = ((JsonObject) data).get("id").getAsLong();
-                List<SyncEvent> events = db.getUniqueEventsFromID(lastHeardId);
-                // Return the gson tree. To create this tree, i need to implement a new TypToken
-                // and instantiate it. As you can see the implementation is empty, but doing that
-                // i can get the type. (this because i can't use List<SyncEvent>.class . If you want to know
-                // more google 'Type Erasure Java')
-                return gson.toJsonTree(events, new TypeToken<List<SyncEvent>> () {}.getType());
-            }
-        });
-    }
-
-    private void notifyInternalClient(GBFile file) {
-        if(internalClient != null)
-            internalClient.ignore(file);
     }
 
     /**
-     * Create a new InternalClient that can be used to
-     * create a new Sync object. This client is used to
-     * keep in sync the fs when the client is run in the
-     * same machine of the storage. It doesn't need to
-     * communicate with the main server, and just talk with
-     * the same database used by the storage.
+     * Create a new InternalClient that can be used to create a new Sync object.
+     * This client is used to keep in sync the fs when the client is run in the
+     * same machine of the storage. It doesn't need to communicate with the main
+     * server, and just talk with the same database used by the storage.
      *
-     * @return
+     * @return The internal client instance.
      */
     public Client getInternalClient () {
         return (internalClient = internalClient == null ? new InternalClient(this, db) : internalClient);

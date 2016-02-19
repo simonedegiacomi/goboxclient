@@ -2,15 +2,19 @@ package it.simonedegiacomi.goboxclient;
 
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.configuration.LoginTool;
+import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.authentication.Auth;
 import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.goboxapi.client.StandardClient;
 import it.simonedegiacomi.storage.Storage;
+import it.simonedegiacomi.sync.Sync;
 import it.simonedegiacomi.utils.EasyProxy;
 import it.simonedegiacomi.utils.SingleInstancer;
 import javafx.scene.control.Alert;
+import org.java_websocket.WebSocketImpl;
 
 import java.awt.*;
+import java.net.InetSocketAddress;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -30,7 +34,7 @@ public class Main {
     public static void main(String[] args) {
 
         Handler consoleHandler = new ConsoleHandler();
-        consoleHandler.setLevel(Level.ALL);
+        consoleHandler.setLevel(Level.FINEST);
         Logger.getAnonymousLogger().addHandler(consoleHandler);
 
 
@@ -47,14 +51,20 @@ public class Main {
 
                 // Check if there is a proxy to use
                 EasyProxy.manageProxy(config);
+
             }
         });
 
         try {
-            // Load the urls to use to contact the server
-            config.loadUrls();
             // Try to load the config
             config.load();
+
+            // Load the urls to use to contact the server
+            config.loadUrls();
+
+            // Notify all the components that need to know when
+            //the config change
+            config.apply();
 
             if (config.getProperty("username") == null)
                 startLogin();
@@ -70,6 +80,11 @@ public class Main {
     }
 
     private static void startLogin() {
+        try {
+            config.getUrls().load();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
         LoginTool.getLoginTool(new LoginTool.EventListener() {
             @Override
             public void onLoginComplete() {
@@ -99,13 +114,12 @@ public class Main {
         } catch (Exception ex) {
             ex.printStackTrace();
         }
-        System.out.println(config.getMode());
 
         switch (auth.getMode()) {
-            case CLIENT_MODE:
+            case CLIENT:
                 startClientMode(auth);
                 break;
-            case STORAGE_MODE:
+            case STORAGE:
                 startStorageMode(auth);
                 break;
         }
@@ -119,12 +133,18 @@ public class Main {
 
     private static void startClientMode (Auth auth) {
         try {
-            Client client = new StandardClient(auth);
+            StandardClient client = new StandardClient(auth);
+            client.connect();
+            WebSocketImpl.DEBUG = true;
+            try {
+                System.out.println(client.getInfo(new GBFile(1)));
+            } catch (Exception ex) {
+                ex.printStackTrace();
+
+            }
+
             sync = new Sync(client);
-
-            sync.receiveNotHeardEvent();
-
-            sync.startSync();
+                sync.resyncAndStart();
 
         } catch (Exception ex) {
             log.log(Level.WARNING, ex.toString(), ex);
@@ -132,17 +152,16 @@ public class Main {
     }
 
     private static void startStorageMode (Auth auth) {
-        // Conect to the database
+        // Connect to the database
         try {
             // start event listener and http server
             Storage storage = new Storage(auth);
 
             storage.startStoraging();
 
-            // start Sync
             sync = new Sync(storage.getInternalClient());
 
-            sync.startSync();
+            sync.resyncAndStart();
 
         } catch (Exception ex) {
             ex.printStackTrace();

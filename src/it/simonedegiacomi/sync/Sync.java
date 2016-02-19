@@ -1,4 +1,4 @@
-package it.simonedegiacomi.goboxclient;
+package it.simonedegiacomi.sync;
 
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
@@ -12,6 +12,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -20,7 +22,8 @@ import java.util.logging.Logger;
  * the Client interface, and manage the synchronization
  * of the filesystem with the relative storage of the account.
  *
- * Created by Degiacomi Simone onEvent 24/12/2015
+ * @author Degiacomi Simone
+ * Created on 24/12/2015
  */
 
 public class Sync {
@@ -30,6 +33,7 @@ public class Sync {
      */
     private static final Logger log = Logger.getLogger(Sync.class.getName());
 
+    private final Worker worker;
     /**
      * Client object used as API interface tp communicate
      * with the storage.
@@ -49,6 +53,7 @@ public class Sync {
     private FileSystemWatcher watcher;
 
     /**
+     * no
      * Path of the files folder
      */
     private static final String PATH = config.getProperty("path");
@@ -64,6 +69,7 @@ public class Sync {
     public Sync (Client client) {
 
         this.client = client;
+        worker = new Worker(client, Worker.DEFAULT_THREADS);
 
         // Create the new watcher for the fileSystem
         try {
@@ -77,33 +83,97 @@ public class Sync {
         assignFileWatcherEvents();
     }
 
-    /**
-     *
-     * Request to the storage the 'not heard' events
-     */
-    public void receiveNotHeardEvent () {
-        long lastHeardEvent = Long.parseLong(config.getProperty("lastEvent"));
-        client.requestEvents(lastHeardEvent);
-    }
+    public void resyncAndStart () {
+        try {
+            checkR(new File(PATH));
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        System.out.println("Resync completed");
 
-    /**
-     * Start the watching thread and the listener from the storage
-     */
-    public void startSync () {
-
-        // And start a separate thread that will pool
-        // continuously the filesystem
+        // Start watching for changes
         watcher.start();
+
+        // And listen for event's from the storage
+        assignSyncEventFromStorage();
     }
 
-    /**
-     * Stop the synchronization with the storage
-     */
-    public void stopSync () {
+    private void checkR (File file) throws Exception {
+        // Get details about this file
+        GBFile gbFile = client.getInfo(new GBFile(file, PATH));
+        //GBFile gbFile = client.getInfo(new GBFile(2));
 
-        // Stop the thread that watch the local fs
-        // TODO: Stop the thread
 
+        // If the storage doesn't know anything about this file
+        if(gbFile == null) {
+            // Upload it
+            uploadR(file);
+            return;
+        }
+
+        // If it's a directory
+        if(gbFile.isDirectory()) {
+
+            // Create a map with the name of the file as key and the GBFile
+            // as value. These files are the children of the folder
+            HashMap<String, GBFile> storageFiles = new HashMap<>();
+            for (GBFile child : gbFile.getChildren())
+                storageFiles.put(child.getName(), child);
+
+
+            System.out.println("Map of the storage files:");
+            System.out.println(storageFiles);
+
+            // Check every children
+            for (File child : file.listFiles()) {
+                checkR(child);
+                storageFiles.remove(child.getName());
+            }
+
+            System.out.println("NOW Map of the storage files:");
+            System.out.println(storageFiles);
+
+
+            // Wait! and the remaining files in the map?
+            // This client doesn't have these file!
+            for (Map.Entry<String, GBFile> entry : storageFiles.entrySet()) {
+                System.out.println("Look, a new file! " + entry.getValue());
+                // Download it
+                downloadR(entry.getValue());
+            }
+        } else {
+            // If it's not a directory but it's a file
+            // check who have the latest version
+            if(gbFile.getLastUpdateDate() > file.lastModified())
+                downloadR(gbFile);
+            else if (gbFile.getLastUpdateDate() < file.lastModified())
+                worker.addWork(new Work(gbFile, Work.WorkKind.UPDATE));
+        }
+    }
+
+    private void downloadR (GBFile fileToDownload) throws Exception {
+        System.out.println("Download " + fileToDownload);
+        fileToDownload = client.getInfo(fileToDownload);
+        if (fileToDownload.isDirectory()) {
+            Files.createDirectory(fileToDownload.toFile(PATH).toPath());
+            for(GBFile child : fileToDownload.getChildren())
+                downloadR(child);
+        } else {
+            Work work = new Work(fileToDownload, Work.WorkKind.DOWNLOAD);
+            worker.addWork(work);
+        }
+    }
+
+    private void uploadR (File fileToUpload) throws Exception {
+        System.out.println("Upload " + fileToUpload);
+        if (fileToUpload.isDirectory()) {
+            client.createDirectory(new GBFile(fileToUpload, PATH));
+            for(File child : fileToUpload.listFiles())
+                uploadR(child);
+        } else {
+            Work work = new Work(new GBFile(fileToUpload, PATH), Work.WorkKind.UPLOAD);
+            worker.addWork(work);
+        }
     }
 
     /**
@@ -131,7 +201,7 @@ public class Sync {
                     if (wrappedFile.isDirectory())
                         client.createDirectory(wrappedFile);
                     else
-                        client.uploadFile(wrappedFile);
+                        worker.addWork(new Work(wrappedFile, Work.WorkKind.UPLOAD));
 
                 } catch (ClientException ex) {
                     log.warning("Can't tell the storage about the new file");
@@ -178,8 +248,8 @@ public class Sync {
 
     /**
      * This method set the listener of the client object
-     * that will listen at the events trasmitted from
-     * the it.simonedegiacomi.storage. These events are the result of the
+     * that will listen at the events transmitted from
+     * the storage. These events are the result of the
      * operation onEvent the files from other clients.
      */
     private void assignSyncEventFromStorage () {
@@ -206,15 +276,15 @@ public class Sync {
                             // If the event is the creation of a new file
                             if (file.isDirectory())
                                 // and is a new folder, just create it
-                                createDirectory(file);
+                                Files.createDirectories(file.toFile(PATH).toPath());
                             else
                                 // otherwise download the new file
-                                client.getFile(file, new FileOutputStream(file.toFile(PATH)));
+                                worker.addWork(new Work(event));
                             break;
 
                         case EDIT_FILE:
 
-                            client.updateFile(file);
+                            worker.addWork(new Work(event));
                             break;
 
                         case REMOVE_FILE:
@@ -238,17 +308,5 @@ public class Sync {
         } catch (Exception ex) {
             ex.printStackTrace();
         }
-    }
-
-    /**
-     * This method create a new directory onEvent the local fs.
-     * Normally this is called when a new folder is created
-     * by another client
-     * @param newDir New directory to create
-     * @throws IOException
-     */
-    private void createDirectory (GBFile newDir) throws IOException {
-        System.out.println("I'm going to create " + newDir.getPathAsString(PATH));
-        Files.createDirectory(newDir.toFile(PATH).toPath());
     }
 }

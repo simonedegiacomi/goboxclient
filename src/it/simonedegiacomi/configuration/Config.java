@@ -9,12 +9,12 @@ import java.util.List;
 import java.util.Properties;
 
 /**
- * Created by Degiacomi Simone onEvent 27/12/2015.
+ * @author Degiacomi Simone
+ * Created on 27/12/2015.
  */
 public class Config {
 
     private static final String DEFAULT_LOCATION = "config/gobox.conf";
-    private static final String DEFAULT_URLS_LOCATION = "/it/simonedegiacomi/resources/urls.conf";
 
     /**
      * Singleton instance of the config
@@ -39,6 +39,9 @@ public class Config {
      */
     private List<OnConfigChangeListener> listeners = new LinkedList<>();
 
+    /**
+     * Private constructor to make this class a singleton
+     */
     private Config () { }
 
     /**
@@ -84,7 +87,6 @@ public class Config {
      * @throws IOException
      */
     public void loadUrls (InputStream in) throws IOException {
-
         // load the urls
         urls.load(in);
     }
@@ -94,11 +96,7 @@ public class Config {
      * @throws IOException
      */
     public void loadUrls () throws IOException {
-        loadUrls(Config.class.getResourceAsStream(DEFAULT_URLS_LOCATION));
-    }
-
-    public int getMode () {
-        return Integer.parseInt(properties.getProperty("mode"));
+        urls.load();
     }
 
     /**

@@ -1,13 +1,11 @@
 package it.simonedegiacomi.goboxapi.authentication;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.utils.EasyHttps;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 
 import javax.net.ssl.HttpsURLConnection;
+import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -22,15 +20,12 @@ import java.util.logging.Logger;
  */
 public class Auth {
 
-    /**
-     * Logger of the class
-     */
     private static final Logger log = Logger.getLogger(Auth.class.getName());
 
     /**
      * Type of session, client mode
      */
-    public enum Modality { CLIENT_MODE, STORAGE_MODE };
+    public enum Modality { CLIENT, STORAGE }
 
     private Modality mode;
 
@@ -39,23 +34,19 @@ public class Auth {
     /**
      * URLs of the gobox server. This is transient because it shouldn't be serialized
      */
-    private transient static final URLBuilder urls = Config.getInstance().getUrls();
-
-    /**
-     * Password of the user. This field is not-null only onEvent
-     * the login phase
-     */
-    private String password;
+    private transient static final URLBuilder urls = new URLBuilder();
 
     /**
      * Token to use to authenticate with the server
      */
     private String token;
 
-    public Auth () { }
-
-    public Auth(String username) {
-        this.username = username;
+    public Auth () {
+        try {
+            urls.load();
+        } catch (IOException ex) {
+            throw new ExceptionInInitializerError("Cannot load GoBox Server urls");
+        }
     }
 
     /**
@@ -63,13 +54,14 @@ public class Auth {
      * will block the thread until the login is complete
      * @throws AuthException
      */
-    public void login() throws AuthException {
+    public void login(String password) throws AuthException {
         try {
             // Get the json of the authentication
-            JsonElement authJson = new Gson().toJsonTree(this, Auth.class);
+            JsonObject authJson = new JsonObject();
+            authJson.addProperty("username", username);
+            authJson.addProperty("password", password);
+            authJson.addProperty("type", mode == Modality.CLIENT ? 'C' : 'S');
 
-            // remove the password
-            this.password = null;
             // Make the https request
             JsonObject response = (JsonObject) EasyHttps.post(urls.get("login"), authJson, null);
             // evaluate the response
@@ -126,10 +118,6 @@ public class Auth {
 
     public void setToken(String token) {
         this.token = token;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
     }
 
     public String getUsername() {

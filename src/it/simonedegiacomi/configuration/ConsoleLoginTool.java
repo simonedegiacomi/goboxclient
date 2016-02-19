@@ -37,11 +37,11 @@ public class ConsoleLoginTool extends LoginTool {
             }
         }
         console.printf("Connecting to GoBoxServer...  ");
-        Auth auth = new Auth(username);
-        auth.setPassword(new String(password));
-        auth.setMode(n == 1 ? Auth.Modality.CLIENT_MODE : Auth.Modality.STORAGE_MODE);
+        Auth auth = config.getAuth();
+        auth.setUsername(username);
+        auth.setMode(n == 1 ? Auth.Modality.CLIENT : Auth.Modality.STORAGE);
         try {
-            auth.login();
+            auth.login(new String(password));
             config.save();
         } catch (AuthException ex) {
             console.printf(" Done with errors\nGoBoxServer rejected your login request\n");

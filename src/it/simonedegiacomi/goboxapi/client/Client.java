@@ -7,35 +7,40 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 /**
- * This is the interface of the goboxclient api
- * and contains the basic operation that a client
- * can do.
+ * This is the interface of the goboxclient api and define the basic operation
+ * that a client can do.
  *
- * Created by Degiacomi Simone onEvent 02/01/2016.
+ * @author Degiacomi Simone
+ * Created on 02/01/2016.
  */
 public interface Client {
 
     /**
-     * Check if the client is connected to the server.
+     * Check if the client is connected to the storage. It doesn't mean
+     * that it's using network, just that the client can talk with the storage
      * @return Connected to the server or not
      */
     public boolean isOnline ();
 
     /**
-     * Return the list of the file inside an directory
-     * @param father Directory to list
-     * @return Children of the directory
-     * @throws ClientException
+     * Return a new GBFile with the info retrieved from the storage. If the file is not found
+     * a null pointer will be returned. The exception is thrown if there's some connection error.
+     *
+     * When the file is missing i return a null pointer instead throwing a new exception because
+     * you can call this method to check if a file exist, so a null pointer can be a logical value
+     * (exist or not).
+     * @param file File to look at
+     * @return GBFile with the storage information
+     * @throws ClientException Exception if there some problem with the communication to
+     * the storage
      */
-    public GBFile[] listDirectory (GBFile father) throws ClientException;
+    public GBFile getInfo(GBFile file) throws ClientException;
 
     /**
-     * Retrive the file from the storage and save it
-     * to the file position saved inside the GBFile
-     * passed as argument
-     * @param file File to retrieve. The file must have his ID
-     *             and a valid path, that will used to save
-     *             the received file
+     * Retrieve the file from the storage and save it to the file position saved inside the GBFile
+     * passed as argument. If the file doesn't exist a new exception is thrown. Int his case an exception
+     * because you're supposing that the file exist
+     * @param file File to retrieve.
      * @throws ClientException Exception thrown in case of
      * invalid id, network error or io error while saving the
      * file to the disk
@@ -43,11 +48,9 @@ public interface Client {
     public void getFile (GBFile file) throws ClientException, IOException;
 
     /**
-     * Same as getFile(GBFile) but let you specify the output
-     * stream that will be used to write the incoming file
+     * Same as getFile(GBFile) but let you specify the output stream that will be used to write the incoming file
      * from the storage
-     * @param file File to download, (Only the id of this object
-     *             will be sued)
+     * @param file File to download
      * @param dst Destination of the input stream of the file
      * @throws ClientException Exception thrown in case of
      * invalid id or network error
@@ -57,22 +60,20 @@ public interface Client {
     /**
      * Create a new directory
      * @param newDir Directory to create
-     * @throws ClientException
+     * @throws ClientException thrown if a folder with the same name exist or other reason of the storage
      */
     public void createDirectory (GBFile newDir) throws ClientException;
 
     /**
      * Send a file to the storage.
-     * @param file File to send File to send. The object must have or the
-     *             field father id or the path.
+     * @param file File to send File to send. The object must have or the field father id or the path.
      * @param stream Stream of the file Stream that will be sent to the storage
      * @throws ClientException Exception Network error or invalid father reference
      */
     public void uploadFile (GBFile file, InputStream stream) throws ClientException;
 
     /**
-     * Same ad uploadFile(GBFile, InputStream) but this read the file from
-     * the path of the GBFile
+     * Same ad uploadFile(GBFile, InputStream) but this read the file from the path of the GBFile
      * @param file File to send
      * @throws ClientException Exception Network error, null file or invalid
      * father reference

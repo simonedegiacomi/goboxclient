@@ -48,11 +48,11 @@ public class GUILoginTool extends LoginTool {
         if(option != JOptionPane.OK_OPTION)
             System.exit(-1);
         // Try to login
-        Auth auth = new Auth(username.getText());
-        auth.setPassword(new String(pass.getPassword()));
-        auth.setMode(storageCheck.isSelected() ? Auth.Modality.STORAGE_MODE : Auth.Modality.STORAGE_MODE);
+        Auth auth = config.getAuth();
+        auth.setUsername(username.getText());
+        auth.setMode(storageCheck.isSelected() ? Auth.Modality.STORAGE : Auth.Modality.STORAGE);
         try {
-            auth.login();
+            auth.login(new String(pass.getPassword()));
             config.save();
             after.onLoginComplete();
         } catch (Exception ex) {

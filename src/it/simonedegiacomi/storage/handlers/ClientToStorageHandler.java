@@ -1,96 +1,125 @@
 package it.simonedegiacomi.storage.handlers;
 
 import com.google.common.io.ByteStreams;
+import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.authentication.Auth;
+import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.WSEventListener;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSEvent;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import it.simonedegiacomi.storage.EventEmitter;
+import it.simonedegiacomi.storage.InternalClient;
 import it.simonedegiacomi.storage.StorageDB;
 
 import javax.net.ssl.HttpsURLConnection;
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.PrintWriter;
 import java.net.URL;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * This handler receive the incoming file from the client
+ * This handler is used to send a file from the storage
+ * to the client that requested it.
  *
- * Created by Degiacomi Simone on 07/02/16.
+ * @author Degiacomi Simone
+ * Created on 07/02/16.
  */
 public class ClientToStorageHandler implements WSEventListener {
 
-    /**
-     * Logger of the class
-     */
     private static final Logger log = Logger.getLogger(ClientToStorageHandler.class.getName());
 
-    /**
-     * Configuration of the program. This is used to get the urls and the
-     * auth object
-     */
     private final Config config = Config.getInstance();
-
-    private final URLBuilder urls = config.getUrls();
 
     private final Auth auth = config.getAuth();
 
-    /**
-     * Path of the files folder
-     */
+    private URLBuilder urls = config.getUrls();
+
     private final String PATH = config.getProperty("path");
 
-    /**
-     * Database of the storage
-     */
+    private final Gson gson = new Gson();
+
+    private final EventEmitter emitter;
+
+    private final InternalClient internalClient;
+
     private final StorageDB db;
 
-    public ClientToStorageHandler (StorageDB db) {
+    public ClientToStorageHandler(StorageDB db, EventEmitter emitter, InternalClient internalClient) {
         this.db = db;
+        this.emitter = emitter;
+        this.internalClient = internalClient;
     }
 
-    @WSEvent(name = "sendMeTheFile")
+    @WSEvent(name = "comeToGetTheFile")
     @Override
     public void onEvent(JsonElement data) {
-        log.info("New download request");
+        log.info("New come to get upload request");
+
+        // Get the uploadKey
+        String uploadKey = ((JsonObject) data).get("uploadKey").getAsString();
+
+        // Wrap the incoming file
+        GBFile incomingFile = gson.fromJson(data.toString(), GBFile.class);
+
         try {
-            JsonObject jsonData = (JsonObject) data;
-            String downloadKey = jsonData.get("downloadKey").getAsString();
-            long file = jsonData.get("ID").getAsLong();
 
-            // get the file from the database
-            GBFile dbFile = db.getFileById(file);
-
-            jsonData.remove("ID");
-
-            URL url = urls.get("sendFileToClient", data);
-
+            // Make the https request to the main server
+            URL url = urls.get("receiveFile");
             HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
+
             conn.setRequestMethod("POST");
             auth.authorize(conn);
-
             conn.setDoOutput(true);
+            conn.setDoInput(true);
 
-            DataOutputStream toServer = new DataOutputStream(conn.getOutputStream());
+            // Create the json that will identify the upload
+            JsonObject json = new JsonObject();
+            json.addProperty("uploadKey", uploadKey);
 
-            // Open the file
-            DataInputStream fromFile = new  DataInputStream(new FileInputStream(dbFile.getPathAsString(PATH)));
+            // Send this json
+            // specify the length of the json
+            conn.setRequestProperty("Content-Length", String.valueOf(json.toString().length()));
+            PrintWriter out = new PrintWriter(conn.getOutputStream());
+            out.println(json.toString());
 
-            // Send the file
-            ByteStreams.copy(fromFile, toServer);
+            // Flush the request
+            out.close();
 
-            fromFile.close();
-            toServer.close();
-            System.out.println(conn.getResponseCode());
+            // Attend for the response ...
+            int response = conn.getResponseCode();
+
+            if(response != 200) {
+                log.warning("Upload file from client to storage failed");
+                return;
+            }
+
+            // Tell the internal client to ignore this event
+            internalClient.ignore(incomingFile);
+
+            // Create the stream to the disk
+            DataOutputStream toDisk = new DataOutputStream(new FileOutputStream(incomingFile.getPathAsString(PATH)));
+
+            // Copy the stream
+            ByteStreams.copy(conn.getInputStream(), toDisk);
+
+            // Close file and http connection
+            toDisk.close();
             conn.disconnect();
 
+            // Insert the file in the database
+            SyncEvent event = db.insertFile(incomingFile);
+
+            // The notification will contain the new file information
+            emitter.emitEvent(event);
+
         } catch (Exception ex) {
-            ex.printStackTrace();
+            log.log(Level.WARNING, ex.toString(), ex);
         }
     }
 }

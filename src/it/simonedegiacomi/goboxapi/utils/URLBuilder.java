@@ -3,6 +3,7 @@ package it.simonedegiacomi.goboxapi.utils;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -21,26 +22,31 @@ import java.util.Properties;
  */
 public class URLBuilder {
 
+    private static final String DEFAULT_URLS_LOCATION = "/it/simonedegiacomi/resources/urls.conf";
+
     /**
      * Properties that contains the url
      */
-    private final Properties properties;
+    private final Properties properties = new Properties();
 
     /**
      * Load the urls from a string without creating a new URLBuilder
      * @param in Stream to which read the properties
      * @throws IOException
      */
-    public void load (InputStream in) throws IOException {
+    public URLBuilder load (InputStream in) throws IOException {
         properties.load(in);
+        return this;
+    }
+
+    public URLBuilder load () throws IOException {
+        return load(URLBuilder.class.getResourceAsStream(DEFAULT_URLS_LOCATION));
     }
 
     /**
      * Create new empty URLBuilder
      */
-    public URLBuilder() {
-        this.properties = new Properties();
-    }
+    public URLBuilder() { }
 
     /**
      * Return a new url specifying the key
@@ -62,6 +68,10 @@ public class URLBuilder {
         } catch (URISyntaxException ex) {
             return null;
         }
+    }
+
+    public String getAsString (String what) {
+        return properties.get(what).toString();
     }
 
     /**

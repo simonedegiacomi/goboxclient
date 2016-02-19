@@ -9,17 +9,21 @@ import it.simonedegiacomi.goboxapi.myws.MyWSClient;
  */
 public class EventEmitter {
 
-    private final MyWSClient ws;
+    private final MyWSClient clients;
 
     private final Gson gson = new Gson();
 
     public EventEmitter (MyWSClient ws) {
-        this.ws = ws;
+        this.clients = ws;
     }
 
+    /**
+     * Send the event to all the other clients
+     * @param eventToEmit
+     */
     public void emitEvent (SyncEvent eventToEmit) {
 
         // Send the event to all the clients
-        ws.sendEventBroadcast("syncEvent", gson.toJsonTree(eventToEmit, SyncEvent.class));
+        clients.sendEventBroadcast("syncEvent", gson.toJsonTree(eventToEmit, SyncEvent.class));
     }
 }

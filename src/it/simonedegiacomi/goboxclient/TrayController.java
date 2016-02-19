@@ -2,6 +2,7 @@ package it.simonedegiacomi.goboxclient;
 
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import it.simonedegiacomi.sync.Sync;
 
 import javax.swing.*;
 import java.awt.*;
