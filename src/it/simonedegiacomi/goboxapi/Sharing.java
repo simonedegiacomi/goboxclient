@@ -13,9 +13,7 @@ public class Sharing {
     @DatabaseField(columnName = "ID", generatedId = true, canBeNull = false)
     private long id;
 
-    @DatabaseField(columnName = "file_ID", canBeNull = false)
-    private long fileID;
-
+    @DatabaseField(foreign = true)
     private GBFile file;
 
     public Sharing () {
@@ -40,6 +38,5 @@ public class Sharing {
 
     public void setFile(GBFile file) {
         this.file = file;
-        this.fileID = file.getID();
     }
 }

@@ -35,13 +35,8 @@ public class SyncEvent implements Comparable {
     /**
      * File associated with this event
      */
+    @DatabaseField(foreign = true)
     private GBFile file;
-
-    /**
-     * This exists only for the database
-     */
-    @DatabaseField(columnName = "file_ID", canBeNull = false)
-    private long fileID;
 
     @DatabaseField
     private long date;
@@ -75,7 +70,6 @@ public class SyncEvent implements Comparable {
      */
     public void setRelativeFile(GBFile relativeFile) {
         this.file = relativeFile;
-        this.fileID = file.getID();
     }
 
     public long getID() {
