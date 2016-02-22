@@ -3,24 +3,17 @@ package it.simonedegiacomi.goboxapi.myws;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.neovisionaries.ws.client.*;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSEvent;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
-import org.java_websocket.WebSocket;
-import org.java_websocket.WebSocketAdapter;
-import org.java_websocket.client.DefaultSSLWebSocketClientFactory;
-import org.java_websocket.client.WebSocketClient;
-import org.java_websocket.drafts.Draft;
-import org.java_websocket.drafts.Draft_10;
-import org.java_websocket.drafts.Draft_17;
-import org.java_websocket.handshake.ServerHandshake;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSocketFactory;
 import java.lang.annotation.IncompleteAnnotationException;
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -34,7 +27,8 @@ import java.util.logging.Logger;
  * class add some feature like event handling and query
  * concept.
  *
- * Created by Degiacomi Simone onEvent 28/12/15.
+ * @author Degiacomi Simone
+ * Created on 28/12/15.
  */
 public class MyWSClient {
 
@@ -43,20 +37,19 @@ public class MyWSClient {
      */
     private static final Logger log = Logger.getLogger(MyWSClient.class.getName());
 
-    /**
-     * Proxy to use to connect to the handlers socket servers
-     */
-    private static InetSocketAddress proxy;
+    private final static WebSocketFactory factory = new WebSocketFactory();
 
     /**
-     * Websocket connection
+     * Web Socket connection
      */
-    private final WebSocketClient server;
+    private final WebSocket server;
 
     /**
      * Status of the connection
      */
     private boolean connected = false;
+
+    final JsonParser parser = new JsonParser();
 
     /**
      * Map that contains the events listener. A event is formed by a event
@@ -91,57 +84,34 @@ public class MyWSClient {
     private final ExecutorService executor = Executors.newFixedThreadPool(6);
 
     /**
-     * This static method allows you to set a proxy that will be used
-     * for the new instances of this class
-     * @param ip IP of the proxy
-     * @param port Port of the proxy
-     */
-    public static void setProxy (String ip, int port) {
-        proxy = new InetSocketAddress("localhost", port);
-        System.out.println(proxy);
-    }
-
-    /**
      * Create a new client without connecting to the sever
+     *
      * @param uri URI of the server
      * @throws Exception
      */
-    public MyWSClient (URI uri) throws Exception {
+    public MyWSClient(URI uri) throws Exception {
 
         // Initialize the maps
         events = new HashMap<>();
         queryAnswers = new HashMap<>();
         queryResponses = new HashMap<>();
 
-        final JsonParser parser = new JsonParser();
-        // Create the 'real' websocket client
-        server = new WebSocketClient(uri, new Draft_17()) {
+        server = factory.createSocket(uri);
+        server.addListener(new WebSocketAdapter() {
             @Override
-            public void onOpen(ServerHandshake handshakedata) {
-                log.info("Websocket connection established");
-
-                connected = true;
-
-                // If there is an event listener for the open event, call it
-                WSEventListener open = events.get("open");
-                if (open != null)
-                    open.onEvent(null);
-            }
-
-            @Override
-            public void onMessage(String message) {
+            public void onTextMessage(WebSocket websocket, String message) throws Exception {
                 try {
                     // Parse the message
                     JsonObject json = (JsonObject) parser.parse(message);
 
                     // If the message has not the queryId parameter
                     // is an simple event
-                    if(!json.has("_queryId") || json.get("_queryId").getAsString().length() <= 0) {
-                        if(events.get(json.get("event").getAsString()) == null)
+                    if (!json.has("_queryId") || json.get("_queryId").getAsString().length() <= 0) {
+                        if (events.get(json.get("event").getAsString()) == null)
                             return;
                         events.get(json.get("event").getAsString())
                                 .onEvent(json.get("data"));
-                        return ;
+                        return;
                     }
 
                     // get the _queryId
@@ -150,10 +120,10 @@ public class MyWSClient {
                     // Now, check if is a query response
                     // If is a query response i MUST have an listener onEvent the
                     // 'queryResponse' map, so check here:
-                    if(json.get("event").getAsString().equals("queryResponse")) {
+                    if (json.get("event").getAsString().equals("queryResponse")) {
                         // Get and remove the response listener
                         queryResponses.remove(queryId).onResponse(json.get("data"));
-                        return ;
+                        return;
                     }
 
                     // If is not a query response neither, is a query made to this program, so
@@ -169,7 +139,7 @@ public class MyWSClient {
                     response.addProperty("_queryId", json.get("_queryId").getAsString());
                     response.addProperty("forServer", false);
                     response.addProperty("broadcast", false);
-                    server.send(response.toString());
+                    server.sendText(response.toString());
                 } catch (Exception ex) {
                     log.log(Level.SEVERE, ex.toString(), ex);
                     log.warning("An incoming message from the websocket cannot be read: " + message);
@@ -178,52 +148,51 @@ public class MyWSClient {
             }
 
             @Override
-            public void onClose(int code, String reason, boolean remote) {
+            public void onConnected(WebSocket ws, Map<String, List<String>> headers) {
+                log.info("Websocket connection established");
+                connected = true;
+
+                // If there is an event listener for the open event, call it
+                WSEventListener open = events.get("open");
+                if (open != null)
+                    open.onEvent(null);
+            }
+
+            @Override
+            public void onCloseFrame (WebSocket ws, WebSocketFrame frame) {
                 connected = false;
-                log.info("Websocket connection closed by the " + (remote ? "server" : "client"));
+                log.info("Websocket connection closed");
                 WSEventListener close = events.get("close");
                 if (close != null)
                     close.onEvent(null);
             }
+        });
+    }
 
-            @Override
-            public void onError(Exception ex) {
-                log.log(Level.SEVERE, ex.toString(), ex);
-                WSEventListener error = events.get("error");
-                if (error != null)
-                    error.onEvent(null);
-            }
-        };
-
-        if(uri.toString().indexOf("wss") >= 0) {
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, null, null); // will use java's default key and trust store which is sufficient unless you deal with self-signed certificates
-
-            server.setWebSocketFactory(new DefaultSSLWebSocketClientFactory(sslContext));
-
-        }
-        //if(proxy != null)
-        //server.setProxy(new InetSocketAddress("127.0.0.1", 3128));
+    /**
+     * This static method allows you to set a proxy that will be used
+     * for the new instances of this class
+     *
+     * @param ip   IP of the proxy
+     * @param port Port of the proxy
+     */
+    public static void setProxy(String host, int port) {
+        ProxySettings proxy = factory.getProxySettings();
+        proxy.setHost(host);
+        proxy.setPort(port);
     }
 
     /**
      * Start the connection to the server
      */
-    public void connect() {
+    public void connect() throws WebSocketException {
         server.connect();
     }
 
     /**
-     * Start the connection blocking the thread until the
-     * socket is connected (synchronized operation)
-     */
-    public void connectSync () throws InterruptedException {
-        server.connectBlocking();
-    }
-
-    /**
      * This method allows you to register a new event listener
-     * @param event Name of the event.
+     *
+     * @param event    Name of the event.
      * @param listener Listener of this event
      */
     public void onEvent(String event, WSEventListener listener) {
@@ -234,11 +203,12 @@ public class MyWSClient {
      * Register an event handler, like 'onEvent', but you don't need to specify the
      * event name. To make this work you need to put the WSEvent notation before the 'onEvent'
      * method.
+     *
      * @param handler Handler to register.
      */
-    public void addEventHandler (WSEventListener handler) {
+    public void addEventHandler(WSEventListener handler) {
         try {
-            Class[] methodArgs = { JsonElement.class };
+            Class[] methodArgs = {JsonElement.class};
             Method method = handler.getClass().getMethod("onEvent", methodArgs);
             WSEvent annotation = method.getAnnotation(WSEvent.class);
             this.onEvent(annotation.name(), handler);
@@ -251,16 +221,17 @@ public class MyWSClient {
 
     /**
      * This method allows you to register an method that answer a response
+     *
      * @param queryName Name of the query that the method will answer
-     * @param listener Listener that will call to answer the query
+     * @param listener  Listener that will call to answer the query
      */
-    public void onQuery (String queryName, WSQueryHandler listener) {
+    public void onQuery(String queryName, WSQueryHandler listener) {
         queryAnswers.put(queryName, listener);
     }
 
-    public void addQueryHandler (WSQueryHandler handler) {
+    public void addQueryHandler(WSQueryHandler handler) {
         try {
-            Class[] methodArgs = { JsonElement.class };
+            Class[] methodArgs = {JsonElement.class};
             Method method = handler.getClass().getMethod("onQuery", methodArgs);
             WSQuery annotation = method.getAnnotation(WSQuery.class);
             this.onQuery(annotation.name(), handler);
@@ -269,14 +240,16 @@ public class MyWSClient {
             throw new IncompleteAnnotationException(WSEvent.class, "Annotation not found");
         }
     }
+
     /**
      * Make a new Query.
-     * @param queryName Name of the query
-     * @param query Data of the query
+     *
+     * @param queryName        Name of the query
+     * @param query            Data of the query
      * @param responseListener Listener that will call when the response of the query
      *                         is retrieve.
      */
-    public void makeQuery (String queryName, JsonElement query, WSQueryResponseListener responseListener) {
+    public void makeQuery(String queryName, JsonElement query, WSQueryResponseListener responseListener) {
         JsonObject json = new JsonObject();
         String queryId = String.valueOf(new Random().nextInt() * System.currentTimeMillis());
         try {
@@ -288,16 +261,17 @@ public class MyWSClient {
             log.log(Level.WARNING, ex.toString(), ex);
         }
         queryResponses.put(queryId, responseListener);
-        server.send(json.toString());
+        server.sendText(json.toString());
     }
 
     /**
      * Same ad make query, but this will return immediately a futureTask.
+     *
      * @param queryName Name of the query
-     * @param query Parameters of the quey
+     * @param query     Parameters of the quey
      * @return FutureTask, completed when the response  retriver
      */
-    public FutureTask<JsonElement> makeQuery (String queryName, JsonElement query) {
+    public FutureTask<JsonElement> makeQuery(String queryName, JsonElement query) {
 
         // Create a new wscallable
         final WSCallable callback = new WSCallable();
@@ -327,8 +301,9 @@ public class MyWSClient {
 
     /**
      * Send a new event
-     * @param event Name of the event
-     * @param data Data that will be sent with the event
+     *
+     * @param event     Name of the event
+     * @param data      Data that will be sent with the event
      * @param forServer Specify if this should be catch from the server
      */
     public void sendEvent(String event, JsonElement data, boolean forServer) {
@@ -341,15 +316,16 @@ public class MyWSClient {
         } catch (Exception ex) {
             ex.printStackTrace();
         }
-        server.send(json.toString());
+        server.sendText(json.toString());
     }
 
     /**
      * Send an event, but specify that is for all the clients
+     *
      * @param event Event name
-     * @param data Event data
+     * @param data  Event data
      */
-    public void sendEventBroadcast (String event, JsonElement data) {
+    public void sendEventBroadcast(String event, JsonElement data) {
         JsonObject json = new JsonObject();
         try {
             json.addProperty("event", event);
@@ -360,11 +336,12 @@ public class MyWSClient {
             ex.printStackTrace();
         }
         log.fine("New broadcast message sent");
-        server.send(json.toString());
+        server.sendText(json.toString());
     }
 
     /**
      * Remove a event listener
+     *
      * @param syncEvent Name of the event listener to remove
      */
     public void removeListener(String syncEvent) {
@@ -373,6 +350,7 @@ public class MyWSClient {
 
     /**
      * Return the state of the connection
+     *
      * @return State of the connection
      */
     public boolean isConnected() {
