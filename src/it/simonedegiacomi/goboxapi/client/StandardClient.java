@@ -4,7 +4,6 @@ import com.google.common.io.ByteStreams;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBCache;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.authentication.Auth;
@@ -12,18 +11,14 @@ import it.simonedegiacomi.goboxapi.myws.MyWSClient;
 import it.simonedegiacomi.goboxapi.myws.WSEventListener;
 import it.simonedegiacomi.goboxapi.myws.WSQueryResponseListener;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
-import org.java_websocket.drafts.Draft_17;
 
 import javax.net.ssl.HttpsURLConnection;
 import java.io.*;
-import java.net.URI;
 import java.net.URL;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -88,13 +83,14 @@ public class StandardClient implements Client {
             // Create the websocket client
             server = new MyWSClient(urls.getURI("socketClient"));
 
+            // Authorize the connection
+            auth.authorizeWs(server);
+
             // When the webSocket in opened, send the authentication object
             server.onEvent("open", new WSEventListener() {
                 @Override
                 public void onEvent(JsonElement data) {
-                    // Send the authentication object
-                    // TODO: handle an authentication error
-                    server.sendEvent("authentication", gson.toJsonTree(auth, Auth.class), true);
+                    //server.sendEvent("authentication", gson.toJsonTree(auth, Auth.class), true);
                 }
             });
 
@@ -120,10 +116,10 @@ public class StandardClient implements Client {
         // Start listening onEvent the websocket, connecting to the server
         try {
             System.out.println("Connecting");
-            server.connectSync();
+            server.connect();
             System.out.println("Done");
             readyCountDown.await();
-        } catch (InterruptedException ex) {
+        } catch (Exception ex) {
             ex.printStackTrace();
         }
     }

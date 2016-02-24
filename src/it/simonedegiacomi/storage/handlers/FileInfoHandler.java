@@ -8,6 +8,7 @@ import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.storage.StorageDB;
+import it.simonedegiacomi.utils.MyGson;
 
 import java.util.logging.Logger;
 
@@ -25,9 +26,7 @@ public class FileInfoHandler implements WSQueryHandler {
 
     private final StorageDB db;
 
-    private final Gson gson = new Gson();
-
-    private final String PATH = Config.getInstance().getProperty("path");
+    private final Gson gson = new MyGson().create();
 
     public FileInfoHandler(StorageDB db) {
         this.db = db;
@@ -43,9 +42,10 @@ public class FileInfoHandler implements WSQueryHandler {
         boolean findPath = json.has("findPath") ? json.get("findPath").getAsBoolean() : false;
         boolean findChildren = json.has("findChildren") ? json.get("findChildren").getAsBoolean() : false;
 
-        // Wrap the father from the request
-        GBFile file = gson.fromJson(json.get("file"), GBFile.class);
         try {
+            // Wrap the father from the request
+            GBFile file = gson.fromJson(json.get("file"), GBFile.class);
+
             if(file.getID() == GBFile.UNKNOWN_ID)
                 db.findIDByPath(file);
 

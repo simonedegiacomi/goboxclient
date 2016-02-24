@@ -190,6 +190,15 @@ public class MyWSClient {
     }
 
     /**
+     * Add a new http header, useful to set the Authorization header
+     * @param header Name of the header
+     * @param value Value of the header
+     */
+    public void addHttpHeader (String header, String value) {
+        server.addHeader(header, value);
+    }
+
+    /**
      * This method allows you to register a new event listener
      *
      * @param event    Name of the event.

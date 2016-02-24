@@ -96,25 +96,26 @@ public class StorageToClientHandler implements WSEventListener {
             conn.setRequestMethod("POST");
             auth.authorize(conn);
 
-
-            // Get the output stream to the server
-            OutputStream rawStreamToServer = conn.getOutputStream();
-
             // Send the file
             if(dbFile.isDirectory()) {
-                MyZip.zipFolder(dbFile.toFile(PATH), rawStreamToServer);
+                sendDirectory(dbFile, conn);
             } else {
-                // Get the connection stream
-                DataOutputStream toServer = new DataOutputStream(rawStreamToServer);
+                if(dbFile.getSize() > 0)
+                    conn.addRequestProperty("Content-Length", String.valueOf(dbFile.getSize()));
+                if(dbFile.getMime() !=  null)
+                    conn.addRequestProperty("Content-Type", dbFile.getMime());
+
+                // Get the output stream to the server
+                OutputStream rawStreamToServer = conn.getOutputStream();
 
                 // Open the file
-                DataInputStream fromFile = new  DataInputStream(new FileInputStream(dbFile.toFile(PATH)));
+                InputStream fromFile = new FileInputStream(dbFile.toFile(PATH));
 
                 // Send the file
-                ByteStreams.copy(fromFile, toServer);
+                ByteStreams.copy(fromFile, rawStreamToServer);
 
                 // Close the streams
-                toServer.close();
+                rawStreamToServer.close();
                 fromFile.close();
             }
 
@@ -125,5 +126,12 @@ public class StorageToClientHandler implements WSEventListener {
         } catch (Exception ex) {
             ex.printStackTrace();
         }
+    }
+
+    private void sendDirectory (GBFile file, HttpsURLConnection conn) throws IOException {
+        conn.addRequestProperty("Content-Type", "application/zip");
+        OutputStream rawStreamToServer = conn.getOutputStream();
+        MyZip.zipFolder(file.toFile(PATH), rawStreamToServer);
+        rawStreamToServer.close();
     }
 }

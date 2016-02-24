@@ -4,17 +4,14 @@ import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.configuration.LoginTool;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.authentication.Auth;
-import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.goboxapi.client.StandardClient;
 import it.simonedegiacomi.storage.Storage;
 import it.simonedegiacomi.sync.Sync;
 import it.simonedegiacomi.utils.EasyProxy;
 import it.simonedegiacomi.utils.SingleInstancer;
 import javafx.scene.control.Alert;
-import org.java_websocket.WebSocketImpl;
 
 import java.awt.*;
-import java.net.InetSocketAddress;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -43,7 +40,6 @@ public class Main {
         // TODO: Add a message or open the configuration of GoBox
         //if(!singler.isSingle())
         //    System.exit(0);
-        System.out.println("Single instance? " + singler.isSingle());
 
         config.addOnconfigChangeListener(new Config.OnConfigChangeListener() {
             @Override
@@ -51,16 +47,13 @@ public class Main {
 
                 // Check if there is a proxy to use
                 EasyProxy.manageProxy(config);
-
             }
         });
 
         try {
             // Try to load the config
-            config.load();
-
-            // Load the urls to use to contact the server
             config.loadUrls();
+            config.load();
 
             // Notify all the components that need to know when
             //the config change
@@ -80,11 +73,6 @@ public class Main {
     }
 
     private static void startLogin() {
-        try {
-            config.getUrls().load();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
         LoginTool.getLoginTool(new LoginTool.EventListener() {
             @Override
             public void onLoginComplete() {
@@ -107,12 +95,15 @@ public class Main {
         // try the token
         Auth auth = config.getAuth();
         try {
-            log.fine("Checking identity");
-            auth.check();
+            if(!auth.check()) {
+                System.out.println("Cannot authenticate");
+                System.exit(0);
+            }
             config.save();
-            log.fine("Authenticated");
         } catch (Exception ex) {
             ex.printStackTrace();
+            System.out.println("Cannot authenticate");
+            System.exit(0);
         }
 
         switch (auth.getMode()) {
@@ -135,7 +126,6 @@ public class Main {
         try {
             StandardClient client = new StandardClient(auth);
             client.connect();
-            WebSocketImpl.DEBUG = true;
             try {
                 System.out.println(client.getInfo(new GBFile(1)));
             } catch (Exception ex) {

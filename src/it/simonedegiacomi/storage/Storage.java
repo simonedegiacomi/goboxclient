@@ -12,6 +12,7 @@ import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.utils.EasyHttps;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import it.simonedegiacomi.storage.handlers.*;
+import it.simonedegiacomi.utils.MyGson;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -59,7 +60,7 @@ public class Storage {
 
     private InternalClient internalClient;
 
-    private final Gson gson = new Gson();
+    private final Gson gson = new MyGson().create();
 
     /**
      * Create a new storage given the Auth object for the appropriate account.
@@ -76,25 +77,10 @@ public class Storage {
             throw new StorageException("Cannot connect to the local database");
         }
 
-        // Try to connect ot the main server to check if the
-        // token in the config is still valid
-        try {
-            JsonObject response = (JsonObject) EasyHttps.post(urls.get("authCheck"),
-                    null, auth.getToken());
-            if (!response.get("state").getAsString().equals("valid"))
-                throw  new StorageException("Invalid token.");
-            // Save the new token in the config
-            auth.setToken(response.get("newOne").getAsString());
-            config.setProperty("token", response.get("newOne").getAsString());
-            config.save();
-        } catch (Exception ex) {
-            log.log(Level.SEVERE, ex.toString(), ex);
-            throw new StorageException("Cannot verify the identity of the token");
-        }
-
-        // Now the token is valid, so we can connect to the main server through ws
+        // Connect to the main server through ws
         try {
             mainServer = new MyWSClient(urls.getURI("socketStorage"));
+            auth.authorizeWs(mainServer);
         } catch (Exception ex) {
             throw new StorageException("Cannot connect to the main server through handlers socket");
         }
@@ -107,6 +93,8 @@ public class Storage {
             @Override
             public void onEvent(JsonElement data) {
                 mainServer.sendEvent("authentication", gson.toJsonTree(auth, Auth.class), true);
+                // Send network info
+                sendNetworkInfo();
 
                 // When the connection is established and the authentication
                 // object sent, assign the events
@@ -117,7 +105,7 @@ public class Storage {
 
     public void startStoraging () throws Exception {
         // Open the connection and start to listen
-        mainServer.connectSync();
+        mainServer.connect();
     }
 
     /**
@@ -148,6 +136,10 @@ public class Storage {
         // Search handler
         mainServer.addQueryHandler(new SearchHandler(db));
 
+        // Share handler
+        mainServer.addQueryHandler(new ShareListHandler(db));
+        mainServer.addQueryHandler(new ShareHandler(db));
+
         mainServer.onQuery("ping", new WSQueryHandler() {
             @Override
             public JsonElement onQuery(JsonElement data) {
@@ -166,6 +158,14 @@ public class Storage {
      */
     public Client getInternalClient () {
         return (internalClient = internalClient == null ? new InternalClient(this, db) : internalClient);
+    }
+
+    private void sendNetworkInfo() {
+        JsonObject info = new JsonObject();
+        //info.addProperty("localIP");
+        //info.addProperty("publicIP");
+        //info.addProperty("port");
+        //mainServer.sendEvent("networkInfo", info);
     }
 
     protected EventEmitter getEventEmitter () {

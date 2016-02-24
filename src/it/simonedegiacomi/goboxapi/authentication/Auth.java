@@ -1,7 +1,9 @@
 package it.simonedegiacomi.goboxapi.authentication;
 
 import com.google.gson.JsonObject;
+import it.simonedegiacomi.goboxapi.myws.MyWSClient;
 import it.simonedegiacomi.goboxapi.utils.EasyHttps;
+import it.simonedegiacomi.goboxapi.utils.EasyHttpsException;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 
 import javax.net.ssl.HttpsURLConnection;
@@ -93,9 +95,16 @@ public class Auth {
             throw new AuthException("Token is null");
         try {
             JsonObject response = (JsonObject) EasyHttps.post(urls.get("authCheck"), null, token);
+            if(!response.get("state").getAsString().equals("valid"))
+                return false;
             token = response.get("newOne").getAsString();
             return true;
+        } catch (EasyHttpsException ex) {
+            if(ex.getResponseCode() == 401)
+                return false;
+            throw new AuthException("Check failed");
         } catch (Exception ex) {
+            ex.printStackTrace();
             throw new AuthException("Check failed");
         }
     }
@@ -129,6 +138,14 @@ public class Auth {
      * @param conn Connection to authorize
      */
     public void authorize (HttpsURLConnection conn) {
-        conn.setRequestProperty("Authorization", "Bearer " + token);
+        conn.setRequestProperty("Authorization", getHeaderToken());
+    }
+
+    public void authorizeWs(MyWSClient server) {
+        server.addHttpHeader("Authorization", getHeaderToken());
+    }
+
+    private String getHeaderToken () {
+        return "Bearer " + token;
     }
 }

@@ -102,8 +102,11 @@ public class ClientToStorageHandler implements WSEventListener {
             // Tell the internal client to ignore this event
             internalClient.ignore(incomingFile);
 
+            // Find the right path
+            db.findPath(incomingFile);
+
             // Create the stream to the disk
-            DataOutputStream toDisk = new DataOutputStream(new FileOutputStream(incomingFile.getPathAsString(PATH)));
+            DataOutputStream toDisk = new DataOutputStream(new FileOutputStream(incomingFile.toFile(PATH)));
 
             // Copy the stream
             ByteStreams.copy(conn.getInputStream(), toDisk);

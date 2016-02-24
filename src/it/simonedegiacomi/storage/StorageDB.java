@@ -5,6 +5,10 @@ import com.j256.ormlite.dao.DaoManager;
 import com.j256.ormlite.dao.GenericRawResults;
 import com.j256.ormlite.jdbc.JdbcConnectionSource;
 import com.j256.ormlite.jdbc.JdbcDatabaseConnection;
+import com.j256.ormlite.stmt.DeleteBuilder;
+import com.j256.ormlite.stmt.QueryBuilder;
+import com.j256.ormlite.stmt.UpdateBuilder;
+import com.j256.ormlite.stmt.Where;
 import com.j256.ormlite.support.ConnectionSource;
 import com.j256.ormlite.table.TableUtils;
 import it.simonedegiacomi.goboxapi.GBFile;
@@ -116,6 +120,8 @@ public class StorageDB {
             GBFile root = new GBFile("root", true);
             root.setID(GBFile.ROOT_ID);
             root.setFatherID(GBFile.UNKNOWN_FATHER); // I'm not sure about it...
+            root.setCreationDate(System.currentTimeMillis());
+            root.setLastUpdateDate(System.currentTimeMillis());
             fileTable.create(root);
             System.out.println(root);
         }
@@ -290,20 +296,14 @@ public class StorageDB {
      * @throws StorageException
      */
     public void findChildrenByFather(GBFile father) throws StorageException {
-        long fatherID = father.getID();
-        List<GBFile> children = new ArrayList<>();
         try {
-
-            GenericRawResults<GBFile> rawChildren = fileTable.queryRaw("SELECT * FROM file WHERE father_ID = ? ORDER BY name",
-                    fileTable.getRawRowMapper(), String.valueOf(fatherID));
-
-            for(GBFile child : rawChildren)
-                children.add(child);
-
+            QueryBuilder<GBFile, Long> stmt =  fileTable.queryBuilder();
+            stmt.where().eq("father_ID", father.getID());
+            stmt.orderBy("name", true);
+            father.setChildren(stmt.query());
         } catch (Exception ex) {
             log.log(Level.SEVERE, ex.toString(), ex);
         }
-        father.setChildren(children);
     }
 
     /**
@@ -369,6 +369,34 @@ public class StorageDB {
         return events;
     }
 
+    public void changeAccess (GBFile file, boolean share) throws StorageException {
+        try {
+            if(share) {
+                sharingTable.create(new Sharing(file));
+            } else {
+                DeleteBuilder<Sharing, Long> stmt = sharingTable.deleteBuilder();
+                stmt.where().eq("file_ID", file.getID());
+                if(stmt.delete() < 0)
+                    throw new StorageException("Filed is nit shared");
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            throw new StorageException(ex.toString());
+        }
+    }
+
+    public List<GBFile> getSharedFiles () throws StorageException {
+
+        try {
+            QueryBuilder<GBFile, Long> fileQuery = fileTable.queryBuilder();
+            QueryBuilder<Sharing, Long> sharingQuery = sharingTable.queryBuilder();
+            return fileQuery.join(sharingQuery).query();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            throw new StorageException(ex.toString());
+        }
+    }
+
     public boolean isShared (GBFile file) {
         boolean exist;
         try {
@@ -381,5 +409,35 @@ public class StorageDB {
             exist =  false;
         }
         return exist;
+    }
+
+    /**
+     * Query the database and return a list of files that match the request.
+     * @param keyword Keyword of the name of the file
+     * @param kind The mime of the file
+     * @param from This is equals to the sql 'limit by'. Is the index of the file of the complete result list
+     *             from which the returned list starts
+     * @param n This indicate how long can the list be
+     * @return The list of the files. Empty (but not null) if any file match the request
+     * @throws StorageException Database connection or query exception
+     */
+    public List<GBFile> search (String keyword, String kind, long from, long n) throws StorageException {
+        try {
+            // Build the query
+            QueryBuilder<GBFile, Long> stmt = fileTable.queryBuilder();
+
+            stmt.where().like("name", '%' + keyword + '%')
+                    .and().like("mime", '%' + kind + '%');
+
+            if(from > 0)
+                stmt.offset(from);
+            if(n > -1)
+                stmt.limit(new Long(n));
+
+            return stmt.query();
+        } catch (Exception ex) {
+            // TODO: catch the exception
+            return new LinkedList<>();
+        }
     }
 }
