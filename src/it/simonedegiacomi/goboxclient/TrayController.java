@@ -2,18 +2,17 @@ package it.simonedegiacomi.goboxclient;
 
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
-import it.simonedegiacomi.sync.Sync;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.net.URL;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Created by simone onEvent 20/01/16.
+ * Created on 20/01/16.
+ * @author Degiacomi Simone
  */
 public class TrayController {
 
@@ -29,17 +28,17 @@ public class TrayController {
 
     private MenuItem state, mode;
 
-    private Sync sync;
-
     private PopupMenu trayMenu = new PopupMenu();
 
-    public TrayController (Sync sync) {
-        this.sync = sync;
+    public TrayController () {
         addButtons();
         desktop = Desktop.getDesktop();
     }
 
-    private void addButtons () {
+    /**
+     * Add button and prepare label for the menu icon tray
+     */
+    private void addButtons() {
         // Client settings, this open the connection
         // window
         MenuItem connSettings = new MenuItem();
@@ -88,29 +87,42 @@ public class TrayController {
         trayMenu.add(exit);
     }
 
-    public void showTray () {
-        try {
-            // Load th icon for the tray
-            URL iconUrl = getClass().getResource(ICON_NAME);
-            final TrayIcon icon = new TrayIcon(new ImageIcon(iconUrl).getImage());
+    /**
+     * Add the icon to the system icon tray
+     */
+    public void showTray() {
+        // Load th icon for the tray
+        URL iconUrl = getClass().getResource(ICON_NAME);
+        final TrayIcon icon = new TrayIcon(new ImageIcon(iconUrl).getImage());
 
-            // Set the menu to the icon
-            icon.setPopupMenu(trayMenu);
+        // Set the menu to the icon
+        icon.setPopupMenu(trayMenu);
 
-            // Add the iconTray to the system tray
-            SwingUtilities.invokeLater(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        tray.add(icon);
-                    } catch (Exception ex) {
-                        ex.printStackTrace();
-                    }
-
+        // Add the iconTray to the system tray
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    tray.add(icon);
+                } catch (AWTException ex) {
+                    ex.printStackTrace();
                 }
-            });
-        } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
-        }
+
+            }
+        });
+    }
+
+    /**
+     * Change the 'state' label. Useful to comunicate silent messages
+     * to the user.
+     * @param message Message to show
+     */
+    public void setMessage(String message) {
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                state.setLabel(message);
+            }
+        });
     }
 }

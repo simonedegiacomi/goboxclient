@@ -57,7 +57,7 @@ public class Config {
      * @param File file with the configuration
      * @throws Exception
      */
-    public void load (File file) throws Exception {
+    public void load (File file) throws IOException {
         // Open the file
         FileInputStream in = new FileInputStream(file);
         properties.load(in);
@@ -77,7 +77,7 @@ public class Config {
      * Load the configuration from the default file
      * @throws Exception
      */
-    public void load () throws Exception {
+    public void load () throws IOException {
         load(new File(DEFAULT_LOCATION));
     }
 
@@ -104,7 +104,7 @@ public class Config {
      * @param File
      * @throws Exception
      */
-    public void save (File file) throws Exception {
+    public void save (File file) throws IOException {
 
         // update the properties with the auth
         properties.setProperty("token", auth.getToken());
@@ -126,7 +126,7 @@ public class Config {
      * Save the configuration to the default file and
      * then call the apply method
      */
-    public void save () throws Exception {
+    public void save () throws IOException {
         save(new File(DEFAULT_LOCATION));
     }
 
@@ -149,6 +149,10 @@ public class Config {
 
     public void addOnconfigChangeListener (OnConfigChangeListener listener) {
         listeners.add(listener);
+    }
+
+    public void deleteAuth() {
+        properties.remove("username");
     }
 
     public interface OnConfigChangeListener {

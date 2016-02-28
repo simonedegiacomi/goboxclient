@@ -4,6 +4,7 @@ import com.google.common.io.ByteStreams;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.neovisionaries.ws.client.WebSocketException;
 import it.simonedegiacomi.goboxapi.GBCache;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.authentication.Auth;
@@ -11,27 +12,32 @@ import it.simonedegiacomi.goboxapi.myws.MyWSClient;
 import it.simonedegiacomi.goboxapi.myws.WSEventListener;
 import it.simonedegiacomi.goboxapi.myws.WSQueryResponseListener;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import it.simonedegiacomi.utils.MyGson;
 
 import javax.net.ssl.HttpsURLConnection;
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.ProtocolException;
 import java.net.URL;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.Phaser;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * This is an implementation of the gobox api client
- * interface. This client uses WebSocket to transfer
- * the file list, to authenticate and to share events
- * and use HTTP(s) to transfer the files.
+ * This is an implementation of the gobox api client interface. This
+ * client uses WebSocket to transfer the file list, to authenticate
+ * and to share events and use HTTP(s) to transfer the files.
  *
  * @author Degiacomi Simone
  * Created on 31/12/2015.
  */
-public class StandardClient implements Client {
+public class StandardClient extends Client {
 
     /**
      * Logger of this class
@@ -40,9 +46,8 @@ public class StandardClient implements Client {
 
     /**
      * Object used to create the urls.
-     * TODO: Get the url builder from the constructor
      */
-    private final URLBuilder urls = new URLBuilder();
+    private static URLBuilder urls = new URLBuilder();
 
     /**
      * WebSocket connection to the server
@@ -54,13 +59,28 @@ public class StandardClient implements Client {
      */
     private final Auth auth;
 
-    private final Gson gson = new Gson();
+    /**
+     * Gson instance to create json objects
+     */
+    private final Gson gson = new MyGson().create();
 
+    /**
+     * Set of events to ignore
+     */
     private final Set<String> eventsToIgnore = new HashSet<>();
 
-    private CountDownLatch readyCountDown = new CountDownLatch(1);
+    /**
+     * Cache of the files information
+     */
+    private final GBCache cache = new GBCache();
 
-    private GBCache cache = new GBCache();
+    private DisconnectedListener disconnectedListener;
+
+    private Phaser works = new Phaser();
+
+    public static void setUrlBuilder (URLBuilder builder) {
+        urls = builder;
+    }
 
     /**
      * Construct a sync object, but first try to login to gobox.
@@ -71,12 +91,6 @@ public class StandardClient implements Client {
      */
     public StandardClient(final Auth auth) throws ClientException {
         this.auth = auth;
-
-        try {
-            urls.load();
-        } catch (IOException ex) {
-            throw new ExceptionInInitializerError("Cannot load GoBox Server urls");
-        }
 
         // Connect to the server
         try {
@@ -90,37 +104,73 @@ public class StandardClient implements Client {
             server.onEvent("open", new WSEventListener() {
                 @Override
                 public void onEvent(JsonElement data) {
-                    //server.sendEvent("authentication", gson.toJsonTree(auth, Auth.class), true);
+                    // TODO: Send network info
                 }
             });
 
-            // Register the storageInfo event
-            server.onEvent("storageInfo", new WSEventListener() {
+            server.onEvent("error", new WSEventListener() {
                 @Override
                 public void onEvent(JsonElement data) {
-                    readyCountDown.countDown();
-                    System.out.println(data);
+                    disconnectedListener.onDisconnect();
                 }
             });
-        } catch (Exception ex) {
-            ex.printStackTrace();
+
+        } catch (IOException ex) {
+            throw new ClientException(ex.toString());
         }
     }
 
+    /**
+     * Interface for the onDisconnect event
+     */
+    public interface DisconnectedListener {
+        public void onDisconnect();
+    }
+
+    /**
+     * Set the listener for the disconnection cause by the websocket
+     * @param listener Listener to call
+     */
+    public void onDisconnect (DisconnectedListener listener) {
+        this.disconnectedListener = listener;
+    }
+
+    /**
+     * Check if the client is connected to the storage
+     * @return
+     */
     @Override
     public boolean isOnline() {
         return server.isConnected();
     }
 
-    public void connect() {
-        // Start listening onEvent the websocket, connecting to the server
+    /**
+     * Connect to the server and to the storage. This method will block
+     * the thread util the websocket connection is estabilite and the
+     * storage info event received
+     */
+    public void connect() throws ClientException {
+        CountDownLatch readyCountDown = new CountDownLatch(1);
         try {
-            System.out.println("Connecting");
+            // Register the storageInfo event
+            server.onEvent("storageInfo", new WSEventListener() {
+                @Override
+                public void onEvent(JsonElement data) {
+                    // Remove the storage info listener
+                    server.removeListener("storageInfo");
+                    readyCountDown.countDown();
+                }
+            });
+
+            // Connect
             server.connect();
-            System.out.println("Done");
+
             readyCountDown.await();
-        } catch (Exception ex) {
+        } catch (WebSocketException ex) {
             ex.printStackTrace();
+            throw new ClientException(ex.toString());
+        } catch (InterruptedException ex) {
+            throw new ClientException("Storage event info not received");
         }
     }
 
@@ -133,7 +183,8 @@ public class StandardClient implements Client {
      * @throws ClientException Error during the download
      */
     @Override
-    public void getFile(GBFile file, OutputStream dst) throws ClientException {
+    public void getFile(GBFile file, OutputStream dst) throws ClientException, IOException {
+        works.register();
         try {
             // Create and fill the request object
             JsonObject request = new JsonObject();
@@ -156,27 +207,11 @@ public class StandardClient implements Client {
             dst.close();
 
         } catch (Exception ex) {
+            works.arriveAndDeregister();
             log.log(Level.WARNING, ex.toString(), ex);
             throw new ClientException(ex.toString());
         }
-    }
-
-    /**
-     * Download the file from the server and save it in his position. If the
-     * file was created with from a javaFile or the method 'toFile' was called
-     * on it specifing a path prefix, this prefix will be used.
-     *
-     * @param file File to retrieve.
-     * @throws ClientException
-     */
-    @Override
-    public void getFile(GBFile file) throws ClientException {
-        try {
-            getFile(file, new FileOutputStream(file.toFile()));
-        } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
-            throw new ClientException(ex.toString());
-        }
+        works.arriveAndDeregister();
     }
 
     /**
@@ -194,8 +229,9 @@ public class StandardClient implements Client {
             FutureTask<JsonElement> future = server.makeQuery("createFolder", gson.toJsonTree(newDir, GBFile.class));
             JsonObject response = (JsonObject) future.get();
             newDir.setID(response.get("newFolderId").getAsLong());
-        } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
+        } catch (InterruptedException ex) {
+            throw new ClientException(ex.toString());
+        } catch (ExecutionException ex) {
             throw new ClientException(ex.toString());
         }
     }
@@ -211,27 +247,28 @@ public class StandardClient implements Client {
      */
     @Override
     public GBFile getInfo(GBFile father) throws ClientException {
-        //GBFile fromCache = cache.get(father);
-        //if(fromCache != null)
-        //    return fromCache;
+        // Check if the file is already cached
+        GBFile fromCache = cache.get(father);
+        if(fromCache != null)
+            return fromCache;
         try {
             JsonObject request = new JsonObject();
             request.add("file", gson.toJsonTree(father, GBFile.class));
-            // TODO: change this
             request.addProperty("findPath", true);
             request.addProperty("findChildren", true);
-            System.out.println("INIZIO GET " + Thread.currentThread());
 
             JsonObject response = (JsonObject) server.makeQuery("info", request).get();
-            System.out.println("Fine get" + Thread.currentThread());
             boolean found = response.get("found").getAsBoolean();
             if (!found)
                 return null;
             GBFile detailedFile = gson.fromJson(response.get("file"), GBFile.class);
-//            cache.add(detailedFile);
+            // cache the file
+            cache.add(detailedFile);
             return detailedFile;
-        } catch (Exception ex) {
+        } catch (InterruptedException ex) {
             ex.printStackTrace();
+            throw new ClientException(ex.toString());
+        } catch (ExecutionException ex) {
             throw new ClientException(ex.toString());
         }
     }
@@ -246,7 +283,7 @@ public class StandardClient implements Client {
      * @throws ClientException
      */
     @Override
-    public void uploadFile(GBFile file, InputStream stream) throws ClientException {
+    public void uploadFile(GBFile file, InputStream stream) throws ClientException, IOException {
         try {
             eventsToIgnore.add(file.getPathAsString());
 
@@ -274,26 +311,7 @@ public class StandardClient implements Client {
             toStorage.close();
             conn.disconnect();
             stream.close();
-        } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
-            throw new ClientException(ex.toString());
-        }
-    }
-
-    /**
-     * Upload the file to the storage reading the file content from the file. If the
-     * file was created with from a javaFile or the method 'toFile' was called
-     * on it specifing a path prefix, this prefix will be used.
-     *
-     * @param file File to send
-     * @throws ClientException
-     */
-    @Override
-    public void uploadFile(GBFile file) throws ClientException {
-        try {
-            uploadFile(file, new FileInputStream(file.toFile()));
-        } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
+        } catch (ProtocolException ex) {
             throw new ClientException(ex.toString());
         }
     }
@@ -328,7 +346,8 @@ public class StandardClient implements Client {
 
     @Override
     public void updateFile(GBFile file) {
-
+        works.register();
+        works.arriveAndDeregister();
     }
 
     /**
@@ -369,5 +388,10 @@ public class StandardClient implements Client {
         JsonObject request = new JsonObject();
         request.addProperty("ID", lastHeardId);
         server.sendEvent("getEventsList", request, false);
+    }
+
+    @Override
+    public void shutdown() {
+        works.arriveAndAwaitAdvance();
     }
 }

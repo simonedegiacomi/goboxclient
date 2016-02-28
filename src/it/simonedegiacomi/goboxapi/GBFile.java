@@ -7,7 +7,6 @@ import com.j256.ormlite.field.DatabaseField;
 import com.j256.ormlite.table.DatabaseTable;
 import org.apache.tika.Tika;
 
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;

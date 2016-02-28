@@ -2,10 +2,14 @@ package it.simonedegiacomi.sync;
 
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.client.Client;
+import it.simonedegiacomi.goboxapi.client.ClientException;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 
+import java.io.IOException;
+
 /**
- * Created by simone on 17/02/16.
+ * Created on 17/02/16.
+ * @author Degiacomi Simone
  */
 public class Work {
 
@@ -24,6 +28,10 @@ public class Work {
      */
     private final GBFile file;
 
+    /**
+     * Create a new work from a SyncEvent
+     * @param event SyncEvent from which create a new work
+     */
     public Work (SyncEvent event) {
         file = event.getRelativeFile();
         switch (event.getKind()) {
@@ -59,7 +67,11 @@ public class Work {
                             client.updateFile(file);
                             break;
                     }
-                } catch (Exception ex) {
+                } catch (ClientException ex) {
+                    // TODO: handle this
+                    ex.printStackTrace();
+                } catch (IOException ex) {
+                    // TODO: handle this
                     ex.printStackTrace();
                 }
             }

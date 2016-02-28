@@ -6,9 +6,9 @@ import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.goboxapi.client.ClientException;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.client.SyncEventListener;
+import it.simonedegiacomi.utils.Speaker;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,14 +18,12 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * A Sync object work with an implementation of
- * the Client interface, and manage the synchronization
- * of the filesystem with the relative storage of the account.
+ * A Sync object work with an implementation of the Client interface, and manage
+ * the synchronization of the filesystem with the relative storage of the account.
  *
- * @author Degiacomi Simone
  * Created on 24/12/2015
+ * @author Degiacomi Simone
  */
-
 public class Sync {
 
     /**
@@ -33,10 +31,14 @@ public class Sync {
      */
     private static final Logger log = Logger.getLogger(Sync.class.getName());
 
-    private final Worker worker;
     /**
-     * Client object used as API interface tp communicate
-     * with the storage.
+     * Worker of the class. This worker is used to keep a simple queue for
+     * thw works (uploads and downloads)
+     */
+    private final Worker worker;
+
+    /**
+     * Client object used as API interface to communicate with the storage
      */
     private Client client;
 
@@ -46,63 +48,67 @@ public class Sync {
     private static final Config config = Config.getInstance();
 
     /**
-     * The FileSystemWatcher is the object that pool and
-     * watch the local fileSystem, notifying any creation,
-     * changes or deletion of a file (or folder)
+     * Speaker used to show silent info messages
+     */
+    private Speaker speaker;
+
+    /**
+     * The FileSystemWatcher is the object that pool and watch the local fileSystem,
+     * notifying any creation, changes or deletion of a file (or folder)
      */
     private FileSystemWatcher watcher;
 
     /**
-     * no
      * Path of the files folder
      */
     private static final String PATH = config.getProperty("path");
 
     /**
-     * Create and start keep in sync the local fs with
-     * the GoBox Storage. It used the Client passed as
-     * arguments to communicate the events and to get
-     * the changes from the storage
-     * @param client Client used to communicate and get
-     *               the files
+     * Create and start keep in sync the local fs with the GoBox Storage. It used the
+     * Client passed as arguments to communicate the events and to get the changes from
+     * the storage
+     * @param client Client used to communicate and get the files
+     * @throws IOException Exception thrown assigning the file system watcher
      */
-    public Sync (Client client) {
-
+    public Sync (Client client) throws IOException {
         this.client = client;
         worker = new Worker(client, Worker.DEFAULT_THREADS);
 
         // Create the new watcher for the fileSystem
-        try {
-            Path pathToWatch = new File(PATH).toPath();
-            watcher = new FileSystemWatcher(pathToWatch);
-        } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
-        }
+        Path pathToWatch = new File(PATH).toPath();
+        watcher = new FileSystemWatcher(pathToWatch);
 
         // Assign the event of the file watcher
         assignFileWatcherEvents();
     }
 
-    public void resyncAndStart () {
-        try {
-            checkR(new File(PATH));
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-        System.out.println("Resync completed");
+    /**
+     * Sync the file system with the storage after a period of sleep. Then start
+     * the file system watcher and listen for events from the client
+     * @throws IOException
+     * @throws ClientException If there is some problem with the client class
+     */
+    public void resyncAndStart () throws IOException, ClientException {
+        advice("Syncing");
+        checkR(new File(PATH));
 
         // Start watching for changes
         watcher.start();
 
         // And listen for event's from the storage
         assignSyncEventFromStorage();
+        advice("Ready");
     }
 
-    private void checkR (File file) throws Exception {
+    /**
+     * Check the file passed as argument recursively
+     * @param file File to compare with the storage
+     * @throws IOException
+     * @throws ClientException
+     */
+    private void checkR (File file) throws IOException, ClientException {
         // Get details about this file
         GBFile gbFile = client.getInfo(new GBFile(file, PATH));
-        //GBFile gbFile = client.getInfo(new GBFile(2));
-
 
         // If the storage doesn't know anything about this file
         if(gbFile == null) {
@@ -121,18 +127,11 @@ public class Sync {
                 storageFiles.put(child.getName(), child);
 
 
-            System.out.println("Map of the storage files:");
-            System.out.println(storageFiles);
-
             // Check every children
             for (File child : file.listFiles()) {
                 checkR(child);
                 storageFiles.remove(child.getName());
             }
-
-            System.out.println("NOW Map of the storage files:");
-            System.out.println(storageFiles);
-
 
             // Wait! and the remaining files in the map?
             // This client doesn't have these file!
@@ -151,8 +150,13 @@ public class Sync {
         }
     }
 
-    private void downloadR (GBFile fileToDownload) throws Exception {
-        System.out.println("Download " + fileToDownload);
+    /**
+     * Download a file o (recursively) a folder
+     * @param fileToDownload File to download
+     * @throws IOException
+     * @throws ClientException
+     */
+    private void downloadR (GBFile fileToDownload) throws IOException, ClientException {
         fileToDownload = client.getInfo(fileToDownload);
         if (fileToDownload.isDirectory()) {
             Files.createDirectory(fileToDownload.toFile(PATH).toPath());
@@ -164,8 +168,13 @@ public class Sync {
         }
     }
 
-    private void uploadR (File fileToUpload) throws Exception {
-        System.out.println("Upload " + fileToUpload);
+    /**
+     * Upload a file o (recursively) a folder
+     * @param fileToUpload File to upload
+     * @throws IOException
+     * @throws ClientException
+     */
+    private void uploadR (File fileToUpload) throws IOException, ClientException {
         if (fileToUpload.isDirectory()) {
             client.createDirectory(new GBFile(fileToUpload, PATH));
             for(File child : fileToUpload.listFiles())
@@ -192,7 +201,6 @@ public class Sync {
         watcher.assignListener(FileSystemWatcher.FILE_CREATED, new FileSystemWatcher.Listener() {
             @Override
             public void onEvent(File newFile) {
-                log.fine("New file created in the local fs");
                 try {
                     // Wrap the java File into a GoBoxFile
                     GBFile wrappedFile = new GBFile(newFile, PATH);
@@ -204,6 +212,7 @@ public class Sync {
                         worker.addWork(new Work(wrappedFile, Work.WorkKind.UPLOAD));
 
                 } catch (ClientException ex) {
+
                     log.warning("Can't tell the storage about the new file");
                 }
             }
@@ -308,5 +317,27 @@ public class Sync {
         } catch (Exception ex) {
             ex.printStackTrace();
         }
+    }
+
+    /**
+     * Stop the sync object.
+     * @throws InterruptedException
+     */
+    public void shutdown () throws InterruptedException {
+        worker.shutdown();
+        watcher.shutdown();
+    }
+
+    /**
+     * Set the speaker for this sync object
+     * @param speaker
+     */
+    public void setSpeaker (Speaker speaker) {
+        this.speaker = speaker;
+    }
+
+    private void advice (String message) {
+        if(speaker != null)
+            speaker.say(message);
     }
 }

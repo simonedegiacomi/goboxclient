@@ -13,11 +13,12 @@ import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.utils.MyZip;
 
 import javax.net.ssl.HttpsURLConnection;
-import java.io.*;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URL;
 import java.util.logging.Logger;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 /**
  * This handler receive the incoming file from the client

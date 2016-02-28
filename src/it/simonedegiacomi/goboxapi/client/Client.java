@@ -2,9 +2,7 @@ package it.simonedegiacomi.goboxapi.client;
 
 import it.simonedegiacomi.goboxapi.GBFile;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 
 /**
  * This is the interface of the goboxclient api and define the basic operation
@@ -13,14 +11,14 @@ import java.io.OutputStream;
  * @author Degiacomi Simone
  * Created on 02/01/2016.
  */
-public interface Client {
+public abstract class Client {
 
     /**
      * Check if the client is connected to the storage. It doesn't mean
      * that it's using network, just that the client can talk with the storage
      * @return Connected to the server or not
      */
-    public boolean isOnline ();
+    public abstract boolean isOnline ();
 
     /**
      * Return a new GBFile with the info retrieved from the storage. If the file is not found
@@ -34,7 +32,7 @@ public interface Client {
      * @throws ClientException Exception if there some problem with the communication to
      * the storage
      */
-    public GBFile getInfo(GBFile file) throws ClientException;
+    public abstract GBFile getInfo(GBFile file) throws ClientException;
 
     /**
      * Retrieve the file from the storage and save it to the file position saved inside the GBFile
@@ -45,7 +43,9 @@ public interface Client {
      * invalid id, network error or io error while saving the
      * file to the disk
      */
-    public void getFile (GBFile file) throws ClientException, IOException;
+    public void getFile (GBFile file) throws ClientException, IOException {
+        getFile(file, new FileOutputStream(file.toFile()));
+    }
 
     /**
      * Same as getFile(GBFile) but let you specify the output stream that will be used to write the incoming file
@@ -55,14 +55,14 @@ public interface Client {
      * @throws ClientException Exception thrown in case of
      * invalid id or network error
      */
-    public void getFile (GBFile file, OutputStream dst) throws ClientException, IOException;
+    public abstract void getFile (GBFile file, OutputStream dst) throws ClientException, IOException;
 
     /**
      * Create a new directory
      * @param newDir Directory to create
      * @throws ClientException thrown if a folder with the same name exist or other reason of the storage
      */
-    public void createDirectory (GBFile newDir) throws ClientException;
+    public abstract void createDirectory (GBFile newDir) throws ClientException;
 
     /**
      * Send a file to the storage.
@@ -70,7 +70,7 @@ public interface Client {
      * @param stream Stream of the file Stream that will be sent to the storage
      * @throws ClientException Exception Network error or invalid father reference
      */
-    public void uploadFile (GBFile file, InputStream stream) throws ClientException;
+    public abstract void uploadFile (GBFile file, InputStream stream) throws ClientException, IOException;
 
     /**
      * Same ad uploadFile(GBFile, InputStream) but this read the file from the path of the GBFile
@@ -78,14 +78,16 @@ public interface Client {
      * @throws ClientException Exception Network error, null file or invalid
      * father reference
      */
-    public void uploadFile (GBFile file) throws ClientException;
+    public void uploadFile (GBFile file) throws ClientException, IOException {
+        uploadFile(file, new FileInputStream(file.toFile()));
+    }
 
     /**
      * Remove a file from the storage
      * @param file File to remove
      * @throws ClientException Exception thrown if the id is not valid
      */
-    public void removeFile (GBFile file) throws ClientException;
+    public abstract void removeFile (GBFile file) throws ClientException;
 
     /**
      * Update a file in the storage.
@@ -94,21 +96,21 @@ public interface Client {
      * the file
      * @param file File to update
      */
-    public void updateFile (GBFile file, InputStream stream) throws ClientException;
+    public abstract void updateFile (GBFile file, InputStream stream) throws ClientException;
 
     /**
      * Update a file in the storage. The same as update,
      * but the stream is obtained from the file
      * @param file File to update
      */
-    public void updateFile (GBFile file) throws ClientException;
+    public abstract void updateFile (GBFile file) throws ClientException;
 
     /**
      * Set the listener for the SyncEvent received from the storage
      * @param listener Listener that will called with the relative
      *                 event
      */
-    public void setSyncEventListener (SyncEventListener listener);
+    public abstract void setSyncEventListener (SyncEventListener listener);
 
     /**
      * Talk to the storage and tell to it the last ID of the event that
@@ -116,5 +118,10 @@ public interface Client {
      * @param lastHeardId The ID of the last event you received or from you want
      *                    the list
      */
-    public void requestEvents (long lastHeardId);
+    public abstract void requestEvents (long lastHeardId);
+
+    /**
+     * Close the connection with the storage and release all the resources.
+     */
+    public abstract void shutdown ();
 }

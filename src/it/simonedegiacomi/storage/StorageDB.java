@@ -7,8 +7,6 @@ import com.j256.ormlite.jdbc.JdbcConnectionSource;
 import com.j256.ormlite.jdbc.JdbcDatabaseConnection;
 import com.j256.ormlite.stmt.DeleteBuilder;
 import com.j256.ormlite.stmt.QueryBuilder;
-import com.j256.ormlite.stmt.UpdateBuilder;
-import com.j256.ormlite.stmt.Where;
 import com.j256.ormlite.support.ConnectionSource;
 import com.j256.ormlite.table.TableUtils;
 import it.simonedegiacomi.goboxapi.GBFile;
@@ -19,7 +17,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
@@ -56,36 +53,33 @@ public class StorageDB {
      * initialization. If any exception are trowed,
      * the object shouldn't be used
      */
-    public StorageDB(String path) throws Exception {
+    public StorageDB(String path) throws StorageException {
 
-        // Connect to the database
-        connectionSource = new JdbcConnectionSource("jdbc:h2:" + path);
-
-        // Get a connection for the raw queries
-        db = ((JdbcDatabaseConnection) connectionSource.getReadWriteConnection()).getInternalConnection();
-        db.setAutoCommit(true);
-
-        // Create the DAO object. I'll use this object to simplify the insertion of the GBFiles
-        fileTable = DaoManager.createDao(connectionSource, GBFile.class);
-        fileTable.setAutoCommit(connectionSource.getReadWriteConnection(), true);
-
-        eventTable = DaoManager.createDao(connectionSource, SyncEvent.class);
-        eventTable.setAutoCommit(connectionSource.getReadWriteConnection(), true);
-
-        sharingTable = DaoManager.createDao(connectionSource, Sharing.class);
-        sharingTable.setAutoCommit(connectionSource.getReadWriteConnection(), true);
-
-        log.info("Connected to local H2 database");
         try {
+
+            // Connect to the database
+            connectionSource = new JdbcConnectionSource("jdbc:h2:" + path);
+
+            // Get a connection for the raw queries
+            db = ((JdbcDatabaseConnection) connectionSource.getReadWriteConnection()).getInternalConnection();
+            db.setAutoCommit(true);
+
+            // Create the DAO object. I'll use this object to simplify the insertion of the GBFiles
+            fileTable = DaoManager.createDao(connectionSource, GBFile.class);
+            fileTable.setAutoCommit(connectionSource.getReadWriteConnection(), true);
+
+            eventTable = DaoManager.createDao(connectionSource, SyncEvent.class);
+            eventTable.setAutoCommit(connectionSource.getReadWriteConnection(), true);
+
+            sharingTable = DaoManager.createDao(connectionSource, Sharing.class);
+            sharingTable.setAutoCommit(connectionSource.getReadWriteConnection(), true);
+
+            log.info("Connected to local H2 database");
+
             // Initialize the tables
             initDatabase();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            log.log(Level.SEVERE, ex.toString(), ex);
-            // If there is any exception with the initialization
-            // close the connection
-            connectionSource.close();
-            db.close();
+        } catch (SQLException ex) {
+            throw new StorageException("Can't connect to database");
         }
     }
 
@@ -104,7 +98,7 @@ public class StorageDB {
      * @throws Exception Exception if the creation of
      * the tables fails.
      */
-    private void initDatabase () throws Exception {
+    private void initDatabase () throws SQLException {
 
         // Create the file table
         TableUtils.createTableIfNotExists(connectionSource, GBFile.class);

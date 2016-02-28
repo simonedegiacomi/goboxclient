@@ -8,55 +8,57 @@ import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 
 import javax.net.ssl.HttpsURLConnection;
 import java.io.IOException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
- * The object of this class contains the credentials
- * of a GoBoxAccount. To use any of the API of this
- * package you need this object. Auth also provides
- * the necessary methods to talk with the server
- * to check the data
+ * The object of this class contains the credentials of a GoBoxAccount.
+ * To use any of the API of this package you need this object. Auth also
+ * provides the necessary methods to talk with the server to check the data.
  *
- * Created by Degiacomi Simone onEvent 31/12/15.
+ * Created on 31/12/15.
+ * @author Degiacomi Simone
  */
 public class Auth {
 
-    private static final Logger log = Logger.getLogger(Auth.class.getName());
-
     /**
-     * Type of session, client mode
+     * Type of session: client or storage mode
      */
     public enum Modality { CLIENT, STORAGE }
 
+    /**
+     * The current mode
+     */
     private Modality mode;
 
     private String username;
 
     /**
-     * URLs of the gobox server. This is transient because it shouldn't be serialized
+     * URLs of the environment. This is transient because it shouldn't be serialized
      */
-    private transient static final URLBuilder urls = new URLBuilder();
+    private transient static URLBuilder urls;
 
     /**
      * Token to use to authenticate with the server
      */
     private String token;
 
-    public Auth () {
-        try {
-            urls.load();
-        } catch (IOException ex) {
-            throw new ExceptionInInitializerError("Cannot load GoBox Server urls");
-        }
+    public Auth () { }
+
+    /**
+     * Let you to set the urls
+     * @param builder Urls of the environment
+     */
+    public static void setUrlBuilder (URLBuilder builder) {
+        urls = builder;
     }
 
     /**
-     * Try to login with the information set. This method
-     * will block the thread until the login is complete
-     * @throws AuthException
+     * Try to login with the information set. This method will block the thread until
+     * the login is complete.
+     * @return true if the user is logged, false if the credentials aren't valid
+     * @throws AuthException Exception thrown if there is some network or strange error
+     * but not when the credentials aren't valid
      */
-    public void login(String password) throws AuthException {
+    public boolean login (String password) throws AuthException {
         try {
             // Get the json of the authentication
             JsonObject authJson = new JsonObject();
@@ -68,27 +70,25 @@ public class Auth {
             JsonObject response = (JsonObject) EasyHttps.post(urls.get("login"), authJson, null);
             // evaluate the response
             String result = response.get("result").getAsString();
-            switch (result) {
-                case "Storage already registered":
-                    throw new AuthException(result);
-                case "logged in":
-                    // Save the token
-                    token = response.get("token").getAsString();
-                    break;
-                default:
-                    throw new AuthException("Login failed");
+            if (result.equals("logged in")) {
+                token = response.get("token").getAsString();
+                return true;
             }
-        } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
-            throw new AuthException("authentication failed");
+            return false;
+        } catch (EasyHttpsException ex) {
+            if(ex.getResponseCode() == 401)
+                return false;
+            throw new AuthException(ex.toString());
+        } catch (IOException ex) {
+            throw new AuthException(ex.toString());
         }
     }
 
     /**
-     * Check if the token of the object is valid. This
-     * method block the thread until the response from the
-     * server is retrieved.
-     * @throws AuthException
+     * Check if the token of the object is valid. This method block the thread until
+     * the response from the server is retrieved.
+     * @return true if the token is valid, false otherwise
+     * @throws AuthException Network errors
      */
     public boolean check() throws AuthException {
         if (token == null)
@@ -141,10 +141,18 @@ public class Auth {
         conn.setRequestProperty("Authorization", getHeaderToken());
     }
 
+    /**
+     * Authorize the websocket connection
+     * @param server Websocket to authorize
+     */
     public void authorizeWs(MyWSClient server) {
         server.addHttpHeader("Authorization", getHeaderToken());
     }
 
+    /**
+     * Return the value of the 'Authorization' http header
+     * @return Value of the authorization http header
+     */
     private String getHeaderToken () {
         return "Bearer " + token;
     }

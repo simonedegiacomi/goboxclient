@@ -2,7 +2,6 @@ package it.simonedegiacomi.goboxapi;
 
 import com.j256.ormlite.field.DatabaseField;
 import com.j256.ormlite.table.DatabaseTable;
-import sun.security.provider.SHA;
 
 /**
  * Created by simone on 15/02/16.

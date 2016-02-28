@@ -11,10 +11,20 @@ import java.util.concurrent.Executors;
  */
 public class Worker {
 
+    /**
+     * Default number of concurrent threads
+     */
     public final static int DEFAULT_THREADS = 2;
 
+    /**
+     * Real java executor.
+     * (yes, this is just another wrapper...)
+     */
     private final ExecutorService executor;
 
+    /**
+     * Client used by the works
+     */
     private final Client client;
 
     public Worker(Client client, int threads){
@@ -22,11 +32,18 @@ public class Worker {
         this.client = client;
     }
 
+    /**
+     * Add a new work to the queue
+     * @param newWork Work to add
+     */
     public void addWork(Work newWork) {
         executor.submit(newWork.getWork(client));
     }
 
-    public void stop () {
+    /**
+     * Stop all the works immediately
+     */
+    public void shutdown () {
         executor.shutdownNow();
     }
 }

@@ -9,11 +9,14 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Simple File System Watcher
  *
- * Created by Degiacomi Simone onEvent 24/12/2015.
+ * Created on 24/12/2015.
+ * @author Degiacomi Simone
  */
 public class FileSystemWatcher extends Thread {
 
@@ -32,13 +35,16 @@ public class FileSystemWatcher extends Thread {
     /**
      * Map of watch key, one for each watched folder
      */
-    private HashMap<WatchKey, Path> keys;
+    private HashMap<WatchKey, Path> keys = new HashMap<>();
 
     /**
      * Map of listeners for the events
      */
-    private HashMap<String, Listener> listeners;
+    private HashMap<String, Listener> listeners = new HashMap<>();
 
+    /**
+     * Set of files to ignore
+     */
     private final Set<String> filesToIgnore = new HashSet<>();
 
     /**
@@ -47,16 +53,18 @@ public class FileSystemWatcher extends Thread {
     private Path pathToWatch;
 
     /**
+     * Count down latch used to shutdown this watcher
+     */
+    private CountDownLatch shutdownLatch = new CountDownLatch(2);
+
+    /**
      * Create a new watcher and register the existing folder
-     * @param path
-     * @throws IOException
+     * @param path Path to watch
+     * @throws IOException thrown watching this path
      */
     public FileSystemWatcher (Path path) throws IOException {
         pathToWatch = path;
-        keys = new HashMap<>();
-        listeners = new HashMap<>();
         watchService = FileSystems.getDefault().newWatchService();
-
     }
 
     /**
@@ -64,7 +72,7 @@ public class FileSystemWatcher extends Thread {
      * @param path Path of the folder to watch
      * @throws IOException
      */
-    private void registerFolder (Path path) throws IOException{
+    private void registerFolder (Path path) throws IOException {
         /**
          * Walk trough the folder inside this folder
          */
@@ -105,9 +113,11 @@ public class FileSystemWatcher extends Thread {
         } catch (Exception ex) {
             ex.printStackTrace();
         }
-        for (;;) {
+        while (shutdownLatch.getCount() > 1) {
             try {
-                WatchKey watchKey = watchService.take();
+                WatchKey watchKey = watchService.poll(500, TimeUnit.MICROSECONDS);
+                if(watchKey == null)
+                    continue;
 
                 Path dir = keys.get(watchKey);
 
@@ -123,20 +133,16 @@ public class FileSystemWatcher extends Thread {
                     WatchEvent<Path> ev = (WatchEvent<Path>) event;
 
                     Path name = ev.context();
-                    System.out.printf(" File: %s", name);
-                    if(name.getFileName().toFile().getName().contains(".DS_Store"))
-                        continue;
                     Path changePath = dir.resolve(name);
 
                     final File file = changePath.toFile();
 
-                    if(filesToIgnore.remove(file.toString()))
+                    if(filesToIgnore.contains(file.toString()))
                         continue;
                     
                     new Thread(new Runnable() {
                         @Override
                         public void run() {
-                            System.out.println("New thread working with " + file.toString());
                             listeners.get(kind.name()).onEvent(file);
                         }
                     }).start();
@@ -145,7 +151,7 @@ public class FileSystemWatcher extends Thread {
                     if (file.isDirectory() && kind == StandardWatchEventKinds.ENTRY_CREATE)
                         try{
                             registerFolder(changePath);
-                        } catch (Exception ex) {
+                        } catch (IOException ex) {
                             ex.printStackTrace();
                         }
 
@@ -153,14 +159,32 @@ public class FileSystemWatcher extends Thread {
 
                 if(!watchKey.reset())
                     keys.remove(watchKey);
-            } catch (Exception ex) {
+            } catch (InterruptedException ex) {
                 ex.printStackTrace();
             }
         }
+        try {
+            watchService.close();
+        } catch (IOException ex) {
+            // TODO: handle this
+        }
+        shutdownLatch.countDown();
     }
 
+    /**
+     * Ignore the updates of this specified file
+     * @param file File to ignore
+     */
     public void ignore(File file) {
         filesToIgnore.add(file.toString());
+    }
+
+    /**
+     * Stop ignoring this file
+     * @param file File to stop ignoring
+     */
+    public void stopIgnoring (File file) {
+        filesToIgnore.remove(file.toString());
     }
 
     /**
@@ -170,4 +194,12 @@ public class FileSystemWatcher extends Thread {
         public void onEvent (File file);
     }
 
+    /**
+     * Stop watching for new file system events
+     * @throws InterruptedException
+     */
+    public void shutdown () throws InterruptedException{
+        shutdownLatch.countDown();
+        shutdownLatch.await();
+    }
 }

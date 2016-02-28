@@ -7,9 +7,9 @@ import com.neovisionaries.ws.client.*;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSEvent;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 
+import java.io.IOException;
 import java.lang.annotation.IncompleteAnnotationException;
 import java.lang.reflect.Method;
-import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
@@ -87,9 +87,8 @@ public class MyWSClient {
      * Create a new client without connecting to the sever
      *
      * @param uri URI of the server
-     * @throws Exception
      */
-    public MyWSClient(URI uri) throws Exception {
+    public MyWSClient(URI uri) throws IOException {
 
         // Initialize the maps
         events = new HashMap<>();
@@ -158,15 +157,24 @@ public class MyWSClient {
                     open.onEvent(null);
             }
 
+
             @Override
-            public void onCloseFrame (WebSocket ws, WebSocketFrame frame) {
+            public void onError (WebSocket ws, WebSocketException ex) {
                 connected = false;
-                log.info("Websocket connection closed");
-                WSEventListener close = events.get("close");
-                if (close != null)
-                    close.onEvent(null);
+                WSEventListener errorListener = events.get("error");
+                if(connected && errorListener != null)
+                    errorListener.onEvent(null);
+            }
+
+            @Override
+            public void onDisconnected(WebSocket websocket, WebSocketFrame serverCloseFrame, WebSocketFrame clientCloseFrame, boolean closedByServer) {
+                connected = false;
+                WSEventListener errorListener = events.get("close");
+                if(connected && errorListener != null)
+                    errorListener.onEvent(null);
             }
         });
+
     }
 
     /**

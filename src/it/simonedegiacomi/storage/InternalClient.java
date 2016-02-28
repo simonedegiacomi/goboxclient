@@ -1,7 +1,6 @@
 package it.simonedegiacomi.storage;
 
 import com.google.common.io.ByteStreams;
-import it.simonedegiacomi.goboxapi.GBCache;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.goboxapi.client.ClientException;
@@ -12,9 +11,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -26,7 +23,7 @@ import java.util.logging.Logger;
  * @author Degiacomi Simone
  * Created on 02/01/2016.
  */
-public class InternalClient implements Client {
+public class InternalClient extends Client {
 
     private static final Logger log = Logger.getLogger(InternalClient.class.getName());
 
@@ -152,6 +149,11 @@ public class InternalClient implements Client {
     @Override
     public void requestEvents(long lastHeardId) {
         // Not implemented yet
+    }
+
+    @Override
+    public void shutdown() {
+
     }
 
     public void ignore(GBFile file) {

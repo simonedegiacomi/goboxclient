@@ -1,6 +1,5 @@
 package it.simonedegiacomi.storage;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import it.simonedegiacomi.configuration.Config;
@@ -9,18 +8,17 @@ import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.goboxapi.myws.MyWSClient;
 import it.simonedegiacomi.goboxapi.myws.WSEventListener;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
-import it.simonedegiacomi.goboxapi.utils.EasyHttps;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import it.simonedegiacomi.storage.handlers.*;
-import it.simonedegiacomi.utils.MyGson;
 
-import java.util.logging.Level;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.logging.Logger;
 
 /**
- * Storage works like a server, saving the incoming
- * file from the other clients and sending it to
- * other client (of the same GoBox account).
+ * Storage works like a server, saving the incoming file from the other clients
+ * and sending it to other client (of the same GoBox account).
  *
  * @author Degiacomi Simone
  * Created on 24/12/2015.
@@ -41,7 +39,7 @@ public class Storage {
      * URLBuilder is used to get the appropriate
      * url
      */
-    private final URLBuilder urls = config.getUrls();
+    private static URLBuilder urls;
 
     /**
      * WebSocket communication with the main server
@@ -60,7 +58,13 @@ public class Storage {
 
     private InternalClient internalClient;
 
-    private final Gson gson = new MyGson().create();
+    private HttpsStorageServer httpStorage;
+
+    private DisconnectedListener disconnectedListener;
+
+    public static void setUrls (URLBuilder builder) {
+        urls = builder;
+    }
 
     /**
      * Create a new storage given the Auth object for the appropriate account.
@@ -70,20 +74,16 @@ public class Storage {
     public Storage(final Auth auth) throws StorageException {
 
         // Connect to the local database
-        try {
-            this.db = new StorageDB("./config/db");
-        } catch (Exception ex) {
-            log.log(Level.SEVERE, ex.toString(), ex);
-            throw new StorageException("Cannot connect to the local database");
-        }
+        this.db = new StorageDB("./config/db");
 
         // Connect to the main server through ws
         try {
             mainServer = new MyWSClient(urls.getURI("socketStorage"));
-            auth.authorizeWs(mainServer);
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             throw new StorageException("Cannot connect to the main server through handlers socket");
         }
+        // Authorize the ws connection
+        auth.authorizeWs(mainServer);
 
         // Create the event emitter
         emitter = new EventEmitter(mainServer);
@@ -92,20 +92,36 @@ public class Storage {
         mainServer.onEvent("open", new WSEventListener() {
             @Override
             public void onEvent(JsonElement data) {
-                mainServer.sendEvent("authentication", gson.toJsonTree(auth, Auth.class), true);
                 // Send network info
-                sendNetworkInfo();
+                try {
+                    sendNetworkInfo();
+                } catch (UnknownHostException ex) {
+                    ex.printStackTrace();
+                }
 
                 // When the connection is established and the authentication
                 // object sent, assign the events
                 assignEvent();
             }
         });
+
+        mainServer.onEvent("error", new WSEventListener() {
+            @Override
+            public void onEvent(JsonElement data) {
+                disconnectedListener.onDisconnected();
+            }
+        });
+
+        // Create the http(s) storage server that is used for direct transfers
+        //httpStorage = new HttpsStorageServer(db, emitter, internalClient);
     }
 
     public void startStoraging () throws Exception {
         // Open the connection and start to listen
         mainServer.connect();
+
+        // Start the local http(s) server
+        //httpStorage.serve();
     }
 
     /**
@@ -140,6 +156,10 @@ public class Storage {
         mainServer.addQueryHandler(new ShareListHandler(db));
         mainServer.addQueryHandler(new ShareHandler(db));
 
+        // The http server that manage direct transfers also has an integrated WSQueryHandler
+        mainServer.addQueryHandler(httpStorage.getWSComponent());
+
+        // Add a simple ping handler
         mainServer.onQuery("ping", new WSQueryHandler() {
             @Override
             public JsonElement onQuery(JsonElement data) {
@@ -160,15 +180,26 @@ public class Storage {
         return (internalClient = internalClient == null ? new InternalClient(this, db) : internalClient);
     }
 
-    private void sendNetworkInfo() {
+    private void sendNetworkInfo() throws UnknownHostException {
         JsonObject info = new JsonObject();
-        //info.addProperty("localIP");
-        //info.addProperty("publicIP");
-        //info.addProperty("port");
-        //mainServer.sendEvent("networkInfo", info);
+        info.addProperty("localIP", InetAddress.getLocalHost().getHostAddress());
+        info.addProperty("port", config.getProperty("directConnectionPort"));
+        mainServer.sendEvent("networkInfo", info, true);
     }
 
     protected EventEmitter getEventEmitter () {
         return emitter;
+    }
+
+    public interface DisconnectedListener {
+        public void onDisconnected ();
+    }
+
+    public void onDisconnected(DisconnectedListener listener) {
+        this.disconnectedListener = listener;
+    }
+
+    public void shutdown () {
+
     }
 }
