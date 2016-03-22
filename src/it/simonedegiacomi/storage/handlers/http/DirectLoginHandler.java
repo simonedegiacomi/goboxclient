@@ -1,4 +1,4 @@
-package it.simonedegiacomi.storage.handlers;
+package it.simonedegiacomi.storage.handlers.http;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -21,7 +21,7 @@ public class DirectLoginHandler implements HttpHandler {
 
     private Set<String> temporaryTokens;
 
-    private byte[] jwtSecret = new byte[128];
+    private byte[] jwtSecret = new byte[256];
 
     public DirectLoginHandler(Set<String> temporaryTokens) {
         new Random().nextBytes(jwtSecret);

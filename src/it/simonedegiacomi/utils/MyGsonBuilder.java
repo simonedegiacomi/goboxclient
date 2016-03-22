@@ -7,11 +7,11 @@ import com.google.gson.LongSerializationPolicy;
 /**
  * Created by simone on 21/02/16.
  */
-public class MyGson {
+public class MyGsonBuilder {
 
     private GsonBuilder builder = new GsonBuilder();
 
-    public MyGson () {
+    public MyGsonBuilder() {
         builder.setLongSerializationPolicy(LongSerializationPolicy.STRING);
     }
 

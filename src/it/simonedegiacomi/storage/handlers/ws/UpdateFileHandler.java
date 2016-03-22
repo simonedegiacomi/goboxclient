@@ -1,4 +1,4 @@
-package it.simonedegiacomi.storage.handlers;
+package it.simonedegiacomi.storage.handlers.ws;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
