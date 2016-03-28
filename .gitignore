@@ -3,3 +3,9 @@
 
 # IntelliJ IDEA directory
 .idea/
+lib/
+
+# Project directory
+client/
+config/
+files/
