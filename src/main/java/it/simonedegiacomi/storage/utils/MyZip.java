@@ -8,7 +8,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 /**
- * Created by simone on 15/02/16.
+ * Created by simone on 15.gif/02/16.
  */
 public class MyZip {
 

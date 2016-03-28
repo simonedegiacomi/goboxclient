@@ -1,6 +1,5 @@
 package it.simonedegiacomi.storage.Preview;
 
-import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.storage.Preview.annotations.PreviewerKind;
 
@@ -16,20 +15,44 @@ import java.io.OutputStream;
  */
 public class ImagePreviewer implements Previewer {
 
+    /**
+     * Default kind of image previews
+     */
+    private static final String DEFAULT_PREVIEW_KIND = "png";
+
     private static final double RESIZE_RATIO = 0.1;
 
-    private static final String PATH = Config.getInstance().getProperty("path");
+    @Override
+    public boolean canHandle(GBFile file) {
+        return file.getMime().startsWith("image");
+    }
 
-    @PreviewerKind(src = "image", dst="image/png")
+    @Override
+    public String getPreviewKind(GBFile file) {
+        return DEFAULT_PREVIEW_KIND;
+    }
+
+    @PreviewerKind(src = "image")
     @Override
     public void getPreview(GBFile file, OutputStream out) throws IOException {
         // Read the image
-        BufferedImage src = ImageIO.read(file.toFile(PATH));
+        BufferedImage src = ImageIO.read(file.toFile());
 
         // Calculate final resolution
         int finalWidth = (int)(src.getWidth() * RESIZE_RATIO);
-        int finalHeight = (int)(src.getHeight() * 0.1);
+        int finalHeight = (int)(src.getHeight() * RESIZE_RATIO);
 
+        // Resize
+        BufferedImage dst = resize(src, finalWidth, finalHeight);
+
+        // Write the resized image
+        ImageIO.write(dst, DEFAULT_PREVIEW_KIND, out);
+
+        // Close the stream
+        out.close();
+    }
+
+    public static BufferedImage resize (BufferedImage src, int finalWidth, int finalHeight) {
         // Create resized buffered image
         BufferedImage dst = new BufferedImage(finalWidth, finalHeight, src.getType());
 
@@ -42,10 +65,6 @@ public class ImagePreviewer implements Previewer {
         // Render the resized image
         g.dispose();
 
-        // Write the resized image
-        ImageIO.write(dst, "png", out);
-
-        // Close the stream
-        out.close();
+        return dst;
     }
 }

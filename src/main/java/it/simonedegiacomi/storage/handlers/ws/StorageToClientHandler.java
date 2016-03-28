@@ -10,6 +10,8 @@ import it.simonedegiacomi.goboxapi.authentication.Auth;
 import it.simonedegiacomi.goboxapi.myws.WSEventListener;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSEvent;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import it.simonedegiacomi.storage.Preview.CachedPreviewer;
+import it.simonedegiacomi.storage.Preview.Previewer;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.utils.MyZip;
@@ -48,6 +50,8 @@ public class StorageToClientHandler implements WSEventListener {
     private final URLBuilder urls = config.getUrls();
 
     private final Auth auth = config.getAuth();
+
+    private final Previewer previewer = new CachedPreviewer();
 
     /**
      * Path of the files folder on this machine
@@ -145,29 +149,12 @@ public class StorageToClientHandler implements WSEventListener {
     }
 
     private void sendPreview (GBFile file, HttpsURLConnection conn) throws IOException {
-        if(file.getMime().startsWith("image")) {
-            BufferedImage src = ImageIO.read(file.toFile(PATH));
-            BufferedImage dst = new BufferedImage((int)(src.getWidth() * 0.1), (int)(src.getHeight() * 0.1), src.getType());
-            Graphics2D g = dst.createGraphics();
-            g.drawImage(src, 0, 0, (int)(src.getWidth() * 0.1), (int)(src.getHeight() * 0.1), null);
-            g.dispose();
-
-            ImageIO.write(dst, "png", conn.getOutputStream());
-        } else if(file.getMime().startsWith("video")) {
-            try {
-                FFmpegFrameGrabber grabber = new FFmpegFrameGrabber(file.toFile(PATH));
-                grabber.start();
-                AnimatedGifEncoder encoder = new AnimatedGifEncoder();
-                encoder.start(conn.getOutputStream());
-                for(int i = 0; i < 30; i++) {
-                    encoder.addFrame();
-
-                }
-                encoder.finish();
-                grabber.stop();
-            } catch (FrameGrabber.Exception ex) {
-                ex.printStackTrace();
-            }
-        }
+        file.toFile(PATH);
+        if(!previewer.canHandle(file))
+            return;
+        conn.addRequestProperty("Content-Type", previewer.getPreviewKind(file));
+        OutputStream out = conn.getOutputStream();
+        previewer.getPreview(file, out);
+        out.close();
     }
 }
