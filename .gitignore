@@ -4,6 +4,8 @@
 # IntelliJ IDEA directory
 .idea/
 lib/
+out/
+target/
 
 # Project directory
 client/
