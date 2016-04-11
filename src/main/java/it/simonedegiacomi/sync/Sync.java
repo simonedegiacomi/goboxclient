@@ -79,6 +79,9 @@ public class Sync {
         Path pathToWatch = new File(PATH).toPath();
         watcher = new FileSystemWatcher(pathToWatch);
 
+        // Set the watcher in the work class
+        Work.setWatcher(watcher);
+
         // Assign the event of the file watcher
         assignFileWatcherEvents();
     }
@@ -113,6 +116,7 @@ public class Sync {
 
         // If the storage doesn't know anything about this file
         if(gbFile == null) {
+
             // Upload it
             uploadR(file);
             return;
@@ -137,7 +141,6 @@ public class Sync {
             // Wait! and the remaining files in the map?
             // This client doesn't have these file!
             for (Map.Entry<String, GBFile> entry : storageFiles.entrySet()) {
-                System.out.println("Look, a new file! " + entry.getValue());
                 // Download it
                 downloadR(entry.getValue());
             }
@@ -158,9 +161,20 @@ public class Sync {
      * @throws ClientException
      */
     private void downloadR (GBFile fileToDownload) throws IOException, ClientException {
+
+        // Download the information from the client
         fileToDownload = client.getInfo(fileToDownload);
+
+        // Add the prefix to the file
+        fileToDownload.setPrefix(PATH);
         if (fileToDownload.isDirectory()) {
-            Files.createDirectory(fileToDownload.toFile(PATH).toPath());
+
+            watcher.startIgnoring(fileToDownload);
+
+            Files.createDirectory(fileToDownload.toFile().toPath());
+
+            watcher.stopIgnoring(fileToDownload);
+
             for(GBFile child : fileToDownload.getChildren())
                 downloadR(child);
         } else {
@@ -182,8 +196,11 @@ public class Sync {
                 uploadR(child);
         } else {
             GBFile wrappedFile = new GBFile(fileToUpload, PATH);
+
             FileInfo.loadFileAttributes(wrappedFile);
+
             Work work = new Work(wrappedFile, Work.WorkKind.UPLOAD);
+
             worker.addWork(work);
         }
     }
@@ -234,8 +251,10 @@ public class Sync {
                     // Call the right client method
                     client.updateFile(wrappedFile);
                 } catch (ClientException ex) {
+
                     log.log(Level.WARNING, ex.toString(), ex);
                 } catch (IOException ex) {
+
                     ex.printStackTrace();
                 }
             }
@@ -254,6 +273,7 @@ public class Sync {
                     // and remove it
                     client.removeFile(wrappedFile);
                 } catch (ClientException ex) {
+
                     log.log(Level.WARNING, ex.toString(), ex);
                 }
             }
@@ -276,21 +296,22 @@ public class Sync {
 
                 // Get the GBFile of this event
                 GBFile file = event.getRelativeFile();
-
-                System.out.println("New event: " + file.toString());
-
-                // Tell the file system watcher to ignore the event to this specific file
-                // otherwise a infinite loop will be generated. Very, very bad thing
-                watcher.ignore(file.toFile(PATH));
+                file.setPrefix(PATH);
 
                 try {
                     switch (event.getKind()) {
                         case NEW_FILE:
 
                             // If the event is the creation of a new file
-                            if (file.isDirectory())
+                            if (file.isDirectory()) {
+
+                                watcher.startIgnoring(file);
+
                                 // and is a new folder, just create it
-                                Files.createDirectories(file.toFile(PATH).toPath());
+                                Files.createDirectories(file.toFile().toPath());
+
+                                watcher.stopIgnoring(file);
+                            }
                             else
                                 // otherwise download the new file
                                 worker.addWork(new Work(event));
@@ -302,7 +323,13 @@ public class Sync {
                             break;
 
                         case REMOVE_FILE:
-                            file.toFile(PATH).delete();
+
+                            watcher.startIgnoring(file);
+
+                            file.toFile().delete();
+
+                            watcher.stopIgnoring(file);
+
                             break;
                         default:
                             log.warning("New unrecognized sync event from the storage");
@@ -344,5 +371,9 @@ public class Sync {
     private void advice (String message) {
         if(speaker != null)
             speaker.say(message);
+    }
+
+    public FileSystemWatcher getFileSystemWatcher () {
+        return watcher;
     }
 }

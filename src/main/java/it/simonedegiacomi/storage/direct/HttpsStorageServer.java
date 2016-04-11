@@ -1,4 +1,4 @@
-package it.simonedegiacomi.storage;
+package it.simonedegiacomi.storage.direct;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
@@ -7,7 +7,12 @@ import com.sun.net.httpserver.HttpsServer;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
+import it.simonedegiacomi.storage.StorageEnvironment;
+import it.simonedegiacomi.storage.StorageException;
+import it.simonedegiacomi.storage.handlers.http.AuthMiddleware;
 import it.simonedegiacomi.storage.handlers.http.DirectLoginHandler;
+import it.simonedegiacomi.storage.handlers.http.FromStorageHttpHandler;
+import it.simonedegiacomi.storage.handlers.http.ToStorageHttpHandler;
 import it.simonedegiacomi.storage.utils.HttpsCertificateGenerator;
 import it.simonedegiacomi.storage.utils.PublicIPFinder;
 import org.apache.log4j.Logger;
@@ -20,26 +25,36 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
+ * Created on 22/02/16.
  * @author Degiacomi Simone
- * Created  on 22/02/16.
  */
 public class HttpsStorageServer {
 
+    /**
+     * Logger of the class
+     */
     private final static Logger log = Logger.getLogger(HttpsStorageServer.class);
 
+    /**
+     * Map of temporary auth token
+     */
     private final Set<String> temporaryTokens = new TreeSet<>();
 
     private final Gson gson = new MyGsonBuilder().create();
 
-    private StorageEnvironment env;
+    private final StorageEnvironment env;
 
     private final InetSocketAddress address;
 
-    private HttpsServer server;
-
     private HttpsCertificateGenerator certificateGenerator;
 
+    /**
+     * Java https server
+     */
+    private final HttpsServer server;
+
     public HttpsStorageServer (InetSocketAddress address, StorageEnvironment env) throws IOException, StorageException {
+
         this.env = env;
         this.address = address;
 
@@ -67,14 +82,19 @@ public class HttpsStorageServer {
     }
 
     private void registerHandlers () {
+
         // Handler used to generate the token
-        server.createContext("/directLogin", new DirectLoginHandler(temporaryTokens));
+        DirectLoginHandler directLoginHandler = new DirectLoginHandler(temporaryTokens);
+        server.createContext("/directLogin", directLoginHandler);
+
+        // Crate the auth middleware
+        AuthMiddleware authMiddleware = new AuthMiddleware(directLoginHandler.getJwtSecret());
 
         // Handler that receive new file (upload from client)
-        //server.createContext("/toStorage", new ToStorageHttpHandler());
+        server.createContext("/toStorage", authMiddleware.wrap(new ToStorageHttpHandler(env.getDB())));
 
         // Handler that send file to the client (download from the storage to the client)
-        //server.createContext("/fromStorage", new FromStorageHttpHandler());
+        server.createContext("/fromStorage", authMiddleware.wrap(new FromStorageHttpHandler(env.getDB())));
     }
 
     /**

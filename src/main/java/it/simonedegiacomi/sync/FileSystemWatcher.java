@@ -1,6 +1,7 @@
 package it.simonedegiacomi.sync;
 
 import com.sun.nio.file.SensitivityWatchEventModifier;
+import it.simonedegiacomi.goboxapi.GBFile;
 
 import java.io.File;
 import java.io.IOException;
@@ -8,6 +9,7 @@ import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -45,7 +47,7 @@ public class FileSystemWatcher extends Thread {
     /**
      * Set of files to ignore
      */
-    private final Set<String> filesToIgnore = new HashSet<>();
+    private final Set<GBFile> filesToIgnore = new HashSet<>();
 
     /**
      * Rot to watch
@@ -137,7 +139,7 @@ public class FileSystemWatcher extends Thread {
 
                     final File file = changePath.toFile();
 
-                    if(filesToIgnore.contains(file.toString()))
+                    if(shouldIgnore(new GBFile(file)))
                         continue;
                     
                     new Thread(new Runnable() {
@@ -171,20 +173,38 @@ public class FileSystemWatcher extends Thread {
         shutdownLatch.countDown();
     }
 
-    /**
-     * Ignore the updates of this specified file
-     * @param file File to ignore
-     */
-    public void ignore(File file) {
-        filesToIgnore.add(file.toString());
+    public void startIgnoring (GBFile file) {
+        filesToIgnore.add(file);
     }
 
-    /**
-     * Stop ignoring this file
-     * @param file File to stop ignoring
-     */
-    public void stopIgnoring (File file) {
-        filesToIgnore.remove(file.toString());
+    public void stopIgnoring (GBFile file) { filesToIgnore.remove(file);}
+
+    private boolean shouldIgnore (GBFile file) {
+
+        // Get the path of the file
+        List<GBFile> path = file.getPathAsList();
+
+        // Iterate every file to ignore
+        for (GBFile toIgnore : filesToIgnore) {
+
+            // Get the path if the file to ignore
+            List<GBFile> pathToIgnore = toIgnore.getPathAsList();
+
+            boolean ignore = true;
+
+            for(int i = 0;i < pathToIgnore.size() && i < path.size(); i++) {
+
+                if (!pathToIgnore.get(i).equals(path.get(i))) {
+
+                    ignore = false;
+                    break;
+                }
+            }
+
+            if (ignore)
+                return true;
+        }
+        return false;
     }
 
     /**

@@ -1,4 +1,4 @@
-package it.simonedegiacomi.storage.Preview;
+package it.simonedegiacomi.storage.sender.preview;
 
 import com.google.common.io.Files;
 import it.simonedegiacomi.configuration.Config;
@@ -17,7 +17,7 @@ import java.util.concurrent.Phaser;
  * @author Degiacomi Simone
  * Created on 27/03/16.
  */
-public class CachedPreviewer implements Previewer {
+public class CachedPreviewer extends Previewer {
 
     /**
      * Path of the folder dedicated to the cache of the previews

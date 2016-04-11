@@ -1,6 +1,11 @@
 package it.simonedegiacomi.storage;
 
+import it.simonedegiacomi.storage.direct.HttpsStorageServer;
+import it.simonedegiacomi.storage.direct.UDPStorageServer;
+import it.simonedegiacomi.sync.Sync;
+
 public class StorageEnvironment {
+
     private StorageDB db;
 
     private Storage storage;
@@ -12,6 +17,8 @@ public class StorageEnvironment {
     private EventEmitter emitter;
 
     private InternalClient internalClient;
+
+    private Sync sync;
 
     public StorageDB getDB() {
         return db;
@@ -59,5 +66,13 @@ public class StorageEnvironment {
 
     public void setInternalClient(InternalClient internalClient) {
         this.internalClient = internalClient;
+    }
+
+    public Sync getSync() {
+        return sync;
+    }
+
+    public void setSync(Sync sync) {
+        this.sync = sync;
     }
 }

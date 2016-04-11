@@ -24,12 +24,12 @@ public class Config {
     /**
      * Java properties, used as container for the properties
      */
-    private Properties properties = new Properties();
+    private final Properties properties = new Properties();
 
     /**
      * Container for the url
      */
-    private URLBuilder urls = new URLBuilder();
+    private final URLBuilder urls = new URLBuilder();
 
     private Auth auth = new Auth();
 

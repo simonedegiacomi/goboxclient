@@ -9,10 +9,13 @@ import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.storage.EventEmitter;
-import it.simonedegiacomi.storage.InternalClient;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
+import it.simonedegiacomi.storage.StorageException;
+import it.simonedegiacomi.sync.FileSystemWatcher;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 
 /**
@@ -23,7 +26,7 @@ public class CopyOrCutHandler implements WSQueryHandler {
 
     private final StorageDB db;
 
-    private final InternalClient internalClient;
+    private final FileSystemWatcher watcher;
 
     private final EventEmitter emitter;
 
@@ -33,38 +36,93 @@ public class CopyOrCutHandler implements WSQueryHandler {
 
     public CopyOrCutHandler(StorageEnvironment env) {
         this.db = env.getDB();
-        this.internalClient = env.getInternalClient();
+        this.watcher = env.getSync().getFileSystemWatcher();
         this.emitter = env.getEmitter();
     }
 
     @WSQuery(name = "copyOrCutFile")
     @Override
     public JsonElement onQuery(JsonElement data) {
-        JsonObject response = new JsonObject();
-        JsonObject json = (JsonObject) data;
-        GBFile file = gson.fromJson(((JsonObject) data).get("file"), GBFile.class);
-        GBFile newFather = gson.fromJson(((JsonObject) data).get("destination"), GBFile.class);
-        GBFile newFile = new GBFile(file.getID(), newFather.getID(), file.getName(), file.isDirectory());
-        boolean cut = json.get("cut").getAsBoolean();
-        try {
-            // Copy the file to the new destination
-            Files.copy(file.toFile(PATH).toPath(), newFile.toFile(PATH).toPath());
-            internalClient.ignore(newFile);
-            SyncEvent creationEvent = db.insertFile(newFile);
-            emitter.emitEvent(creationEvent);
 
-            // If the event was an cut operation, delete the older file
-            if(cut) {
-                internalClient.ignore(file);
-                Files.delete(file.toFile(PATH).toPath());
-                SyncEvent delete = db.removeFile(file);
-                emitter.emitEvent(delete);
+        // Prepare the response
+        JsonObject response = new JsonObject();
+
+        // Cast the request
+        JsonObject json = data.getAsJsonObject();
+
+        // Get the cut flag from the request
+        boolean cut = json.get("cut").getAsBoolean();
+
+        try {
+
+            // Get the file from the database
+            GBFile file = db.getFileById(json.get("id").getAsLong());
+
+            // Get the new father from the database
+            GBFile newFather = db.getFileById(json.get("fatherId").getAsLong());
+
+            // Create the new file
+            GBFile newFile = new GBFile(file.getName(), newFather.getID(), file.isDirectory());
+
+            // Set the path of this environment
+            file.setPrefix(PATH);
+            newFather.setPrefix(PATH);
+            newFile.setPrefix(PATH);
+
+            while (newFile.toFile().exists()) {
+                newFile.setName(newFile.getName() + " - Copy");
             }
 
+            // Tell the client to ignore this event (the copy)
+            watcher.startIgnoring(newFile);
+
+            // Copy the file to the new destination
+            copyR(file.toFile(), newFile.toFile());
+
+            // Stop ignoring this file
+            watcher.stopIgnoring(newFile);
+
+            // Create a new Sync event
+            SyncEvent creationEvent = db.copyFile(file, newFile);
+
+            // Emit it
+            emitter.emitEvent(creationEvent);
+
+            if (cut) {
+
+                // Tell the file system watcher to ignore
+                watcher.startIgnoring(file);
+
+                RemoveFileHandler.deleteR(file.toFile());
+
+                watcher.stopIgnoring(file);
+
+                SyncEvent deletion = db.removeFile(newFile);
+                emitter.emitEvent(deletion);
+            }
+
+            // Complete the response with the result
             response.addProperty("success", true);
-        } catch (Exception ex) {
+        } catch (IOException ex) {
+            ex.printStackTrace();
+
+            // Something wrong
+            response.addProperty("success", false);
+        } catch (StorageException ex) {
+
+            ex.printStackTrace();
+
+            // Something wrong
             response.addProperty("success", false);
         }
         return response;
+    }
+
+    private static void copyR (File src, File dst) throws IOException {
+        Files.copy(src.toPath(), dst.toPath());
+        if (src.isDirectory()) {
+            for(File file : src.listFiles())
+                copyR(file, new File(dst.getPath() + '/' + file.getName()));
+        }
     }
 }

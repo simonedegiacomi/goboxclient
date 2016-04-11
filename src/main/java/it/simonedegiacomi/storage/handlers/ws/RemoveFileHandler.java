@@ -9,12 +9,12 @@ import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.storage.EventEmitter;
-import it.simonedegiacomi.storage.InternalClient;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
+import it.simonedegiacomi.sync.FileSystemWatcher;
 import org.apache.log4j.Logger;
 
-import java.nio.file.Files;
+import java.io.File;
 
 /**
  * @author Degiacomi Simone
@@ -32,12 +32,12 @@ public class RemoveFileHandler implements WSQueryHandler {
 
     private final EventEmitter emitter;
 
-    private final InternalClient internalClient;
+    private final FileSystemWatcher watcher;
 
     public RemoveFileHandler (StorageEnvironment env) {
         this.db = env.getDB();
         this.emitter = env.getEmitter();
-        this.internalClient = env.getInternalClient();
+        this.watcher = env.getSync().getFileSystemWatcher();
     }
 
     @WSQuery(name = "removeFile")
@@ -49,6 +49,7 @@ public class RemoveFileHandler implements WSQueryHandler {
 
         // Wrap the file to delete
         GBFile fileToRemove = gson.fromJson(data, GBFile.class);
+        fileToRemove.setPrefix(PATH);
 
         try {
 
@@ -57,10 +58,12 @@ public class RemoveFileHandler implements WSQueryHandler {
             db.findPath(fileToRemove);
 
             // Tell the internal client to ignore this event
-            internalClient.ignore(fileToRemove);
+            watcher.startIgnoring(fileToRemove);
 
             // Remove the file from the file system
-            Files.delete(fileToRemove.toFile(PATH).toPath());
+            deleteR(fileToRemove.toFile());
+
+            watcher.stopIgnoring(fileToRemove);
 
             // And then remove the file from the database
             SyncEvent event = db.removeFile(fileToRemove);
@@ -75,5 +78,15 @@ public class RemoveFileHandler implements WSQueryHandler {
             res.addProperty("success", false);
         }
         return res;
+    }
+
+    public static void deleteR (File fileToRemove) {
+        if(fileToRemove.isDirectory()) {
+            for (File file : fileToRemove.listFiles())
+                deleteR(file);
+        }
+
+        // Even if it's a folder delete it, because only now is empty
+        fileToRemove.delete();
     }
 }

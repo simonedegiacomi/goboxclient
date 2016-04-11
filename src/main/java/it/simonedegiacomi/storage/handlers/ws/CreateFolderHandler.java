@@ -9,9 +9,9 @@ import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.storage.EventEmitter;
-import it.simonedegiacomi.storage.InternalClient;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
+import it.simonedegiacomi.sync.FileSystemWatcher;
 import org.apache.log4j.Logger;
 
 import java.nio.file.Files;
@@ -30,43 +30,48 @@ public class CreateFolderHandler implements WSQueryHandler {
 
     private final EventEmitter emitter;
 
-    private final InternalClient internalClient;
+    private final FileSystemWatcher watcher;
 
     private final String PATH = Config.getInstance().getProperty("path");
 
     private final Gson gson = new Gson();
 
     public CreateFolderHandler (StorageEnvironment env) {
+
         this.db = env.getDB();
         this.emitter = env.getEmitter();
-        this.internalClient = env.getInternalClient();
+        this.watcher = env.getSync().getFileSystemWatcher();
     }
 
     @WSQuery(name = "createFolder")
     @Override
     public JsonElement onQuery(JsonElement data) {
         log.info("CreateFolder query");
+
         // Wrap the new directory
         GBFile newFolder = gson.fromJson(data, GBFile.class);
+        newFolder.setPrefix(PATH);
 
         // Prepare the response
         JsonObject response = new JsonObject();
         try {
             // Find the right path of the new folder
-            if(newFolder.getPathAsList() == null)
-                db.findPath(newFolder);
+            db.findPath(newFolder);
 
             // Check if another file with the same name already exists
-            if(Files.exists(newFolder.toFile(PATH).toPath())) {
+            if(Files.exists(newFolder.toFile().toPath())) {
                 response.addProperty("created", false);
                 return response;
             }
 
             // Tell the internal client ot ignore this event
-            internalClient.ignore(newFolder);
+            watcher.startIgnoring(newFolder);
 
             // Create the real file in the FS
-            Files.createDirectory(newFolder.toFile(PATH).toPath());
+            Files.createDirectory(newFolder.toFile().toPath());
+
+            // Stop ignoring
+            watcher.stopIgnoring(newFolder);
 
             // Insert the file and get the event
             SyncEvent event = db.insertFile(newFolder);
@@ -81,6 +86,7 @@ public class CreateFolderHandler implements WSQueryHandler {
             // The notification will contain the new file information
             emitter.emitEvent(event);
         } catch (Exception ex) {
+
             ex.printStackTrace();
             response.addProperty("created", false);
         }

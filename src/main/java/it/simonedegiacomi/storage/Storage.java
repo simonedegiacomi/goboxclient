@@ -10,6 +10,8 @@ import it.simonedegiacomi.goboxapi.myws.MyWSClient;
 import it.simonedegiacomi.goboxapi.myws.WSEventListener;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import it.simonedegiacomi.storage.direct.HttpsStorageServer;
+import it.simonedegiacomi.storage.direct.UDPStorageServer;
 import it.simonedegiacomi.storage.handlers.ws.*;
 import org.apache.log4j.Logger;
 
@@ -36,30 +38,25 @@ public class Storage {
     /**
      * Reference to the configuration
      */
-    private final Config config = Config.getInstance();
+    private final static Config config = Config.getInstance();
+
+    /**
+     * The environment is a singleton class that contains the object used by the storage
+     */
+    private final StorageEnvironment env = new StorageEnvironment();
 
     /**
      * URLBuilder is used to get the appropriate
      * url
      */
-    private static URLBuilder urls;
+    private final static URLBuilder urls = config.getUrls();
 
     /**
      * WebSocket communication with the main server
      */
     private MyWSClient mainServer;
 
-    private final StorageEnvironment env = new StorageEnvironment();
-
     private DisconnectedListener disconnectedListener;
-
-    /**
-     * Initialize setting the urls to use
-     * @param builder URL builder
-     */
-    public static void setUrls (URLBuilder builder) {
-        urls = builder;
-    }
 
     /**
      * Create a new storage given the Auth object for the appropriate account.
@@ -72,14 +69,17 @@ public class Storage {
         env.setDB(new StorageDB(DEFAULT_DB_LOCATION));
 
         try {
+
             // Create the web socket
             mainServer = new MyWSClient(urls.getURI("socketStorage"));
         } catch (IOException ex) {
+
             throw new StorageException("Cannot connect to the main server");
         }
 
         // Set the listener for the error event
         mainServer.onEvent("error", new WSEventListener() {
+
             @Override
             public void onEvent(JsonElement data) {
                 disconnectedListener.onDisconnected();
@@ -93,49 +93,67 @@ public class Storage {
         env.setEmitter(new EventEmitter(mainServer));
 
         try {
+
             // Create the local UDP server
             env.setUdpServer(new UDPStorageServer(UDPStorageServer.DEFAULT_PORT));
         } catch (UnknownHostException ex) {
+
             log.warn(ex.toString());
         } catch (IOException ex) {
+
             log.warn(ex.toString());
         }
 
         try {
+
             // Create the http(s) storage server that is used for direct transfers
+            // Get the port from the config
             int port = Integer.parseInt(config.getProperty("directConnectionPort"));
+
+            // Create the inet address (the broadcast
             InetSocketAddress address = new InetSocketAddress("0.0.0.0", port);
+
+            // Set the http server in the environment
             env.setHttpsServer(new HttpsStorageServer(address, env));
         } catch (IOException ex) {
+
             log.warn(ex.toString());
         }
 
+        // Create a new internal client and set it in the environment
         env.setInternalClient(new InternalClient(env));
 
         // Set all the others events and queries
         assignEvent();
     }
 
+    /**
+     * Start listening and serving.
+     * @throws StorageException
+     */
     public void startStoraging () throws StorageException {
         try {
+
             // Open the connection and start to listen
             mainServer.connect();
         } catch (WebSocketException ex) {
+
             throw new StorageException("Cannot connect to main server");
         }
 
         // Start the UDP server
         env.getUdpServer().start();
 
+        // Forward the port for the http server
+        env.getHttpsServer().forwardPort();
+
         // Start the local http(s) server
-        //httpStorage.forwardPort();
         env.getHttpsServer().serve();
     }
 
     /**
-     * Assign the events listener for the incoming events
-     * and incoming query from the main server and the other
-     * clients trough handlers sockets.
+     * Assign the events listener for the incoming events and incoming query from the main
+     * server and the other clients trough handlers sockets.
      */
     private void assignEvent () {
 
@@ -146,10 +164,10 @@ public class Storage {
         mainServer.addQueryHandler(new CreateFolderHandler(env));
 
         // Handler that send a file to a client
-        mainServer.addEventHandler(new StorageToClientHandler(env));
+        mainServer.addQueryHandler(new StorageToClientHandler(env));
 
         // Handler that receive the incoming file from a client
-        mainServer.addEventHandler(new ClientToStorageHandler(env));
+        mainServer.addQueryHandler(new ClientToStorageHandler(env));
 
         // Handler that remove files
         mainServer.addQueryHandler(new RemoveFileHandler(env));
@@ -196,12 +214,29 @@ public class Storage {
         this.disconnectedListener = listener;
     }
 
+    /**
+     * Stop the storage
+     */
     public void shutdown () {
         try {
+            // Stop the udp server
             env.getUdpServer().shutdown();
         } catch (InterruptedException ex) {
             log.warn(ex.toString());
         }
+
+        // Stop the https server
         env.getHttpsServer().shutdown();
+
+        // Disconnect from the main server
+        //mainServer.disconnect();
+    }
+
+    /**
+     * Get the storage environment
+     * @return Storage Environment
+     */
+    public StorageEnvironment getEnvironment () {
+        return env;
     }
 }

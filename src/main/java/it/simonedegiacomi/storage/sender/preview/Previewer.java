@@ -1,4 +1,4 @@
-package it.simonedegiacomi.storage.Preview;
+package it.simonedegiacomi.storage.sender.preview;
 
 import it.simonedegiacomi.goboxapi.GBFile;
 
@@ -9,7 +9,7 @@ import java.io.OutputStream;
  * @author Degiacomi Simone
  * Created on 27/03/16.
  */
-public interface Previewer {
+public abstract class Previewer {
 
     /**
      * This method should return an boolean that represents the ability to generate
@@ -17,7 +17,9 @@ public interface Previewer {
      * @param file
      * @return ability to generate the associated preview
      */
-    boolean canHandle (GBFile file);
+    public boolean canHandle (GBFile file) {
+        return true;
+    }
 
     /**
      * This method should return the kind of the preview that will generate if the method
@@ -25,7 +27,7 @@ public interface Previewer {
      * @param file
      * @return Kind of preview that will be generated if the method getPreview is called
      */
-    String getPreviewKind (GBFile file);
+    public abstract String getPreviewKind (GBFile file);
 
     /**
      * This method should generate the preview and write in the specified output stream
@@ -33,5 +35,5 @@ public interface Previewer {
      * @param out Output stream to which write the generated preview
      * @throws IOException
      */
-    void getPreview (GBFile file, OutputStream out) throws IOException;
+    public abstract void getPreview (GBFile file, OutputStream out) throws IOException;
 }

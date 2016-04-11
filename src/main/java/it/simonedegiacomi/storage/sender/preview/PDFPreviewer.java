@@ -1,7 +1,7 @@
-package it.simonedegiacomi.storage.Preview;
+package it.simonedegiacomi.storage.sender.preview;
 
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.storage.Preview.annotations.PreviewerKind;
+import it.simonedegiacomi.storage.sender.preview.annotations.PreviewerKind;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
 
@@ -15,14 +15,9 @@ import java.io.OutputStream;
  * @author Degiacomi Simone
  * Created on 27/03/16.
  */
-public class PDFPreviewer implements Previewer {
+public class PDFPreviewer extends Previewer {
 
     private static final String DEFAULT_PREVIEW_KIND = "png";
-
-    @Override
-    public boolean canHandle(GBFile file) {
-        return file.getMime().equals("application/pdf");
-    }
 
     @Override
     public String getPreviewKind(GBFile file) {

@@ -113,7 +113,6 @@ public class StorageDB {
         if(fileTable.queryForId(GBFile.ROOT_ID) == null) {
             GBFile root = new GBFile("root", true);
             root.setID(GBFile.ROOT_ID);
-            root.setFatherID(GBFile.UNKNOWN_FATHER); // I'm not sure about it...
             root.setCreationDate(System.currentTimeMillis());
             root.setLastUpdateDate(System.currentTimeMillis());
             fileTable.create(root);
@@ -202,9 +201,9 @@ public class StorageDB {
      *                inserting the data (the ID)
      * @throws Exception Exception throwed during the insertion
      */
-    public SyncEvent insertFile (GBFile newFile) throws Exception {
+    public SyncEvent insertFile (GBFile newFile) throws SQLException {
         // If the file doesn't know his father, let's find his
-        if (newFile.getFatherID() == GBFile.UNKNOWN_FATHER)
+        if (newFile.getFatherID() == GBFile.UNKNOWN_ID)
             findIDByPath(newFile);
 
         fileTable.create(newFile);
@@ -269,6 +268,10 @@ public class StorageDB {
 
             // Remove from the database
             fileTable.deleteById(fileToRemove.getID());
+
+            if(fileToRemove.isDirectory())
+                for(GBFile child : fileToRemove.getChildren())
+                        removeFile(child);
 
             // Create the sync event
             SyncEvent event = new SyncEvent(SyncEvent.EventKind.REMOVE_FILE, fileToRemove);
@@ -433,5 +436,75 @@ public class StorageDB {
             // TODO: catch the exception
             return new LinkedList<>();
         }
+    }
+
+    /**
+     * Return a list of the recent files in date order
+     * @param from Offset of the result list
+     * @param size Limit of result
+     * @return List of recent files
+     */
+    public List<GBFile> getRecentFiles (long from, long size) {
+
+        try {
+
+            // Query builder event table
+            QueryBuilder<SyncEvent, Long> eventQuery = eventTable.queryBuilder();
+
+            // Query builder file table
+            QueryBuilder<GBFile, Long> fileQuery = fileTable.queryBuilder();
+
+            // Make the query
+            return fileQuery.join(eventQuery)
+                    .having("kind NOT 'REMOVE_FILE'")
+                    .orderBy("date", false)
+                    .offset(from)
+                    .limit(size)
+                    .query();
+        } catch (SQLException ex) {
+
+            return new LinkedList<>();
+        }
+    }
+
+    /**
+     * Return a list with the trashed files in alphabetic order
+     * @param from Offset of the list
+     * @param size Size of the result list
+     * @return List with the trashed files
+     */
+    public List<GBFile> getTrashedFiles (long from, long size) {
+        try {
+
+            // Prepare the query
+            QueryBuilder<GBFile, Long> queryBuilder = fileTable.queryBuilder();
+
+            // Make the query
+            return queryBuilder
+                    .orderBy("name", false)
+                    .where().eq("trashed", false)
+                    .query();
+        } catch (SQLException ex) {
+
+            return new LinkedList<>();
+        }
+    }
+
+    public SyncEvent copyFile(GBFile src, GBFile dst) throws StorageException {
+
+        src = getFileById(src.getID());
+
+        SyncEvent event = null;
+
+        try {
+            event = insertFile(dst);
+        } catch (Exception ex) {
+
+        }
+        if(src.isDirectory())
+            for(GBFile child : src.getChildren())
+                copyFile(child, new GBFile(child.getName(), dst.getID(), true));
+
+        return event;
     }
 }

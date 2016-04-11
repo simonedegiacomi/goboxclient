@@ -45,6 +45,12 @@ public class Main {
 
     private static Speaker speaker;
 
+    private static Storage storage;
+
+    private static Sync sync;
+
+    private static Client client;
+
     public static void main(String[] args) {
 
         // Configure the logger
@@ -52,9 +58,22 @@ public class Main {
 
         // Check if this is the only instance
         SingleInstancer singler = new SingleInstancer();
-        // Close the program
+
+        // Otherwise close the program
         if(!singler.isSingle())
             error("GoBox already running");
+
+        // Set the shutdown action
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+
+            @Override
+            public void run () {
+                shutdown();
+            }
+        });
+
+        // Initialize controls
+        initializeControls();
 
         // When the config change
         config.addOnconfigChangeListener(new Config.OnConfigChangeListener() {
@@ -63,31 +82,43 @@ public class Main {
 
                 // Reload the proxy configuration
                 EasyProxy.manageProxy(config);
-                advice("New configuration loaded");
+                advice("Configuration reloaded");
             }
         });
 
-        // Load the resources and initialize the classes
         try {
+
+            // Load the resources and initialize the classes
             initializeEnvironment();
         } catch (IOException ex) {
+
             error("Can't load resources files");
         }
 
-        initializeControls();
-
         // If the user is not logged start the login wizard
-        if (config.getProperty("username") == null)
+        if (config.getProperty("username") == null) {
+
+            advice("No Authentication token found. Start login procedure");
+
+            // Start login
             startLogin();
-        else
+        } else {
+
+            // Login already done
             afterLogin();
+        }
     }
 
+    /**
+     * Initialize controls like the icon tray
+     */
     private static void initializeControls () {
+
         // If there is a graphic interface add the tray icon
         if(!GraphicsEnvironment.isHeadless()) {
             tray = new TrayController();
 
+            // Set the connection settings button
             tray.setSettingsButtonListener(new ActionListener() {
                 @Override
                 public void actionPerformed(ActionEvent e) {
@@ -95,7 +126,17 @@ public class Main {
                 }
             });
 
+            // Set the close action
+            tray.setOnCloseListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
 
+                    shutdown();
+                    System.exit(0);
+                }
+            });
+
+            // Show the icon in the tray
             tray.showTray();
         }
 
@@ -113,13 +154,13 @@ public class Main {
      * @throws IOException File not found or invalid
      */
     private static void initializeEnvironment () throws IOException {
+
         // Load the urls
         config.loadUrls();
 
         // Set the urls
         Auth.setUrlBuilder(config.getUrls());
         StandardClient.setUrlBuilder(config.getUrls());
-        Storage.setUrls(config.getUrls());
 
         // Load the other config
         config.load();
@@ -132,6 +173,8 @@ public class Main {
      * Start the login wizard
      */
     private static void startLogin() {
+
+        // Get and start the right login tool
         LoginTool.getLoginTool(new LoginTool.EventListener() {
             @Override
             public void onLoginComplete() {
@@ -146,38 +189,57 @@ public class Main {
     }
 
     /**
-     * After the login resync and start the client/storage
+     * After the login, resync and start the client/storage
      */
     private static void afterLogin() {
 
         // Check if the auth token is still valid
         Auth auth = config.getAuth();
+
         try {
+
+            // Try to authenticate
             advice("Authenticating...");
+
             if(!auth.check()) {
-                // If can't authenticate because the data is wrong, delete
+
+                error("Invalid authentication token", false);
+
+                // If can't authenticate because the data is wrong, delete the auth information
                 config.deleteAuth();
-                error("Invalid authentication token");
+
+                // And save the configuration
+                config.save();
+
+                // Restart the login procedure
+                startLogin();
+
+                return;
             }
+
+            // Save the configuration with the new token
             config.save();
         } catch (AuthException ex) {
-            // If there was an error just close the program
-            ex.printStackTrace();
-            error("Cannot authenticate");
+
+            // If there was an error with the connection retry later
+            disconnected();
+            return;
         } catch (IOException ex) {
+
             error("Cannot save config file");
         }
 
         // Start the right client
         switch (auth.getMode()) {
+
             case CLIENT:
+
                 startClientMode(auth);
                 break;
             case STORAGE:
+
                 startStorageMode(auth);
                 break;
-            //case MULTIPLE_STORAGE:
-            //    break;
         }
     }
 
@@ -186,55 +248,49 @@ public class Main {
      * @param auth Auth object to use to instantiate the client
      */
     private static void startClientMode (Auth auth) {
+
         advice("Connecting as client ...");
         try {
-            StandardClient client = new StandardClient(auth);
-            Sync sync = new Sync(client);
+
+            // Create the client
+            client = new StandardClient(auth);
+
+            // And the sync object
+            sync = new Sync(client);
+
+            // Set the speaket
             sync.setSpeaker(speaker);
-            client.onDisconnect(new StandardClient.DisconnectedListener() {
+
+            ((StandardClient) client).onDisconnect(new StandardClient.DisconnectedListener() {
                 @Override
                 public void onDisconnect() {
-                    try {
-                        client.shutdown();
-                        sync.shutdown();
-                    } catch (InterruptedException ex) {
-                        ex.printStackTrace();
-                    } catch (ClientException ex) {
-                        ex.printStackTrace();
-                    }
+
+                    // Call the shutdown method
+                    shutdown();
+
+                    // And retry later
                     disconnected();
                 }
             });
 
             // Connect the client to the server and the storage
-            client.connect();
+            ((StandardClient) client).connect();
 
+            // If there is the gui
             if (!GraphicsEnvironment.isHeadless()) {
+
+                // Update the tray icon
                 tray.setMode("Bridge");
-                tray.setOnCloseListener(new ActionListener() {
-                    @Override
-                    public void actionPerformed(ActionEvent e) {
-                        advice("Shutting down...");
-                        //sync.shutdown();
-                        try {
-                            client.shutdown();
-                        } catch (ClientException ex) {
-                            ex.printStackTrace();
-                        }
-                        System.exit(0);
-                    }
-                });
             }
 
             try {
-                // Switch to direct mode
-                client.switchMode(StandardClient.ConnectionMode.DIRECT_MODE);
 
-                if (!GraphicsEnvironment.isHeadless())
-                    tray.setMode("Bridge");
+                // Try to switch to direct mode
+                ((StandardClient) client).switchMode(StandardClient.ConnectionMode.DIRECT_MODE);
 
-            } catch (Exception ex) {
+            } catch (ClientException ex) {
 
+                logger.warn(ex);
             }
 
             // Start sync
@@ -243,12 +299,15 @@ public class Main {
             advice("Ready");
 
             if (!GraphicsEnvironment.isHeadless()) {
+
                 tray.setSyncCheckUsability(true);
             }
 
         } catch (ClientException ex) {
+
             disconnected();
         } catch (IOException ex) {
+
             disconnected();
         }
     }
@@ -257,13 +316,17 @@ public class Main {
      * Called when the client is disconnected
      */
     private static void disconnected () {
+
         advice("Connection Error");
+
         // wait some seconds...
         try {
+
             Thread.sleep(DEFAULT_RESTART_DELAY);
         } catch (InterruptedException ex) { }
 
         advice("New connection attempt");
+
         // Restart
         afterLogin();
     }
@@ -276,47 +339,56 @@ public class Main {
 
         advice("Connecting as storage...");
         try {
-            Storage storage = new Storage(auth);
-            Sync sync = new Sync(storage.getInternalClient());
+
+            // Create the storage
+            storage = new Storage(auth);
+
+            // Create the sync object
+            sync = new Sync(storage.getInternalClient());
+
+            // Set the sync object to the storage environment
+            storage.getEnvironment().setSync(sync);
+
+            // Add a listener for the storage disconnection
             storage.onDisconnected(new Storage.DisconnectedListener() {
                 @Override
                 public void onDisconnected() {
-                    //storage.shutdown();
-                    try {
-                        sync.shutdown();
-                    } catch (InterruptedException ex) {
-                        ex.printStackTrace();
-                    }
+
+                    shutdown();
+
+                    // Call the function that will try to reconnect soon
                     disconnected();
                 }
             });
 
-            // start event listener and http server
+            // Start event listener and http server
             storage.startStoraging();
 
+            // Sync the folders and files
             sync.resyncAndStart();
 
+            // If the Graphics Environment is available, add a tray icon
             if (!GraphicsEnvironment.isHeadless()) {
+
+                // configure the tray icon
                 tray.setSyncCheckUsability(false);
                 tray.setMode("Storage");
-
-                tray.setOnCloseListener(new ActionListener() {
-                    @Override
-                    public void actionPerformed(ActionEvent e) {
-                        advice("Shutting down...");
-                        //sync.shutdown();
-                        storage.shutdown();
-                        System.exit(0);
-                    }
-                });
-
             }
-        } catch (Exception ex) {
-            ex.printStackTrace();
+        } catch (StorageException e) {
+
+            logger.warn(e);
+            disconnected();
+        } catch (ClientException e) {
+
+            logger.warn(e);
+            disconnected();
+        } catch (IOException e) {
+
+            logger.warn(e);
             disconnected();
         }
-        advice("Ready");
 
+        advice("Ready");
     }
 
     /**
@@ -325,10 +397,15 @@ public class Main {
      * @param message Error message to show
      */
     private static void error (String message) {
+        error(message, true);
+    }
+
+    private static void error (String message, boolean close) {
         logger.fatal(message);
         if (!GraphicsEnvironment.isHeadless())
             JOptionPane.showMessageDialog(null, message, "Error", JOptionPane.ERROR_MESSAGE);
-        System.exit(-1);
+        if (close)
+            System.exit(-1);
     }
 
     /**
@@ -340,6 +417,28 @@ public class Main {
         if (tray != null) {
             // Show in the icon tray
             tray.setMessage(message);
+        }
+    }
+
+    /**
+     * Prepare the program to exit correctly disconnection all the object
+     */
+    private static void shutdown () {
+
+        if(storage != null) {
+            storage.shutdown();
+        }
+
+        if(sync != null) {
+            try {
+                sync.shutdown();
+            } catch (Exception ex) { }
+        }
+
+        if(client != null) {
+            try {
+                client.shutdown();
+            } catch (Exception ex) { }
         }
     }
 }

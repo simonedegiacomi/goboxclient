@@ -1,7 +1,7 @@
-package it.simonedegiacomi.storage.Preview;
+package it.simonedegiacomi.storage.sender.preview;
 
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.storage.Preview.annotations.PreviewerKind;
+import it.simonedegiacomi.storage.sender.preview.annotations.PreviewerKind;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -16,7 +16,7 @@ import java.util.Map;
  * @author Degiacomi Simone
  * Created on 27/03/16.
  */
-public class SimplePreviewer implements Previewer {
+public class SimplePreviewer extends Previewer {
 
     /**
      * Map that contains the know implementations

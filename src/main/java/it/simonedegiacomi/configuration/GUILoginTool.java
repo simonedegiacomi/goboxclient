@@ -50,7 +50,7 @@ public class GUILoginTool extends LoginTool {
         // Try to login
         Auth auth = config.getAuth();
         auth.setUsername(username.getText());
-        auth.setMode(storageCheck.isSelected() ? Auth.Modality.STORAGE : Auth.Modality.STORAGE);
+        auth.setMode(storageCheck.isSelected() ? Auth.Modality.STORAGE : Auth.Modality.CLIENT);
         try {
             auth.login(new String(pass.getPassword()));
             config.setAuth(auth);

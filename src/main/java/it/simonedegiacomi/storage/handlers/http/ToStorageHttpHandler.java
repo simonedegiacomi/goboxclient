@@ -20,11 +20,17 @@ public class ToStorageHttpHandler implements HttpHandler {
 
     @Override
     public void handle(HttpExchange httpExchange) throws IOException {
+
+        // Assert that the method is 'POST'
         if(!httpExchange.getRequestMethod().equals("POST")) {
+
+            // Client's fault
             httpExchange.sendResponseHeaders(400, 0);
             httpExchange.close();
             return;
         }
+
+
 
     }
 }

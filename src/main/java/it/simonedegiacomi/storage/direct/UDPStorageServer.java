@@ -1,4 +1,4 @@
-package it.simonedegiacomi.storage;
+package it.simonedegiacomi.storage.direct;
 
 import java.io.IOException;
 import java.net.*;

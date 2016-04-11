@@ -48,6 +48,8 @@
     </build>
 
     <repositories>
+
+        <!-- Repository used to import library from github -->
         <repository>
             <id>jitpack.io</id>
             <url>https://jitpack.io</url>
@@ -78,12 +80,6 @@
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
             <version>1.2.17</version>
-        </dependency>
-
-        <dependency>
-            <groupId>com.neovisionaries</groupId>
-            <artifactId>nv-websocket-client</artifactId>
-            <version>1.23</version>
         </dependency>
 
         <dependency>
@@ -119,9 +115,20 @@
         <dependency>
             <groupId>com.github.simonedegiacomi</groupId>
             <artifactId>goboxjavaapi</artifactId>
-            <version>master-1c6c198d49-1</version>
+            <version>c90c6094d4</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.mpatric</groupId>
+            <artifactId>mp3agic</artifactId>
+            <version>0.8.3</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>2.0.0</version>
         </dependency>
 
     </dependencies>
-    
 </project>

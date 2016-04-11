@@ -28,6 +28,13 @@ public class Work {
      */
     private final GBFile file;
 
+    private static FileSystemWatcher watcher;
+
+    public static void setWatcher (FileSystemWatcher watcher) {
+
+        Work.watcher = watcher;
+    }
+
     /**
      * Create a new work from a SyncEvent
      * @param event SyncEvent from which create a new work
@@ -55,6 +62,10 @@ public class Work {
         return new Runnable() {
             @Override
             public void run() {
+
+                // Tell the watcher to ignore the event
+                watcher.startIgnoring(file);
+
                 try {
                     switch (kind) {
                         case DOWNLOAD:
@@ -74,6 +85,8 @@ public class Work {
                     // TODO: handle this
                     ex.printStackTrace();
                 }
+
+                watcher.stopIgnoring(file);
             }
         };
     }

@@ -2,9 +2,7 @@ package it.simonedegiacomi.goboxclient;
 
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
-import org.apache.log4j.Logger;
 
-import javax.accessibility.AccessibleRelation;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -18,7 +16,7 @@ import java.net.URL;
 public class TrayController {
 
     // Default icon file name
-    private static final String ICON_NAME = "/it/simonedegiacomi/resources/icon.png";
+    private static final String ICON_NAME = "/icon.png";
 
     private final static URLBuilder urls = Config.getInstance().getUrls();
 

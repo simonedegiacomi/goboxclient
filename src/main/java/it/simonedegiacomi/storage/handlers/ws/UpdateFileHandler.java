@@ -27,9 +27,16 @@ public class UpdateFileHandler implements WSQueryHandler{
     @WSQuery(name = "updateFile")
     @Override
     public JsonElement onQuery(JsonElement data) {
+        JsonObject request = data.getAsJsonObject();
         JsonObject response = new JsonObject();
-        GBFile file = gson.fromJson(data, GBFile.class);
+        GBFile file = gson.fromJson(request.get("file"), GBFile.class);
+        boolean ovverrideFile = request.get("overrideFile").getAsBoolean();
         try {
+
+            if(ovverrideFile) {
+                // Richiamare la procedura di ricezione del file
+            }
+
             SyncEvent update = db.updateFile(file);
 
             response.addProperty("success", false);

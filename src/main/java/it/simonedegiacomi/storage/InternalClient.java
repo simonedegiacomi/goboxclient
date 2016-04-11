@@ -8,9 +8,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -37,8 +35,6 @@ public class InternalClient extends Client {
     private final Storage storage;
 
     private final EventEmitter emitter;
-
-    private final Set<String> filesToIgnore = new HashSet<>();
 
     public InternalClient (StorageEnvironment env) {
         this.db = env.getDB();
@@ -72,46 +68,42 @@ public class InternalClient extends Client {
 
     @Override
     public void getFile(GBFile file) throws ClientException {
-        if(shouldIgnore(file))
-            return;
+
     }
 
     @Override
     public void getFile(GBFile file, OutputStream dst) throws ClientException, IOException {
-        if(shouldIgnore(file))
-            return;
+
         InputStream fileStream = new FileInputStream(file.toFile());
         ByteStreams.copy(fileStream, dst);
     }
 
     @Override
     public void createDirectory(GBFile newDir) throws ClientException {
-        this.uploadFile(newDir);
+        // The internal client never crete a new folder
     }
 
     @Override
     public void uploadFile(GBFile file, InputStream stream) {
-        if(shouldIgnore(file))
-            return;
+        // The file is already here
+        uploadFile(file);
     }
 
     @Override
     public void uploadFile(GBFile file) {
-        if(shouldIgnore(file))
-            return;
         try {
+
             // Just insert the file into the database, the file is already here
             SyncEvent event = db.insertFile(file);
             emitter.emitEvent(event);
         } catch (Exception ex) {
+
             log.log(Level.WARNING, ex.toString(), ex);
         }
     }
 
     @Override
     public void removeFile(GBFile file) {
-        if(shouldIgnore(file))
-            return;
         try {
             // Just remove the file, it's already gone...
             SyncEvent event = db.removeFile(file);
@@ -123,8 +115,6 @@ public class InternalClient extends Client {
 
     @Override
     public void updateFile(GBFile file, InputStream file2) {
-        if(shouldIgnore(file))
-            return;
         try {
             // The file is already updated...
             SyncEvent event = db.updateFile(file);
@@ -164,11 +154,13 @@ public class InternalClient extends Client {
         return null;
     }
 
-    public void ignore(GBFile file) {
-        filesToIgnore.add(file.getPathAsString());
+    @Override
+    public List<GBFile> getRecentFiles(long l, long l1) throws ClientException {
+        return null;
     }
 
-    private boolean shouldIgnore (GBFile file) {
-        return filesToIgnore.remove(file.getPathAsString());
+    @Override
+    public List<GBFile> getTrashedFiles(long l, long l1) throws ClientException {
+        return null;
     }
 }

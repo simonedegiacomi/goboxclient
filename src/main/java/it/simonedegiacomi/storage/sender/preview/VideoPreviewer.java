@@ -1,14 +1,11 @@
-package it.simonedegiacomi.storage.Preview;
+package it.simonedegiacomi.storage.sender.preview;
 
 import com.madgag.gif.fmsware.AnimatedGifEncoder;
-import com.sun.org.apache.regexp.internal.RE;
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.storage.Preview.annotations.PreviewerKind;
-import org.bytedeco.javacpp.opencv_core;
+import it.simonedegiacomi.storage.sender.preview.annotations.PreviewerKind;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.FrameGrabber;
 import org.bytedeco.javacv.Java2DFrameConverter;
-import org.bytedeco.javacv.OpenCVFrameConverter;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -18,7 +15,7 @@ import java.io.OutputStream;
  * @author Degiacomi Simone
  * Created on 27/03/16.
  */
-public class VideoPreviewer implements Previewer {
+public class VideoPreviewer extends Previewer {
 
     private static final int FRAME_LIMIT = 30;
 
@@ -27,12 +24,6 @@ public class VideoPreviewer implements Previewer {
     private static final int GIF_DELAY = 1000;
 
     private static final double RESIZE_RATIO = 0.3;
-
-
-    @Override
-    public boolean canHandle(GBFile file) {
-        return true;
-    }
 
     @Override
     public String getPreviewKind(GBFile file) {

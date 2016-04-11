@@ -1,7 +1,7 @@
-package it.simonedegiacomi.storage.Preview;
+package it.simonedegiacomi.storage.sender.preview;
 
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.storage.Preview.annotations.PreviewerKind;
+import it.simonedegiacomi.storage.sender.preview.annotations.PreviewerKind;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -13,7 +13,7 @@ import java.io.OutputStream;
  * @author Degiacomi Simone
  * Created on 27/03/16.
  */
-public class ImagePreviewer implements Previewer {
+public class ImagePreviewer extends Previewer {
 
     /**
      * Default kind of image previews
@@ -21,11 +21,6 @@ public class ImagePreviewer implements Previewer {
     private static final String DEFAULT_PREVIEW_KIND = "png";
 
     private static final double RESIZE_RATIO = 0.1;
-
-    @Override
-    public boolean canHandle(GBFile file) {
-        return file.getMime().startsWith("image");
-    }
 
     @Override
     public String getPreviewKind(GBFile file) {

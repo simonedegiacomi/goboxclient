@@ -1,4 +1,4 @@
-package it.simonedegiacomi.storage.Preview.annotations;
+package it.simonedegiacomi.storage.sender.preview.annotations;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

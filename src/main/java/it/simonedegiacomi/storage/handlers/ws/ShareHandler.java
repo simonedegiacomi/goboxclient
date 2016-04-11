@@ -37,22 +37,44 @@ public class ShareHandler implements WSQueryHandler {
     @WSQuery(name = "share")
     @Override
     public JsonElement onQuery(JsonElement data) {
+
+        // Prepare the response
         JsonObject response = new JsonObject();
+
+        // Cast the request
         JsonObject request = data.getAsJsonObject();
+
+        // Check if the file is to share or unshare
         boolean share = request.has("share") ? request.get("share").getAsBoolean() : false;
-        GBFile file = gson.fromJson(request.get("file"), GBFile.class);
+
         try {
+
+            // Wrap the file from the request
+            GBFile file = db.getFileById(request.get("id").getAsLong());
+
+            // Change the access of this file
             db.changeAccess(file, share);
+
+            // Complete the response
             response.addProperty("success", true);
+
+            // Generate the link to the file
             if(share) {
+
+                // Add the link to the response
                 response.addProperty("link", generateLink(file));
                 log.info("New file shared: " + file.getName());
             } else {
+
                 log.info("Unshared file: " + file.getName());
             }
         } catch (StorageException ex) {
+
+            ex.printStackTrace();
+
             response.addProperty("success", false);
         }
+
         return response;
     }
 
