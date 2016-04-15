@@ -96,6 +96,7 @@ public class StorageToClientHandler implements WSQueryHandler {
 
                 // Unauthorized download
                 response.addProperty("error", "unauthorized");
+                response.addProperty("httpCode", 401);
                 response.addProperty("success", false);
                 return response;
             }
@@ -151,6 +152,9 @@ public class StorageToClientHandler implements WSQueryHandler {
 
             // Complete the response
             response.addProperty("success", responseCode == 200);
+
+            // Register the open action
+            db.registerView(dbFile);
 
             log.info("File sent to the client");
         } catch (StorageException ex) {

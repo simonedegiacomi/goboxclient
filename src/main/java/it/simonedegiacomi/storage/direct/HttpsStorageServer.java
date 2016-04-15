@@ -9,12 +9,9 @@ import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
-import it.simonedegiacomi.storage.handlers.http.AuthMiddleware;
-import it.simonedegiacomi.storage.handlers.http.DirectLoginHandler;
-import it.simonedegiacomi.storage.handlers.http.FromStorageHttpHandler;
-import it.simonedegiacomi.storage.handlers.http.ToStorageHttpHandler;
+import it.simonedegiacomi.storage.handlers.http.*;
 import it.simonedegiacomi.storage.utils.HttpsCertificateGenerator;
-import it.simonedegiacomi.storage.utils.PublicIPFinder;
+import it.simonedegiacomi.storage.utils.IPFinder;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
@@ -83,6 +80,9 @@ public class HttpsStorageServer {
 
     private void registerHandlers () {
 
+        // Handler for test
+        server.createContext("/test", new TestHandler());
+
         // Handler used to generate the token
         DirectLoginHandler directLoginHandler = new DirectLoginHandler(temporaryTokens);
         server.createContext("/directLogin", directLoginHandler);
@@ -107,6 +107,7 @@ public class HttpsStorageServer {
             @WSQuery(name = "directLogin")
             @Override
             public JsonElement onQuery(JsonElement data) {
+
                 // Prepare the response
                 JsonObject response = new JsonObject();
 
@@ -116,9 +117,15 @@ public class HttpsStorageServer {
                 response.addProperty("temporaryToken", temporaryToken);
 
                 try {
+
                     // Send to the client the public IP
-                    response.addProperty("publicIP", PublicIPFinder.find());
+                    response.addProperty("publicIP", IPFinder.findPublic());
+
+                    // And also the probable local ip
+                    response.addProperty("localIP", IPFinder.findProbableLocal());
                 } catch (IOException ex) {
+
+                    response.addProperty("error", true);
                     log.warn(ex.toString());
                 }
 

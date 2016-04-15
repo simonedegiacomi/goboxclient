@@ -12,6 +12,7 @@ import it.simonedegiacomi.storage.EventEmitter;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
+import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.FileSystemWatcher;
 
 import java.io.File;
@@ -55,11 +56,17 @@ public class CopyOrCutHandler implements WSQueryHandler {
 
         try {
 
-            // Get the file from the database
-            GBFile file = db.getFileById(json.get("id").getAsLong());
+            // Instance the file from the json
+            GBFile file = gson.fromJson(json.get("file"), GBFile.class);
 
-            // Get the new father from the database
-            GBFile newFather = db.getFileById(json.get("fatherId").getAsLong());
+            // Fill with the correct information
+            db.fillFile(file);
+
+            // Instance the new father from the json
+            GBFile newFather = gson.fromJson(json.get("father"), GBFile.class);
+
+            // Fill with the information
+            db.fillFile(newFather);
 
             // Create the new file
             GBFile newFile = new GBFile(file.getName(), newFather.getID(), file.isDirectory());
@@ -69,18 +76,19 @@ public class CopyOrCutHandler implements WSQueryHandler {
             newFather.setPrefix(PATH);
             newFile.setPrefix(PATH);
 
+            // Assert that the name is unique
             while (newFile.toFile().exists()) {
                 newFile.setName(newFile.getName() + " - Copy");
             }
 
             // Tell the client to ignore this event (the copy)
-            watcher.startIgnoring(newFile);
+            watcher.startIgnoring(newFile.toFile());
 
             // Copy the file to the new destination
-            copyR(file.toFile(), newFile.toFile());
+            MyFileUtils.copyR(file.toFile(), newFile.toFile());
 
             // Stop ignoring this file
-            watcher.stopIgnoring(newFile);
+            watcher.stopIgnoring(newFile.toFile());
 
             // Create a new Sync event
             SyncEvent creationEvent = db.copyFile(file, newFile);
@@ -91,11 +99,11 @@ public class CopyOrCutHandler implements WSQueryHandler {
             if (cut) {
 
                 // Tell the file system watcher to ignore
-                watcher.startIgnoring(file);
+                watcher.startIgnoring(file.toFile());
 
-                RemoveFileHandler.deleteR(file.toFile());
+                MyFileUtils.deleteR(file.toFile());
 
-                watcher.stopIgnoring(file);
+                watcher.stopIgnoring(file.toFile());
 
                 SyncEvent deletion = db.removeFile(newFile);
                 emitter.emitEvent(deletion);
@@ -116,13 +124,5 @@ public class CopyOrCutHandler implements WSQueryHandler {
             response.addProperty("success", false);
         }
         return response;
-    }
-
-    private static void copyR (File src, File dst) throws IOException {
-        Files.copy(src.toPath(), dst.toPath());
-        if (src.isDirectory()) {
-            for(File file : src.listFiles())
-                copyR(file, new File(dst.getPath() + '/' + file.getName()));
-        }
     }
 }

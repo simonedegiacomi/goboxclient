@@ -10,6 +10,9 @@ import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 
+import java.io.File;
+import java.nio.file.Files;
+
 /**
  * @author Degiacomi Simone
  * Created on 08/02/16.
@@ -24,23 +27,39 @@ public class UpdateFileHandler implements WSQueryHandler{
         this.db = env.getDB();
     }
 
-    @WSQuery(name = "updateFile")
+    @WSQuery(name = "rename")
     @Override
     public JsonElement onQuery(JsonElement data) {
+
+        // Cast the request
         JsonObject request = data.getAsJsonObject();
+
+        // Prepare the response
         JsonObject response = new JsonObject();
+
+        // Get the file from the request
         GBFile file = gson.fromJson(request.get("file"), GBFile.class);
-        boolean ovverrideFile = request.get("overrideFile").getAsBoolean();
+
+        // Get the new name
+        String newName = request.get("newName").getAsString();
+
         try {
 
-            if(ovverrideFile) {
-                // Richiamare la procedura di ricezione del file
-            }
+            // Fill with the info
+            db.fillFile(file);
 
+            // Change the name on the filesystem
+            Files.move(file.toFile().toPath(), new File(file.getPathAsString() + "/" + newName).toPath());
+
+            // Change the name in the database
+            file.setName(newName);
             SyncEvent update = db.updateFile(file);
 
+            // complete the response
             response.addProperty("success", false);
+
         } catch (Exception ex) {
+
             response.addProperty("success", false);
         }
         return response;

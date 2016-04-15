@@ -14,6 +14,7 @@ public class HttpUrlConnectionDestination implements SenderDestination {
 
     public HttpUrlConnectionDestination(HttpURLConnection conn) {
 
+        this.conn = conn;
     }
 
     @Override

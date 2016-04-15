@@ -97,7 +97,7 @@ public class TrayController {
     }
 
     /**
-     * show the icon in the system icon tray
+     * untrash the icon in the system icon tray
      */
     public void showTray() {
         // Load the icon for the tray
@@ -124,7 +124,7 @@ public class TrayController {
     /**
      * Change the 'state' label. Useful to communicate silent messages
      * to the user.
-     * @param message Message to show
+     * @param message Message to untrash
      */
     public void setMessage(String message) {
         SwingUtilities.invokeLater(new Runnable() {

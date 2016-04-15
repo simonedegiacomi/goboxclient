@@ -60,8 +60,8 @@ public class Main {
         SingleInstancer singler = new SingleInstancer();
 
         // Otherwise close the program
-        if(!singler.isSingle())
-            error("GoBox already running");
+        //if(!singler.isSingle())
+        //    error("GoBox already running");
 
         // Set the shutdown action
         Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -258,7 +258,7 @@ public class Main {
             // And the sync object
             sync = new Sync(client);
 
-            // Set the speaket
+            // Set the speaker
             sync.setSpeaker(speaker);
 
             ((StandardClient) client).onDisconnect(new StandardClient.DisconnectedListener() {
@@ -392,9 +392,9 @@ public class Main {
     }
 
     /**
-     * Print the error message in the console or show an error dialog. Then
+     * Print the error message in the console or untrash an error dialog. Then
      * exit the program
-     * @param message Error message to show
+     * @param message Error message to untrash
      */
     private static void error (String message) {
         error(message, true);
@@ -409,8 +409,8 @@ public class Main {
     }
 
     /**
-     * Print in the console or show in the tray icon the message
-     * @param message Message to show
+     * Print in the console or untrash in the tray icon the message
+     * @param message Message to untrash
      */
     private static void advice (String message) {
         logger.info(message);

@@ -2,6 +2,8 @@ package it.simonedegiacomi.sync;
 
 import it.simonedegiacomi.goboxapi.client.Client;
 
+import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -23,6 +25,11 @@ public class Worker {
     private final ExecutorService executor;
 
     /**
+     * List of failed works
+     */
+    private final List<Work> failedWorks = new LinkedList<>();
+
+    /**
      * Client used by the works
      */
     private final Client client;
@@ -37,7 +44,21 @@ public class Worker {
      * @param newWork Work to add
      */
     public void addWork(Work newWork) {
-        executor.submit(newWork.getWork(client));
+        executor.submit(new Runnable() {
+            @Override
+            public void run() {
+
+                // Run the work
+                newWork.getWork(client).run();
+
+                // Get the state
+                Work.WorkState state = newWork.getState();
+
+                // If it's failed, add to the list
+                if (state == Work.WorkState.FAILED)
+                    failedWorks.add(newWork);
+            }
+        });
     }
 
     /**

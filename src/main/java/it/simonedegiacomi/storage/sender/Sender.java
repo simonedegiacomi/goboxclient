@@ -98,7 +98,7 @@ public class Sender {
         File file = gbFile.toFile();
 
         // Check if the file exist
-        if (file.exists())
+        if (!file.exists())
             throw new InvalidParameterException("The file doesn't exist");
 
         // Check if the file is a directory

@@ -1,16 +1,12 @@
 package it.simonedegiacomi.sync;
 
 import com.sun.nio.file.SensitivityWatchEventModifier;
-import it.simonedegiacomi.goboxapi.GBFile;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -45,9 +41,9 @@ public class FileSystemWatcher extends Thread {
     private HashMap<String, Listener> listeners = new HashMap<>();
 
     /**
-     * Set of files to ignore
+     * Map of files to ignore
      */
-    private final Set<GBFile> filesToIgnore = new HashSet<>();
+    private final Map<String, Long> filesToIgnore = new HashMap<>();
 
     /**
      * Rot to watch
@@ -65,6 +61,7 @@ public class FileSystemWatcher extends Thread {
      * @throws IOException thrown watching this path
      */
     public FileSystemWatcher (Path path) throws IOException {
+
         pathToWatch = path;
         watchService = FileSystems.getDefault().newWatchService();
     }
@@ -79,6 +76,7 @@ public class FileSystemWatcher extends Thread {
          * Walk trough the folder inside this folder
          */
         Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
+
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
 
@@ -100,7 +98,7 @@ public class FileSystemWatcher extends Thread {
      * @param eventName Kind of event
      * @param listener Listener of this event
      */
-    public void assignListener (String eventName, Listener listener) {
+    public void addListener(String eventName, Listener listener) {
         listeners.put(eventName, listener);
     }
 
@@ -111,12 +109,14 @@ public class FileSystemWatcher extends Thread {
     public void run () {
         // Register the already existing folder
         try {
+
             registerFolder(pathToWatch);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
         while (shutdownLatch.getCount() > 1) {
             try {
+
                 WatchKey watchKey = watchService.poll(500, TimeUnit.MICROSECONDS);
                 if(watchKey == null)
                     continue;
@@ -127,8 +127,6 @@ public class FileSystemWatcher extends Thread {
 
                     final WatchEvent.Kind kind = event.kind();
 
-                    System.out.printf("KIND: %s ", kind.toString());
-
                     if (kind == StandardWatchEventKinds.OVERFLOW)
                         continue;
 
@@ -138,8 +136,9 @@ public class FileSystemWatcher extends Thread {
                     Path changePath = dir.resolve(name);
 
                     final File file = changePath.toFile();
+                    System.out.println("WATCHER PATH" + file.getPath());
 
-                    if(shouldIgnore(new GBFile(file)))
+                    if(shouldIgnore(file))
                         continue;
                     
                     new Thread(new Runnable() {
@@ -152,11 +151,11 @@ public class FileSystemWatcher extends Thread {
                     // If is a directory, start watch this
                     if (file.isDirectory() && kind == StandardWatchEventKinds.ENTRY_CREATE)
                         try{
+
                             registerFolder(changePath);
                         } catch (IOException ex) {
                             ex.printStackTrace();
                         }
-
                 }
 
                 if(!watchKey.reset())
@@ -173,37 +172,75 @@ public class FileSystemWatcher extends Thread {
         shutdownLatch.countDown();
     }
 
-    public void startIgnoring (GBFile file) {
-        filesToIgnore.add(file);
+    /**
+     * Ignore all the events relative to this file. If this file is a folder, all the children
+     * events will be ignored
+     * @param file File to ignore
+     */
+    public void startIgnoring (File file) {
+        filesToIgnore.put(file.getPath(), -1L);
     }
 
-    public void stopIgnoring (GBFile file) { filesToIgnore.remove(file);}
+    /**
+     * Stop ignoring a file and receive new events. If this file is a folder, this is applied also
+     * to his children.
+     * NOTE that the file must be equivalent to the file that was passed as argument to the
+     * {@link #startIgnoring(File) startIgnoring} method.
+     * @param file File to stop ignoring
+     */
+    public void stopIgnoring (File file) {
+        filesToIgnore.put(file.getPath(), System.currentTimeMillis());
+    }
 
-    private boolean shouldIgnore (GBFile file) {
+    /**
+     * Check if a event relative to this file should be ignored or not
+     * @param file File to check
+     * @return Ignore or not
+     */
+    private boolean shouldIgnore (File file) {
 
         // Get the path of the file
-        List<GBFile> path = file.getPathAsList();
+        String[] path = file.getPath().split("/");
 
         // Iterate every file to ignore
-        for (GBFile toIgnore : filesToIgnore) {
+        for (Map.Entry<String, Long> toIgnore : filesToIgnore.entrySet()) {
 
             // Get the path if the file to ignore
-            List<GBFile> pathToIgnore = toIgnore.getPathAsList();
+            String[] pathToIgnore = toIgnore.getKey().split("/");
 
+            // Default ignore the file
             boolean ignore = true;
 
-            for(int i = 0;i < pathToIgnore.size() && i < path.size(); i++) {
+            // Iterate each piece
+            for(int i = 0;i < pathToIgnore.length && i < path.length; i++) {
 
-                if (!pathToIgnore.get(i).equals(path.get(i))) {
+                // If a piece is different
+                if (!pathToIgnore[i].equals(path[i])) {
 
+                    // Ignore this file check, go to the next
                     ignore = false;
                     break;
                 }
             }
 
-            if (ignore)
-                return true;
+            // If the file is present in the map, check if should continue to ignore
+            if (ignore) {
+
+                // Get the time
+                long time = toIgnore.getValue();
+
+                // If the file was ignored before the file event, ignore it
+                if (time <= 0 || time >= file.lastModified()) {
+                    return true;
+                } else {
+
+                    // Otherwise remove the file from the map
+                    filesToIgnore.remove(toIgnore);
+                }
+            }
         }
+
+        // Don't ignore the file
         return false;
     }
 

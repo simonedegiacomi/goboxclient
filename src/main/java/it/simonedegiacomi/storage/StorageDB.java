@@ -11,8 +11,10 @@ import com.j256.ormlite.support.ConnectionSource;
 import com.j256.ormlite.table.TableUtils;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.Sharing;
+import it.simonedegiacomi.goboxapi.client.ClientException;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 
+import java.security.InvalidParameterException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -111,6 +113,7 @@ public class StorageDB {
 
         // Check if the root file is already in the database
         if(fileTable.queryForId(GBFile.ROOT_ID) == null) {
+
             GBFile root = new GBFile("root", true);
             root.setID(GBFile.ROOT_ID);
             root.setCreationDate(System.currentTimeMillis());
@@ -173,13 +176,21 @@ public class StorageDB {
      */
     public void findPath(GBFile file) throws StorageException {
 
+        // Create a new temporary list
+        List<GBFile> path = new LinkedList<>();
+
+        if(file.getID() == GBFile.ROOT_ID) {
+
+            path.add(GBFile.ROOT_FILE);
+
+            file.setPathByList(path);
+            return;
+        }
+
         if(file.getFatherID() == GBFile.UNKNOWN_ID) {
             findIDByPath(file);
             return ;
         }
-
-        // Create a new temporary list
-        List<GBFile> path = new LinkedList<>();
 
         long fatherId = file.getFatherID();
         while (fatherId != GBFile.ROOT_ID) {
@@ -208,7 +219,7 @@ public class StorageDB {
 
         fileTable.create(newFile);
 
-        log.info("New file inserted onEvent the database");
+        log.info("New file inserted on the database");
 
         // Create the SyncEvent to return
         SyncEvent event = new SyncEvent(SyncEvent.EventKind.NEW_FILE, newFile);
@@ -329,6 +340,40 @@ public class StorageDB {
 
             throw new StorageException(StorageException.FILE_NOT_FOUND);
         }
+    }
+
+    /**
+     * Fill the file with the information of the database, such as children and path
+     * @param file Fill to fill with his information
+     * @return The same file passed as argument
+     */
+    public GBFile fillFile (GBFile file) throws StorageException {
+
+        // Assert that the file know his id
+        if (file.getID() == GBFile.UNKNOWN_ID) {
+
+            if (file.getPathAsList() == null)
+                throw new InvalidParameterException("The file hasn't enough information");
+
+            // Find the id using the path
+            findIDByPath(file);
+        }
+
+        // Assert that know his path
+        if (file.getPathAsList() == null) {
+
+            // Find it
+            findPath(file);
+        }
+
+        // Assert that know his children
+        if (file.getChildren() == null) {
+
+            // Find them
+            findChildrenByFather(file);
+        }
+
+        return file;
     }
 
     /**
@@ -468,6 +513,27 @@ public class StorageDB {
     }
 
     /**
+     * Move a file to/from the trash
+     * @param fileToMove File to move
+     * @param toTrash To trash/from trash
+     * @throws StorageException
+     */
+    public void moveToTrash (GBFile fileToMove, boolean toTrash) throws StorageException {
+
+        // Change the flag
+        fileToMove.setTrashed(toTrash);
+
+        try {
+
+            // Update the database
+            fileTable.update(fileToMove);
+        } catch (SQLException ex) {
+
+            throw new StorageException(ex.toString());
+        }
+    }
+
+    /**
      * Return a list with the trashed files in alphabetic order
      * @param from Offset of the list
      * @param size Size of the result list
@@ -506,5 +572,23 @@ public class StorageDB {
                 copyFile(child, new GBFile(child.getName(), dst.getID(), true));
 
         return event;
+    }
+
+    /**
+     * Create a new event that says that this file was opened (useful for the recent file list)
+     * @param fileToRegister View file
+     */
+    public void registerView (GBFile fileToRegister) {
+
+        try {
+
+            // Create the new event
+            SyncEvent newEvent = new SyncEvent(SyncEvent.EventKind.OPEN_FILE, fileToRegister);
+
+            // Insert into the database
+            eventTable.create(newEvent);
+        } catch (SQLException ex) {
+            // No one cares...
+        }
     }
 }

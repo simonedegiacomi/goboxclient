@@ -39,11 +39,22 @@ public class FileInfoHandler implements WSQueryHandler {
         JsonObject res = new JsonObject();
         JsonObject json = (JsonObject) data;
         boolean findPath = json.has("findPath") ? json.get("findPath").getAsBoolean() : false;
-        boolean findChildren = json.has("findChildren") ? json.get("findChildren").getAsBoolean() : false;
+        boolean findChildren = json.has("findChildren") ? json.get("findChildren").getAsBoolean() : true;
 
         try {
             // Wrap the father from the request
             GBFile file = gson.fromJson(json.get("file"), GBFile.class);
+
+            // If who make the query is not authenticated
+            if (json.has("public") && json.get("public").getAsBoolean()) {
+
+                // Check if the file is shared
+                if (!db.isShared(file)) {
+
+                    res.addProperty("found", false);
+                    return res;
+                }
+            }
 
             if(file.getID() == GBFile.UNKNOWN_ID)
                 db.findIDByPath(file);

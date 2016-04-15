@@ -65,13 +65,13 @@ public class CreateFolderHandler implements WSQueryHandler {
             }
 
             // Tell the internal client ot ignore this event
-            watcher.startIgnoring(newFolder);
+            watcher.startIgnoring(newFolder.toFile());
 
             // Create the real file in the FS
             Files.createDirectory(newFolder.toFile().toPath());
 
             // Stop ignoring
-            watcher.stopIgnoring(newFolder);
+            watcher.stopIgnoring(newFolder.toFile());
 
             // Insert the file and get the event
             SyncEvent event = db.insertFile(newFolder);

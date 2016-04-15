@@ -6,17 +6,14 @@ import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.goboxapi.client.ClientException;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.client.SyncEventListener;
-import it.simonedegiacomi.storage.utils.FileInfo;
 import it.simonedegiacomi.utils.Speaker;
+import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * A Sync object work with an implementation of the Client interface, and manage
@@ -49,7 +46,7 @@ public class Sync {
     private static final Config config = Config.getInstance();
 
     /**
-     * Speaker used to show silent info messages
+     * Speaker used to untrash silent info messages
      */
     private Speaker speaker;
 
@@ -68,11 +65,12 @@ public class Sync {
      * Create and start keep in sync the local fs with the GoBox Storage. It used the
      * Client passed as arguments to communicate the events and to get the changes from
      * the storage
-     * @param client Client used to communicate and get the files
      * @throws IOException Exception thrown assigning the file system watcher
      */
     public Sync (Client client) throws IOException {
+
         this.client = client;
+
         worker = new Worker(client, Worker.DEFAULT_THREADS);
 
         // Create the new watcher for the fileSystem
@@ -86,6 +84,11 @@ public class Sync {
         assignFileWatcherEvents();
     }
 
+    public void setClient (Client client) {
+
+        this.client = client;
+    }
+
     /**
      * Sync the file system with the storage after a period of sleep. Then start
      * the file system watcher and listen for events from the client
@@ -93,6 +96,7 @@ public class Sync {
      * @throws ClientException If there is some problem with the client class
      */
     public void resyncAndStart () throws IOException, ClientException {
+
         advice("Syncing");
         checkR(new File(PATH));
 
@@ -111,97 +115,55 @@ public class Sync {
      * @throws ClientException
      */
     private void checkR (File file) throws IOException, ClientException {
+
+        // Wrap the java file into a gb file
+        GBFile gbFile = new GBFile(file, PATH);
+
         // Get details about this file
-        GBFile gbFile = client.getInfo(new GBFile(file, PATH));
+        GBFile detailedFile = client.getInfo(gbFile);
 
         // If the storage doesn't know anything about this file
-        if(gbFile == null) {
+        if(detailedFile == null) {
 
             // Upload it
-            uploadR(file);
+            worker.addWork(new Work(gbFile, Work.WorkKind.UPLOAD));
             return;
         }
 
         // If it's a directory
-        if(gbFile.isDirectory()) {
+        if(detailedFile.isDirectory()) {
 
             // Create a map with the name of the file as key and the GBFile
             // as value. These files are the children of the folder
-            HashMap<String, GBFile> storageFiles = new HashMap<>();
-            for (GBFile child : gbFile.getChildren())
+            Map<String, GBFile> storageFiles = new HashMap<>();
+            for (GBFile child : detailedFile.getChildren())
                 storageFiles.put(child.getName(), child);
-
 
             // Check every children
             for (File child : file.listFiles()) {
+
+                // Check
                 checkR(child);
+
+                // And then remove from the map
                 storageFiles.remove(child.getName());
             }
 
             // Wait! and the remaining files in the map?
             // This client doesn't have these file!
             for (Map.Entry<String, GBFile> entry : storageFiles.entrySet()) {
+
                 // Download it
-                downloadR(entry.getValue());
+                worker.addWork(new Work(entry.getValue(), Work.WorkKind.DOWNLOAD));
             }
+
+            // Empty the mash
+            storageFiles.clear();
         } else {
-            // If it's not a directory but it's a file
-            // check who have the latest version
-            if(gbFile.getLastUpdateDate() > file.lastModified())
-                downloadR(gbFile);
-            else if (gbFile.getLastUpdateDate() < file.lastModified())
-                worker.addWork(new Work(gbFile, Work.WorkKind.UPDATE));
-        }
-    }
 
-    /**
-     * Download a file o (recursively) a folder
-     * @param fileToDownload File to download
-     * @throws IOException
-     * @throws ClientException
-     */
-    private void downloadR (GBFile fileToDownload) throws IOException, ClientException {
-
-        // Download the information from the client
-        fileToDownload = client.getInfo(fileToDownload);
-
-        // Add the prefix to the file
-        fileToDownload.setPrefix(PATH);
-        if (fileToDownload.isDirectory()) {
-
-            watcher.startIgnoring(fileToDownload);
-
-            Files.createDirectory(fileToDownload.toFile().toPath());
-
-            watcher.stopIgnoring(fileToDownload);
-
-            for(GBFile child : fileToDownload.getChildren())
-                downloadR(child);
-        } else {
-            Work work = new Work(fileToDownload, Work.WorkKind.DOWNLOAD);
-            worker.addWork(work);
-        }
-    }
-
-    /**
-     * Upload a file o (recursively) a folder
-     * @param fileToUpload File to upload
-     * @throws IOException
-     * @throws ClientException
-     */
-    private void uploadR (File fileToUpload) throws IOException, ClientException {
-        if (fileToUpload.isDirectory()) {
-            client.createDirectory(new GBFile(fileToUpload, PATH));
-            for(File child : fileToUpload.listFiles())
-                uploadR(child);
-        } else {
-            GBFile wrappedFile = new GBFile(fileToUpload, PATH);
-
-            FileInfo.loadFileAttributes(wrappedFile);
-
-            Work work = new Work(wrappedFile, Work.WorkKind.UPLOAD);
-
-            worker.addWork(work);
+            // If it's not a directory but it's a file check who have the latest version
+            Work.WorkKind action = detailedFile.getLastUpdateDate() > file.lastModified() ? Work.WorkKind.UPLOAD : Work.WorkKind.DOWNLOAD;
+            worker.addWork(new Work(detailedFile, action));
         }
     }
 
@@ -218,33 +180,27 @@ public class Sync {
         // redownloaded
 
         // This event is called when a new file or directory is created
-        watcher.assignListener(FileSystemWatcher.FILE_CREATED, new FileSystemWatcher.Listener() {
+        watcher.addListener(FileSystemWatcher.FILE_CREATED, new FileSystemWatcher.Listener() {
+
             @Override
             public void onEvent(File newFile) {
-                try {
-                    // Wrap the java File into a GoBoxFile
-                    GBFile wrappedFile = new GBFile(newFile, PATH);
 
+                // Wrap the java File into a GoBoxFile
+                GBFile wrappedFile = new GBFile(newFile, PATH);
 
-                    if (wrappedFile.isDirectory())
-                        client.createDirectory(wrappedFile);
-                    else
-                        worker.addWork(new Work(wrappedFile, Work.WorkKind.UPLOAD));
-
-                } catch (ClientException ex) {
-
-                    log.warning("Can't tell the storage about the new file");
-                }
+                // Add the work
+                worker.addWork(new Work(wrappedFile, Work.WorkKind.UPLOAD));
             }
         });
 
         // Event thrown when the file is edited
-        watcher.assignListener(FileSystemWatcher.FILE_CHANGED, new FileSystemWatcher.Listener() {
+        watcher.addListener(FileSystemWatcher.FILE_CHANGED, new FileSystemWatcher.Listener() {
+
             @Override
             public void onEvent(File editedFile) {
-                log.fine("New file updated onEvent the local fs");
 
                 try {
+
                     // Wrap the java File into a GoBoxFile
                     GBFile wrappedFile = new GBFile(editedFile, PATH);
 
@@ -252,7 +208,7 @@ public class Sync {
                     client.updateFile(wrappedFile);
                 } catch (ClientException ex) {
 
-                    log.log(Level.WARNING, ex.toString(), ex);
+                    log.warn(ex.toString(), ex);
                 } catch (IOException ex) {
 
                     ex.printStackTrace();
@@ -261,12 +217,15 @@ public class Sync {
         });
 
         // Event called when a file is removed
-        watcher.assignListener(FileSystemWatcher.FILE_DELETED, new FileSystemWatcher.Listener() {
+        watcher.addListener(FileSystemWatcher.FILE_DELETED, new FileSystemWatcher.Listener() {
+
             @Override
             public void onEvent(File deletedFile) {
-                log.fine("A file in the local fs was deleted");
+
+                log.info("A file in the local fs was deleted");
 
                 try {
+
                     // Wrap the file
                     GBFile wrappedFile = new GBFile(deletedFile, PATH);
 
@@ -274,7 +233,7 @@ public class Sync {
                     client.removeFile(wrappedFile);
                 } catch (ClientException ex) {
 
-                    log.log(Level.WARNING, ex.toString(), ex);
+                    log.warn(ex.toString(), ex);
                 }
             }
         });
@@ -299,23 +258,12 @@ public class Sync {
                 file.setPrefix(PATH);
 
                 try {
+
                     switch (event.getKind()) {
                         case NEW_FILE:
 
-                            // If the event is the creation of a new file
-                            if (file.isDirectory()) {
-
-                                watcher.startIgnoring(file);
-
-                                // and is a new folder, just create it
-                                Files.createDirectories(file.toFile().toPath());
-
-                                watcher.stopIgnoring(file);
-                            }
-                            else
-                                // otherwise download the new file
-                                worker.addWork(new Work(event));
-                            break;
+                             worker.addWork(new Work(event));
+                             break;
 
                         case EDIT_FILE:
 
@@ -324,25 +272,27 @@ public class Sync {
 
                         case REMOVE_FILE:
 
-                            watcher.startIgnoring(file);
+                            watcher.startIgnoring(file.toFile());
 
                             file.toFile().delete();
 
-                            watcher.stopIgnoring(file);
+                            watcher.stopIgnoring(file.toFile());
 
                             break;
+
                         default:
-                            log.warning("New unrecognized sync event from the storage");
+                            log.warn("New unrecognized sync event from the storage");
                     }
                     rememberEvent(event);
                 } catch (Exception ex) {
-                    log.log(Level.WARNING, ex.toString(), ex);
+                    log.warn(ex.toString(), ex);
                 }
             }
         });
     }
 
     private void rememberEvent (SyncEvent eventToRemember) {
+
         config.setProperty("lastEvent", String.valueOf(eventToRemember.getID()));
         try {
             config.save();
@@ -356,8 +306,9 @@ public class Sync {
      * @throws InterruptedException
      */
     public void shutdown () throws InterruptedException {
-        worker.shutdown();
+
         watcher.shutdown();
+        worker.shutdown();
     }
 
     /**
@@ -369,6 +320,7 @@ public class Sync {
     }
 
     private void advice (String message) {
+
         if(speaker != null)
             speaker.say(message);
     }

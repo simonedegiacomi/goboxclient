@@ -13,6 +13,7 @@ import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import it.simonedegiacomi.storage.direct.HttpsStorageServer;
 import it.simonedegiacomi.storage.direct.UDPStorageServer;
 import it.simonedegiacomi.storage.handlers.ws.*;
+import it.simonedegiacomi.storage.utils.MyFileUtils;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
@@ -92,6 +93,9 @@ public class Storage {
         // Create the event emitter
         env.setEmitter(new EventEmitter(mainServer));
 
+        // Set the trash path
+        MyFileUtils.setTrashPath(config.getProperty("trash"));
+
         try {
 
             // Create the local UDP server
@@ -122,9 +126,6 @@ public class Storage {
 
         // Create a new internal client and set it in the environment
         env.setInternalClient(new InternalClient(env));
-
-        // Set all the others events and queries
-        assignEvent();
     }
 
     /**
@@ -132,6 +133,10 @@ public class Storage {
      * @throws StorageException
      */
     public void startStoraging () throws StorageException {
+
+        // Set all the others events and queries
+        assignEvent();
+
         try {
 
             // Open the connection and start to listen
@@ -169,8 +174,12 @@ public class Storage {
         // Handler that receive the incoming file from a client
         mainServer.addQueryHandler(new ClientToStorageHandler(env));
 
-        // Handler that remove files
-        mainServer.addQueryHandler(new RemoveFileHandler(env));
+        // Handler for the trash
+        TrashHandler trashHandler = new TrashHandler(env);
+        mainServer.addQueryHandler(trashHandler.getDeleteHandler());
+        mainServer.addQueryHandler(trashHandler.getTrashedHandler());
+        mainServer.addQueryHandler(trashHandler.getTrashHandler());
+        mainServer.addQueryHandler(trashHandler.getEmptyTrashHandler());
 
         // Handler that copy or cut files
         mainServer.addQueryHandler(new CopyOrCutHandler(env));

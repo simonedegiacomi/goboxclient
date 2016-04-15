@@ -14,7 +14,7 @@ import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import it.simonedegiacomi.storage.EventEmitter;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
-import it.simonedegiacomi.storage.utils.FileInfo;
+import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.FileSystemWatcher;
 import org.apache.log4j.Logger;
 
@@ -76,6 +76,9 @@ public class ClientToStorageHandler implements WSQueryHandler {
 
         try {
 
+            // Find the path
+            db.findPath(incomingFile);
+
             // Make the https request to the main server
             URL url = urls.get("receiveFile");
             HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
@@ -113,7 +116,7 @@ public class ClientToStorageHandler implements WSQueryHandler {
             }
 
             // Tell the internal client to ignore this event
-            watcher.startIgnoring(incomingFile);
+            watcher.startIgnoring(incomingFile.toFile());
 
             // Find the right path
             db.findPath(incomingFile);
@@ -131,7 +134,7 @@ public class ClientToStorageHandler implements WSQueryHandler {
             conn.disconnect();
 
             // Read the info of the file
-            FileInfo.loadFileAttributes(incomingFile);
+            MyFileUtils.loadFileAttributes(incomingFile);
 
             // Insert the file in the database
             SyncEvent event = db.insertFile(incomingFile);
@@ -140,7 +143,7 @@ public class ClientToStorageHandler implements WSQueryHandler {
             emitter.emitEvent(event);
 
             // Stop ignoring
-            watcher.stopIgnoring(incomingFile);
+            watcher.stopIgnoring(incomingFile.toFile());
 
             queryResponse.addProperty("success", true);
 
