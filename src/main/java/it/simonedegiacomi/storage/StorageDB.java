@@ -11,8 +11,8 @@ import com.j256.ormlite.support.ConnectionSource;
 import com.j256.ormlite.table.TableUtils;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.Sharing;
-import it.simonedegiacomi.goboxapi.client.ClientException;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
+import org.apache.log4j.Logger;
 
 import java.security.InvalidParameterException;
 import java.sql.Connection;
@@ -21,41 +21,56 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * This class wrap the database in a object that
  * exposes all the method used in the GoBox Storage.
  *
- * Created by Degiacomi Simone onEvent 23/12/2015
+ * Created on 23/12/2015
+ * @author Degiacomi Simone
  */
 public class StorageDB {
 
+    /**
+     * Logger of the class
+     */
     private static final Logger log = Logger.getLogger(StorageDB.class.getName());
-
-    private ConnectionSource connectionSource;
 
     /**
      * Connection to the database
      */
+    private ConnectionSource connectionSource;
+
+    /**
+     * JDBC Connection to the database
+     */
     private Connection db;
 
+    /**
+     * Dao file table
+     */
     private Dao<GBFile, Long> fileTable;
 
+    /**
+     * Dao event table
+     */
     private Dao<SyncEvent, Long> eventTable;
 
+    /**
+     * Dao sharing table
+     */
     private Dao<Sharing, Long> sharingTable;
 
     /**
      * Create a new database and open the connection
      * @param path Path to the database
-     * @throws Exception Exception in case there are
-     * some problem with the connection or with the
-     * initialization. If any exception are trowed,
-     * the object shouldn't be used
+     * @throws Exception Exception in case there are some problem with the connection or with the
+     * initialization. If any exception are trowed, the object shouldn't be used
      */
     public StorageDB(String path) throws StorageException {
+
+        if (path == null || path.length() <= 0)
+            throw new InvalidParameterException("Invalid path string");
 
         try {
 
@@ -81,6 +96,7 @@ public class StorageDB {
             // Initialize the tables
             initDatabase();
         } catch (SQLException ex) {
+
             throw new StorageException("Can't connect to database");
         }
     }
@@ -90,6 +106,10 @@ public class StorageDB {
      * @throws SQLException
      */
     public void close () throws SQLException {
+
+        if (db == null)
+            throw new IllegalStateException("The database connection is not open");
+
         db.close();
         connectionSource.close();
         log.info("Database disconnected");
@@ -97,8 +117,7 @@ public class StorageDB {
 
     /**
      * Init the database tables
-     * @throws Exception Exception if the creation of
-     * the tables fails.
+     * @throws Exception Exception if the creation of the tables fails.
      */
     private void initDatabase () throws SQLException {
 
@@ -122,22 +141,28 @@ public class StorageDB {
             System.out.println(root);
         }
 
-        log.fine("Database tables initialized.");
+        log.info("Database tables initialized.");
     }
 
     /**
-     * Find the ID of the file and set it in the GBFile. This method works only when
-     * the path is set. If the file is not in the database, only the father ID will
-     * be found, same for his father etc..
+     * Find the ID of the file and set it in the GBFile. This method works only when the path is set.
+     * If the file is not in the database, only the father ID will be found, same for his father etc..
+     * So, if you call this method when the file 'music/song.mp3' in not inserted yet into the database, as result
+     * you'll have the file music with his ID and father ID (the root in this case) and the father ID in 'song.mp3'
      *
-     * So, if you call this method when the file 'music/song.mp3' in not inserted yet
-     * into the database, as result you'll have the file music with his ID and father ID
-     * (the root in this case) and the father ID in 'song.mp3'
-     *
-     * TL DR use this method to find the father
+     * TL;DR use this method to find the father
+     * @param file File to which find the id using the path
      */
-    public void findIDByPath (GBFile file) {
+    public void findIDByPath (GBFile file) throws StorageException {
+
+        if (file == null)
+            throw new InvalidParameterException("File can't be null");
+
+        // Get the path list
         List<GBFile> path = file.getPathAsList();
+
+        if (path == null)
+            throw new InvalidParameterException("The file has a null path");
 
         try {
             // Prepare the query that is the same each iteration
@@ -158,66 +183,84 @@ public class StorageDB {
                 // If there is no result
                 if(!res.next())
                     return;
+
                 fatherOfSomeone = res.getLong("ID");
                 res.close();
                 ancestor.setID(fatherOfSomeone);
             }
 
-        } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
+        } catch (SQLException ex) {
+            log.warn(ex.toString(), ex);
+            throw new StorageException("Cannot find ID");
         }
     }
 
     /**
-     * Find the path of the file. This method works only if the father ID of the
-     * GBFile is set. However, if you call this method and the path field in the GBFile
-     * is set, the method 'findIDByPath' will be called.
+     * Find the path of the file. This method works only if the father ID of the GBFile is set.
+     * However, if you call this method and the path field in the GBFile is set, the method 'findIDByPath'
+     * will be called.
      * @param file File that doesn't know his path
      */
     public void findPath(GBFile file) throws StorageException {
 
+        // Check if the file is null
+        if (file == null)
+            throw new InvalidParameterException("File can't be null");
+
+        // Get the father id of the file
+        long fatherId = file.getFatherID();
+
+        // Check if it's known
+        if(fatherId == GBFile.UNKNOWN_ID)
+            throw new InvalidParameterException("This file doesn't know his father id");
+
         // Create a new temporary list
         List<GBFile> path = new LinkedList<>();
 
-        if(file.getID() == GBFile.ROOT_ID) {
-
-            path.add(GBFile.ROOT_FILE);
-
-            file.setPathByList(path);
-            return;
-        }
-
-        if(file.getFatherID() == GBFile.UNKNOWN_ID) {
-            findIDByPath(file);
-            return ;
-        }
-
-        long fatherId = file.getFatherID();
+        // Until the father is the root
         while (fatherId != GBFile.ROOT_ID) {
+
+            // find the father of the father
             GBFile node = this.getFileById(fatherId);
             fatherId = node.getFatherID();
+
+            // Add this father tot he list
             path.add(0, node);
          }
 
-        // Add also the file because the GBFile.setPath wants it
+        // Finally add the root
+        path.add(0, GBFile.ROOT_FILE);
+
+        // Add also the file as last element
         path.add(file);
 
+        // And set the path to the file
         file.setPathByList(path);
     }
 
     /**
      * Insert a new file in the database
-     * @param newFile New file to insert. The object will be
-     *                filled with the new information obtained
+     * @param newFile New file to insert. The object will be filled with the new information obtained
      *                inserting the data (the ID)
-     * @throws Exception Exception throwed during the insertion
+     * @throws Exception Exception thrown during the insertion
      */
-    public SyncEvent insertFile (GBFile newFile) throws SQLException {
+    public SyncEvent insertFile (GBFile newFile) throws StorageException {
+
+        // Assert that the file is not null
+        if (newFile == null)
+            throw new InvalidParameterException("File insert a null file");
+
         // If the file doesn't know his father, let's find his
         if (newFile.getFatherID() == GBFile.UNKNOWN_ID)
             findIDByPath(newFile);
 
-        fileTable.create(newFile);
+        try {
+
+            // Insert into the database
+            fileTable.create(newFile);
+        } catch (SQLException ex) {
+            throw new StorageException("Cannot insert file into the database");
+        }
 
         log.info("New file inserted on the database");
 
@@ -234,11 +277,17 @@ public class StorageDB {
      * Add a new row in the event table
      * @param event Event to add
      */
-    private void registerEvent (SyncEvent event) {
+    private void registerEvent (SyncEvent event) throws StorageException {
+
+        // Assert that the event is not null
+        if (event == null)
+            throw new InvalidParameterException("Can't add null event");
+
         try {
             eventTable.create(event);
         } catch (SQLException ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
+            log.warn(ex.toString(), ex);
+            throw new StorageException("Cannot insert event into database");
         }
     }
 
@@ -247,7 +296,12 @@ public class StorageDB {
      * @param updatedFile File to update with the new information
      * @return Generated sync event
      */
-    public SyncEvent updateFile (GBFile updatedFile) {
+    public SyncEvent updateFile (GBFile updatedFile) throws StorageException {
+
+        // Check if the file is null
+        if (updatedFile == null)
+            throw new InvalidParameterException("File can't be null");
+
         try {
             // If the file doesn't know his id, let's find it
             if(updatedFile.getID() == GBFile.UNKNOWN_ID)
@@ -260,10 +314,10 @@ public class StorageDB {
             SyncEvent event = new SyncEvent(SyncEvent.EventKind.EDIT_FILE, updatedFile);
             registerEvent(event);
             return  event;
-        } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
+        } catch (SQLException ex) {
+            log.warn(ex.toString(), ex);
+            throw new StorageException("Cannot update file");
         }
-        return null;
     }
 
     /**
@@ -271,7 +325,12 @@ public class StorageDB {
      * @param fileToRemove File to remove
      * @return The generated sync event
      */
-    public SyncEvent removeFile (GBFile fileToRemove) {
+    public SyncEvent removeFile (GBFile fileToRemove) throws StorageException {
+
+        // Check if the file is null
+        if (fileToRemove == null)
+            throw new InvalidParameterException("File can't be null");
+
         try {
             // If the file doesn't know his id, let's find it
             if(fileToRemove.getID() == GBFile.UNKNOWN_ID)
@@ -280,6 +339,7 @@ public class StorageDB {
             // Remove from the database
             fileTable.deleteById(fileToRemove.getID());
 
+            // Also his children
             if(fileToRemove.isDirectory())
                 for(GBFile child : fileToRemove.getChildren())
                         removeFile(child);
@@ -288,13 +348,12 @@ public class StorageDB {
             SyncEvent event = new SyncEvent(SyncEvent.EventKind.REMOVE_FILE, fileToRemove);
             registerEvent(event);
 
-            //TODO: Remove all the children
-
             return event;
-        } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
+        } catch (SQLException ex) {
+
+            // TODO: Because i'am not sure if the error was with the first or the last query is better to rollback
+            throw new StorageException("Cannot remove file");
         }
-        return null;
     }
 
     /**
@@ -310,35 +369,8 @@ public class StorageDB {
             stmt.orderBy("name", true);
             father.setChildren(stmt.query());
         } catch (Exception ex) {
-            log.log(Level.SEVERE, ex.toString(), ex);
-        }
-    }
-
-    /**
-     * Query the database and return the requested file
-     * @param id File Id to search in the database
-     * @param children If true, insert in the file also his children
-     * @return File retrieved from the database
-     */
-    public GBFile getFileById (long id, boolean path, boolean children) throws StorageException {
-        try {
-            // Get the GBFile
-            GBFile file = fileTable.queryForId(id);
-
-            // If the file is null throw a new exception
-            if(file == null)
-                throw new StorageException(StorageException.FILE_NOT_FOUND);
-
-            // Get additional information if need
-            if(children && file.isDirectory())
-                findChildrenByFather(file);
-            if(path)
-                findPath(file);
-            return file;
-        } catch (Exception ex) {
-            // TODO divide the case when the file is not found and where there is a real problem
-
-            throw new StorageException(StorageException.FILE_NOT_FOUND);
+            log.warn(ex.toString(), ex);
+            throw new StorageException("Cannot find children");
         }
     }
 
@@ -347,7 +379,11 @@ public class StorageDB {
      * @param file Fill to fill with his information
      * @return The same file passed as argument
      */
-    public GBFile fillFile (GBFile file) throws StorageException {
+    public GBFile fillFile (GBFile file, boolean path, boolean children) throws StorageException {
+
+        // assert that the file is not null
+        if (file == null)
+            throw new InvalidParameterException("This method doesn't accept null file.");
 
         // Assert that the file know his id
         if (file.getID() == GBFile.UNKNOWN_ID) {
@@ -360,14 +396,14 @@ public class StorageDB {
         }
 
         // Assert that know his path
-        if (file.getPathAsList() == null) {
+        if (path && file.getPathAsList() == null) {
 
             // Find it
             findPath(file);
         }
 
         // Assert that know his children
-        if (file.getChildren() == null) {
+        if (children && file.getChildren() == null) {
 
             // Find them
             findChildrenByFather(file);
@@ -377,13 +413,29 @@ public class StorageDB {
     }
 
     /**
-     * Query the database and return the GBFile. Either the children and
-     * path fields of this object will be null
+     * Query the database and return the requested file.
+     * This methodis just an alias for {@link #fillFile(GBFile, boolean, boolean)}
+     * @param id File Id to search in the database
+     * @param children If true, insert in the file also his children
+     * @return File retrieved from the database
+     */
+    public GBFile getFileById (long id, boolean path, boolean children) throws StorageException {
+
+        // Assert that the id is valid
+        if (id <= 0)
+            throw new InvalidParameterException("ID cannot be less than zero");
+
+        return fillFile(new GBFile(id), path, children);
+    }
+
+    /**
+     * Query the database and return the GBFile. Either the children and path fields of this object will be null.
+     * This method is just an alias for {@link #getFileById(long, boolean, boolean)}
      * @param id ID of the file
      * @return The wrapped GBFile
      */
     public GBFile getFileById (long id) throws StorageException {
-        return this.getFileById(id, false, false);
+        return getFileById(id, false, false);
     }
 
     public List<SyncEvent> getUniqueEventsFromID (long ID) {
@@ -405,52 +457,78 @@ public class StorageDB {
 
             eventsRaw.close();
 
-        } catch (Exception ex) {
+        } catch (SQLException ex) {
             ex.printStackTrace();
+            throw new StorageException("Cannot find events");
         }
         return events;
     }
 
+    /**
+     * Share/unshare a file
+     * @param file File to share or unshare
+     * @param share true to share, false otherwise
+     * @throws StorageException
+     */
     public void changeAccess (GBFile file, boolean share) throws StorageException {
+
+        if (file == null)
+            throw new InvalidParameterException("Cannot share/unshare a null file");
+
         try {
             if(share) {
+
                 sharingTable.create(new Sharing(file));
             } else {
+
                 DeleteBuilder<Sharing, Long> stmt = sharingTable.deleteBuilder();
                 stmt.where().eq("file_ID", file.getID());
                 if(stmt.delete() < 0)
                     throw new StorageException("Filed is nit shared");
             }
-        } catch (Exception ex) {
+        } catch (SQLException ex) {
             ex.printStackTrace();
             throw new StorageException(ex.toString());
         }
     }
 
+    /**
+     * Return a list of the shared files
+     * @return List of all the shared files
+     * @throws StorageException
+     */
     public List<GBFile> getSharedFiles () throws StorageException {
 
         try {
             QueryBuilder<GBFile, Long> fileQuery = fileTable.queryBuilder();
             QueryBuilder<Sharing, Long> sharingQuery = sharingTable.queryBuilder();
             return fileQuery.join(sharingQuery).query();
-        } catch (Exception ex) {
+        } catch (SQLException ex) {
             ex.printStackTrace();
             throw new StorageException(ex.toString());
         }
     }
 
-    public boolean isShared (GBFile file) {
-        boolean exist;
+    /**
+     * Check if the specified file is shared or not
+     * @param file File to check
+     * @return Shared or not
+     */
+    public boolean isShared (GBFile file) throws StorageException {
+
+        if (file == null)
+            throw new InvalidParameterException("File is null");
+
         try {
             PreparedStatement stmt = db.prepareStatement("SELECT ID FROM sharing WHERE file_ID = ?");
             stmt.setLong(1, file.getID());
             ResultSet res = stmt.executeQuery();
-            exist = res.next();
+            boolean exist = res.next();
             res.close();
-        } catch (Exception ex) {
-            exist =  false;
+            return exist;
+        } catch (SQLException ex) {
+            throw new StorageException("Cannot check if the file is shared");
         }
-        return exist;
     }
 
     /**
@@ -464,6 +542,7 @@ public class StorageDB {
      * @throws StorageException Database connection or query exception
      */
     public List<GBFile> search (String keyword, String kind, long from, long n) throws StorageException {
+
         try {
             // Build the query
             QueryBuilder<GBFile, Long> stmt = fileTable.queryBuilder();
@@ -477,9 +556,9 @@ public class StorageDB {
                 stmt.limit(new Long(n));
 
             return stmt.query();
-        } catch (Exception ex) {
-            // TODO: catch the exception
-            return new LinkedList<>();
+        } catch (SQLException ex) {
+
+            throw new StorageException("Cannot search");
         }
     }
 
@@ -489,7 +568,7 @@ public class StorageDB {
      * @param size Limit of result
      * @return List of recent files
      */
-    public List<GBFile> getRecentFiles (long from, long size) {
+    public List<GBFile> getRecentFiles (long from, long size) throws StorageException {
 
         try {
 
@@ -508,7 +587,7 @@ public class StorageDB {
                     .query();
         } catch (SQLException ex) {
 
-            return new LinkedList<>();
+            throw new StorageException("Cannot search");
         }
     }
 
@@ -519,6 +598,9 @@ public class StorageDB {
      * @throws StorageException
      */
     public void moveToTrash (GBFile fileToMove, boolean toTrash) throws StorageException {
+
+        if (fileToMove == null)
+            throw new InvalidParameterException("The file to remove cannot be null");
 
         // Change the flag
         fileToMove.setTrashed(toTrash);
@@ -539,7 +621,7 @@ public class StorageDB {
      * @param size Size of the result list
      * @return List with the trashed files
      */
-    public List<GBFile> getTrashedFiles (long from, long size) {
+    public List<GBFile> getTrashedFiles (long from, long size) throws StorageException {
         try {
 
             // Prepare the query
@@ -552,7 +634,7 @@ public class StorageDB {
                     .query();
         } catch (SQLException ex) {
 
-            return new LinkedList<>();
+            throw new StorageException();
         }
     }
 
