@@ -1,34 +1,53 @@
-package it.simonedegiacomi.goboxclient;
+package it.simonedegiacomi.goboxclient.ui;
 
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import it.simonedegiacomi.sync.Work;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.net.URL;
+import java.util.Set;
 
 /**
  * Created on 20/01/16.
  * @author Degiacomi Simone
  */
-public class TrayController {
+public class TrayView implements View {
 
-    // Default icon file name
+    /**
+     * Default icon file name
+     */
     private static final String ICON_NAME = "/icon.png";
 
+    /**
+     * URLBuilder used to get the url if the website
+     */
     private final static URLBuilder urls = Config.getInstance().getUrls();
 
-    // System icon tray to add icons
+    /**
+     * Presenter that set the data to this class and to which this class class
+     * can proxy the user actions
+     */
+    private Presenter presenter;
+
+    /**
+     * System icon tray to add icons
+     */
     private final static SystemTray tray = SystemTray.getSystemTray();
 
-    // Desktop object used to object the browser
+    /**
+     * Desktop object used to object the browser
+     */
     private final Desktop desktop;
 
     private PopupMenu trayMenu = new PopupMenu();
 
-    // Menu items
+    /**
+     * Menu items
+     */
     private MenuItem state, mode, exit, connSettings;
 
     private CheckboxMenuItem syncCheck;
@@ -36,7 +55,8 @@ public class TrayController {
     /**
      * Create a new tray controller without showing anything
      */
-    public TrayController () {
+    public TrayView (Presenter presenter) {
+        this.presenter = presenter;
         desktop = Desktop.getDesktop();
         addButtons();
     }
@@ -45,8 +65,7 @@ public class TrayController {
      * Add buttons and prepare labels for the menu icon tray
      */
     private void addButtons() {
-        // Client settings, this open the connection
-        // window
+        // Client settings, this open the connection window
         connSettings = new MenuItem();
         connSettings.setLabel("Client Settings");
         trayMenu.add(connSettings);
@@ -97,7 +116,7 @@ public class TrayController {
     }
 
     /**
-     * untrash the icon in the system icon tray
+     * Show the icon in the system icon tray
      */
     public void showTray() {
         // Load the icon for the tray
@@ -121,49 +140,29 @@ public class TrayController {
         });
     }
 
-    /**
-     * Change the 'state' label. Useful to communicate silent messages
-     * to the user.
-     * @param message Message to untrash
-     */
-    public void setMessage(String message) {
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                state.setLabel(message);
-            }
-        });
+    @Override
+    public void setPresenter(Presenter presenter) {
+        this.presenter = presenter;
     }
 
-    /**
-     * Change the mode label
-     * @param modeName Name of the current mode
-     */
-    public void setMode (String modeName) {
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                mode.setLabel("Mode: " + modeName);
-            }
-        });
+    @Override
+    public Presenter getPresenter() {
+        return presenter;
     }
 
-    /**
-     * Set the click listener on the 'exit' label
-     * @param listener Listener for the click
-     */
-    public void setOnCloseListener (ActionListener listener) {
-        exit.addActionListener(listener);
+    @Override
+    public void setClientState(ClientState state) {
+
     }
 
-    /**
-     * Set the listener for the settings label.
-     * @param listener Listener for the click
-     */
-    public void setSettingsButtonListener (ActionListener listener) { connSettings.addActionListener(listener); }
+    @Override
+    public void setSyncState(boolean enabled) {
 
-    public void setSyncCheckUsability(boolean usability) {
-        syncCheck.setEnabled(usability);
+    }
+
+    @Override
+    public void setWorks(Set<Work> worksQueue) {
+
     }
 
     /**

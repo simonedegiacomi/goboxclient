@@ -11,9 +11,7 @@ import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
-import it.simonedegiacomi.storage.EventEmitter;
-import it.simonedegiacomi.storage.StorageDB;
-import it.simonedegiacomi.storage.StorageEnvironment;
+import it.simonedegiacomi.storage.*;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.FileSystemWatcher;
 import org.apache.log4j.Logger;
@@ -21,6 +19,7 @@ import org.apache.log4j.Logger;
 import javax.net.ssl.HttpsURLConnection;
 import java.io.DataOutputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.URL;
 
@@ -65,8 +64,17 @@ public class ClientToStorageHandler implements WSQueryHandler {
         // Prepare the response
         JsonObject queryResponse = new JsonObject();
 
+        JsonObject json = data.getAsJsonObject();
+
+        if (!json.has("uploadKey")) {
+
+            queryResponse.addProperty("success", false);
+            queryResponse.addProperty("error", "missing upload key");
+            return queryResponse;
+        }
+
         // Get the uploadKey
-        String uploadKey = ((JsonObject) data).get("uploadKey").getAsString();
+        String uploadKey = json.get("uploadKey").getAsString();
 
         // Wrap the incoming file
         GBFile incomingFile = gson.fromJson(data.toString(), GBFile.class);
@@ -78,7 +86,14 @@ public class ClientToStorageHandler implements WSQueryHandler {
 
             // Find the path
             db.findPath(incomingFile);
+        } catch (StorageException ex) {
 
+            queryResponse.addProperty("success", false);
+            queryResponse.addProperty("error", ex.toString());
+            return queryResponse;
+        }
+
+        try {
             // Make the https request to the main server
             URL url = urls.get("receiveFile");
             HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
@@ -147,14 +162,21 @@ public class ClientToStorageHandler implements WSQueryHandler {
 
             queryResponse.addProperty("success", true);
 
-        } catch (Exception ex) {
+        } catch (IOException ex) {
 
             log.warn(ex.toString(), ex);
             queryResponse.addProperty("success", false);
             queryResponse.addProperty("error", "IOError");
             queryResponse.addProperty("httpCode", 500);
+        } catch (StorageException ex) {
+
+            log.warn(ex.toString(), ex);
+            queryResponse.addProperty("success", false);
+            queryResponse.addProperty("error", ex.toString());
+            queryResponse.addProperty("httpCode", 500);
         }
 
+        queryResponse.addProperty("success", true);
         return queryResponse;
     }
 }

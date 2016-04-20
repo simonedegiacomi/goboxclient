@@ -17,13 +17,13 @@ import java.nio.file.Files;
  * @author Degiacomi Simone
  * Created on 08/02/16.
  */
-public class UpdateFileHandler implements WSQueryHandler{
+public class RenameFileHandler implements WSQueryHandler{
 
     private final StorageDB db;
 
     private final Gson gson = new Gson();
 
-    public UpdateFileHandler (StorageEnvironment env) {
+    public RenameFileHandler(StorageEnvironment env) {
         this.db = env.getDB();
     }
 
