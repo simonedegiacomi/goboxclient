@@ -1,5 +1,7 @@
 package it.simonedegiacomi.goboxclient.ui;
 
+import java.util.Set;
+
 /**
  * This is the Presenter Interface in the MVP. This interface says to the view what it needs
  * to show (from the model), and exposes the method that can be called by the view (calling
@@ -11,16 +13,22 @@ package it.simonedegiacomi.goboxclient.ui;
 public interface Presenter {
 
     /**
-     * Set the view that the model will use to show the data from the model
-     * @param view
+     * Add a new view that the model will use to show the data from the model
+     * @param New view to add
      */
-    void setView (View view);
+    void addView (View view);
 
     /**
-     * Return the view current used by this presenter.
-     * @return Current view used by the presenter
+     * Return all the views current used by this presenter.
+     * @return Current views used by the presenter
      */
-    View getView();
+    Set<View> getViews();
+
+    /**
+     * Remove a view from the views list
+     * @param viewToRemove View to remove
+     */
+    void removeView (View viewToRemove);
 
     /**
      * Set the model that will be used by this presenter
