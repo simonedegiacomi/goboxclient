@@ -1,5 +1,8 @@
 package it.simonedegiacomi.utils;
 
+import it.simonedegiacomi.goboxclient.ui.CLIView;
+import it.simonedegiacomi.goboxclient.ui.Presenter;
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -12,12 +15,12 @@ import java.util.logging.Logger;
  *
  * Created by Degiacomi Simone onEvent 10/01/16.
  */
-public class SingleInstancer {
+public class GoBoxInstance {
 
     /**
      * Logger of the class
      */
-    private static final Logger log = Logger.getLogger(SingleInstancer.class.getName());
+    private static final Logger log = Logger.getLogger(GoBoxInstance.class.getName());
 
     /**
      * Default port used to check if another instance
@@ -36,11 +39,16 @@ public class SingleInstancer {
     private final boolean single;
 
     /**
+     * Presenter used to which add the view
+     */
+    private Presenter presenter;
+
+    /**
      * Create a new single instancer and check if is
      * the only instance in the system
      * @param port Port to use
      */
-    public SingleInstancer (int port) {
+    public GoBoxInstance(int port) {
         this.port = port;
         single = checkIfSingle();
         if(single)
@@ -52,7 +60,7 @@ public class SingleInstancer {
      * the only instance in the system, using the default
      * port
      */
-    public SingleInstancer () {
+    public GoBoxInstance() {
         this(DEFAULT_PORT);
     }
 
@@ -61,7 +69,7 @@ public class SingleInstancer {
     }
 
     /**
-     * Try to conenct to another instance
+     * Try to connect to another instance
      * @return state of running
      */
     private boolean checkIfSingle () {
@@ -88,15 +96,30 @@ public class SingleInstancer {
             public void run() {
                 try {
                     ServerSocket server = new ServerSocket(port);
-                    for (; ; )
+                    for (;;)
                         try {
-                            server.accept();
-                        } catch (Exception ex) {
-                        }
+
+                            // Get the socket from another instance of gobox
+                            Socket console = server.accept();
+
+                            // Create a new CLI view
+                            CLIView cli = new CLIView(console);
+
+                            // Add the view to the presenter
+                            presenter.addView(cli);
+                        } catch (Exception ex) {}
                 } catch (IOException ex) {
                     log.log(Level.WARNING, ex.toString(), ex);
                 }
             }
         }).start();
+    }
+
+    /**
+     * Set the presenter to which add the cli views
+     * @param presenter Presenter to use
+     */
+    public void setPresenter(Presenter presenter) {
+        this.presenter = presenter;
     }
 }
