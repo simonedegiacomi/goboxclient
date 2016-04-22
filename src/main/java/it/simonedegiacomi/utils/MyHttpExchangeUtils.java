@@ -1,7 +1,5 @@
 package it.simonedegiacomi.utils;
 
-import com.sun.org.apache.xerces.internal.util.URI;
-
 import java.net.URL;
 import java.security.InvalidParameterException;
 import java.util.HashMap;

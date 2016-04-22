@@ -9,10 +9,7 @@ import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
-import it.simonedegiacomi.storage.EventEmitter;
-import it.simonedegiacomi.storage.StorageDB;
-import it.simonedegiacomi.storage.StorageEnvironment;
-import it.simonedegiacomi.storage.StorageException;
+import it.simonedegiacomi.storage.*;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.FileSystemWatcher;
 
@@ -65,7 +62,7 @@ public class TrashHandler {
                     MyFileUtils.trash(fileToTrash.toFile());
 
                     // Update the db
-                    db.moveToTrash(fileToTrash, true);
+                    db.trashFile(fileToTrash.getID(), true);
 
                     response.addProperty("success", true);
                 } catch (StorageException ex) {
@@ -100,7 +97,7 @@ public class TrashHandler {
                     MyFileUtils.untrash(fileToTrash.toFile());
 
                     // Update the db
-                    db.moveToTrash(fileToTrash, false);
+                    db.trashFile(fileToTrash.getID(), false);
 
                     response.addProperty("success", true);
                 } catch (StorageException ex) {
@@ -127,24 +124,22 @@ public class TrashHandler {
             @Override
             public JsonElement onQuery(JsonElement jsonElement) {
 
-                    // Prepare the response
-                    JsonObject response = new JsonObject();
+                // Prepare the response
+                JsonObject response = new JsonObject();
 
-                    // Cast the request
-                    JsonObject request = jsonElement.getAsJsonObject();
-
-                    long from = request.has("from") ? request.get("from").getAsLong() : 0;
-                    long size = request.has("size") ? request.get("size").getAsLong() : 0;
-
+                try {
                     // Make the query
-                    List<GBFile> files = db.getTrashedFiles(from, size);
+                    List<GBFile> files = db.getTrashList();
 
                     // Add the files to the response
-                    response.add("files", gson.toJsonTree(files, new TypeToken<List<GBFile>>(){}.getType()));
+                    response.add("files", gson.toJsonTree(files, new TypeToken<List<GBFile>>() {
+                    }.getType()));
 
                     response.addProperty("error", false);
-
-                    return response;
+                } catch (StorageException ex) {
+                    response.addProperty("error", true);
+                }
+                return response;
             }
         };
     }
@@ -213,24 +208,28 @@ public class TrashHandler {
                 // Prepare the response
                 JsonObject response = new JsonObject();
 
-                // Get all the trashed files
-                List<GBFile> files = db.getTrashedFiles(0, Long.MAX_VALUE);
+                try {
+                    // Get all the trashed files
+                    List<GBFile> files = db.getTrashList(0, Long.MAX_VALUE);
 
-                // Iterate each file
-                for (GBFile file : files) {
+                    // Iterate each file
+                    for (GBFile file : files) {
 
-                // Set the environment prefix
-                file.setPrefix(PATH);
+                        // Set the environment prefix
+                        file.setPrefix(PATH);
 
-                // Delete the hidden file
-                MyFileUtils.deleteR(file.toFile(), true);
+                        // Delete the hidden file
+                        MyFileUtils.deleteR(file.toFile(), true);
 
-                // Remove form the database
-                db.removeFile(file);
-            }
+                        // Remove form the database
+                        db.removeFile(file.getID());
+                    }
 
-            response.addProperty("success", true);
-            return response;
+                    response.addProperty("success", true);
+                } catch (StorageException ex) {
+                    response.addProperty("success", false);
+                }
+                return response;
             }
         };
     }

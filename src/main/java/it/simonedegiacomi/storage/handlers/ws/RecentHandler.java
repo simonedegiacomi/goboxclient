@@ -8,8 +8,10 @@ import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
+import it.simonedegiacomi.storage.DAOStorageDB;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
+import it.simonedegiacomi.storage.StorageException;
 
 import java.util.List;
 
@@ -41,13 +43,17 @@ public class RecentHandler implements WSQueryHandler {
         long from = request.has("from") ? request.get("from").getAsLong() : 0;
         long size = request.has("size") ? request.get("size").getAsLong() : 50;
 
-        // Query the database
-        List<GBFile> files = db.getRecentFiles(from, size);
+        try {
+            // Query the database
+            List<GBFile> files = db.getRecentList(from, size);
 
-        // Add the files list
-        response.add("files", gson.toJsonTree(files, new TypeToken<List<GBFile>>(){}.getType()));
+            // Add the files list
+            response.add("files", gson.toJsonTree(files, new TypeToken<List<GBFile>>(){}.getType()));
 
-        response.addProperty("error", false);
+            response.addProperty("error", false);
+        } catch (StorageException ex) {
+            response.addProperty("error", true);
+        }
 
         return response;
     }

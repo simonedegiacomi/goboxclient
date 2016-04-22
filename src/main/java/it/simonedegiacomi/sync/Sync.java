@@ -6,7 +6,6 @@ import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.goboxapi.client.ClientException;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.client.SyncEventListener;
-import it.simonedegiacomi.utils.Speaker;
 import org.apache.log4j.Logger;
 
 import java.io.File;
@@ -46,11 +45,6 @@ public class Sync {
     private static final Config config = Config.getInstance();
 
     /**
-     * Speaker used to untrash silent info messages
-     */
-    private Speaker speaker;
-
-    /**
      * The FileSystemWatcher is the object that pool and watch the local fileSystem,
      * notifying any creation, changes or deletion of a file (or folder)
      */
@@ -60,6 +54,8 @@ public class Sync {
      * Path of the files folder
      */
     private static final String PATH = config.getProperty("path");
+
+    private volatile boolean syncState;
 
     /**
      * Create and start keep in sync the local fs with the GoBox Storage. It used the
@@ -96,16 +92,15 @@ public class Sync {
      * @throws ClientException If there is some problem with the client class
      */
     public void resyncAndStart () throws IOException, ClientException {
+        syncState = true;
 
-        advice("Syncing");
-        checkR(new File(PATH));
+        checkR(new GBFile(GBFile.ROOT_ID, GBFile.ROOT_ID, PATH, true));
 
         // Start watching for changes
         watcher.start();
 
         // And listen for event's from the storage
         assignSyncEventFromStorage();
-        advice("Ready");
     }
 
     /**
@@ -114,19 +109,16 @@ public class Sync {
      * @throws IOException
      * @throws ClientException
      */
-    private void checkR (File file) throws IOException, ClientException {
-
-        // Wrap the java file into a gb file
-        GBFile gbFile = new GBFile(file, PATH);
+    private void checkR (GBFile file) throws IOException, ClientException {
 
         // Get details about this file
-        GBFile detailedFile = client.getInfo(gbFile);
+        GBFile detailedFile = client.getInfo(file);
 
         // If the storage doesn't know anything about this file
         if(detailedFile == null) {
 
             // Upload it
-            worker.addWork(new Work(gbFile, Work.WorkKind.UPLOAD));
+            worker.addWork(new Work(file, Work.WorkKind.UPLOAD));
             return;
         }
 
@@ -139,11 +131,11 @@ public class Sync {
             for (GBFile child : detailedFile.getChildren())
                 storageFiles.put(child.getName(), child);
 
-            // Check every children
-            for (File child : file.listFiles()) {
+            // Check every children (in the fs)
+            for (File child : file.toFile().listFiles()) {
 
                 // Check
-                checkR(child);
+                checkR(new GBFile(child, PATH));
 
                 // And then remove from the map
                 storageFiles.remove(child.getName());
@@ -162,7 +154,7 @@ public class Sync {
         } else {
 
             // If it's not a directory but it's a file check who have the latest version
-            Work.WorkKind action = detailedFile.getLastUpdateDate() > file.lastModified() ? Work.WorkKind.UPLOAD : Work.WorkKind.DOWNLOAD;
+            Work.WorkKind action = detailedFile.getLastUpdateDate() > file.getLastUpdateDate() ? Work.WorkKind.UPLOAD : Work.WorkKind.DOWNLOAD;
             worker.addWork(new Work(detailedFile, action));
         }
     }
@@ -175,7 +167,7 @@ public class Sync {
      */
     private void assignFileWatcherEvents () {
         // At the beginning i download the file list, and make a control.
-        // I download the file from the server, and new files found are trasmetted to sevrer.
+        // I download the file from the server, and new files found are transmitted to server.
         // If a file was deleted onEvent the client with the program not running, the file will
         // redownloaded
 
@@ -221,7 +213,6 @@ public class Sync {
 
             @Override
             public void onEvent(File deletedFile) {
-
                 log.info("A file in the local fs was deleted");
 
                 try {
@@ -306,26 +297,27 @@ public class Sync {
      * @throws InterruptedException
      */
     public void shutdown () throws InterruptedException {
-
+        syncState = false;
         watcher.shutdown();
         worker.shutdown();
     }
 
-    /**
-     * Set the speaker for this sync object
-     * @param speaker
-     */
-    public void setSpeaker (Speaker speaker) {
-        this.speaker = speaker;
-    }
-
-    private void advice (String message) {
-
-        if(speaker != null)
-            speaker.say(message);
-    }
-
     public FileSystemWatcher getFileSystemWatcher () {
         return watcher;
+    }
+
+    public Worker getWorker () { return worker; }
+
+    public void setSyncing(boolean newState) throws InterruptedException, ClientException, IOException {
+        if (newState == syncState)
+            throw new IllegalStateException("Already in this state");
+        if (newState)
+            resyncAndStart();
+        else
+            shutdown();
+    }
+
+    public boolean isSyncing() {
+        return syncState;
     }
 }

@@ -9,6 +9,7 @@ import it.simonedegiacomi.goboxapi.authentication.Auth;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import it.simonedegiacomi.storage.DAOStorageDB;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
@@ -70,7 +71,6 @@ public class StorageToClientHandler implements WSQueryHandler {
     @WSQuery(name = "sendMeTheFile")
     @Override
     public JsonElement onQuery(JsonElement data) {
-
         log.info("New download request");
 
         // Prepare the response
@@ -79,9 +79,14 @@ public class StorageToClientHandler implements WSQueryHandler {
         // Get the id of the file and the key of the download
         JsonObject jsonData = (JsonObject) data;
 
-        // Remove the field id to reuse this object. This is done just to not create a new json object.
-        // Doing this the data object contains the downloadKey
-        long fileID = jsonData.remove("ID").getAsLong();
+        if (!jsonData.has("ID") && !jsonData.has("path")) {
+            response.addProperty("error", "file not found");
+            response.addProperty("httpCode", 400);
+            response.addProperty("success", false);
+            return response;
+        }
+
+        long ID = jsonData.has("ID") ? jsonData.get("ID").getAsLong() : GBFile.UNKNOWN_ID;
 
         // Check if the download is authorized
         boolean authorized = jsonData.remove("authorized").getAsBoolean();
@@ -92,7 +97,7 @@ public class StorageToClientHandler implements WSQueryHandler {
         try {
 
             // If the download is not authorized, check of the file is shared
-            if(!authorized && !db.isShared(new GBFile(fileID))) {
+            if(!authorized && !db.isShared(ID)) {
 
                 // Unauthorized download
                 response.addProperty("error", "unauthorized");
@@ -102,9 +107,9 @@ public class StorageToClientHandler implements WSQueryHandler {
             }
 
             // Get the file from the database
-            GBFile dbFile = db.getFileById(fileID, true, false);
-
-            // Set the prefix of this file
+            GBFile temp = new GBFile(ID);
+            temp.setPathByString(jsonData.get("path").getAsString());
+            GBFile dbFile = db.getFile(temp);
             dbFile.setPrefix(PATH);
 
             // Create the url to upload the file
@@ -154,7 +159,7 @@ public class StorageToClientHandler implements WSQueryHandler {
             response.addProperty("success", responseCode == 200);
 
             // Register the open action
-            db.registerView(dbFile);
+            db.addToRecent(ID);
 
             log.info("File sent to the client");
         } catch (StorageException ex) {

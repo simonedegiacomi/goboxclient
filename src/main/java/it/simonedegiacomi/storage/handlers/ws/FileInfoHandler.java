@@ -7,8 +7,10 @@ import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
+import it.simonedegiacomi.storage.DAOStorageDB;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
+import it.simonedegiacomi.storage.StorageException;
 import org.apache.log4j.Logger;
 
 /**
@@ -56,16 +58,24 @@ public class FileInfoHandler implements WSQueryHandler {
                 }
             }
 
-            if(file.getID() == GBFile.UNKNOWN_ID)
-                db.findIDByPath(file);
+            // Get the file form the database
+            GBFile dbFile = db.getFile(file);
 
-            GBFile detailedFile = db.getFileById(file.getID(), findPath, findChildren);
+            // Check if the file exists
+            if (dbFile == null) {
+                res.addProperty("found", false);
+                return res;
+            }
 
-            JsonElement detailedJsonFile =  gson.toJsonTree(detailedFile, GBFile.class);
+            if (findChildren)
+                db.findChildren(dbFile);
 
-            res.add("file", detailedJsonFile);
+            if (findPath)
+                db.findPath(dbFile);
+
+            res.add("file", gson.toJsonTree(dbFile, GBFile.class));
             res.addProperty("found", true);
-        } catch (Exception ex) {
+        } catch (StorageException ex) {
             ex.printStackTrace();
             res.addProperty("found", false);
         }

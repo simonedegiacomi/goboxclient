@@ -1,172 +1,98 @@
 package it.simonedegiacomi.goboxclient;
 
 import it.simonedegiacomi.configuration.Config;
-import it.simonedegiacomi.configuration.GUIConnectionTool;
 import it.simonedegiacomi.configuration.LoginTool;
 import it.simonedegiacomi.goboxapi.authentication.Auth;
 import it.simonedegiacomi.goboxapi.authentication.AuthException;
-import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.goboxapi.client.ClientException;
 import it.simonedegiacomi.goboxapi.client.StandardClient;
+import it.simonedegiacomi.goboxclient.ui.*;
 import it.simonedegiacomi.storage.Storage;
 import it.simonedegiacomi.storage.StorageException;
 import it.simonedegiacomi.sync.Sync;
-import it.simonedegiacomi.utils.EasyProxy;
-import it.simonedegiacomi.utils.SingleInstancer;
-import it.simonedegiacomi.utils.Speaker;
+import it.simonedegiacomi.utils.GoBoxInstance;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
-import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.IOException;
 
 /**
- * This class load the config, let the user log in and
- * start the client, the sync and the storage
+ * This class load the config, let the user log in and start the client, the sync and the storage
  *
  * Created on 24/12/2015.
  * @author Degiacomi Simone
 **/
 public class Main {
 
-    // Default delay to wait between the new connection attempt
+    /**
+     * Logger of this class
+     */
+    private static final Logger logger = Logger.getLogger(Main.class);
+
+    /**
+     * Default delay to wait between the new connection attempt
+     */
     private static final int DEFAULT_RESTART_DELAY = 5000;
 
-    private static final String DEFAULT_LOG_CONFIG = "config/log.conf";
-
-    private static final Logger logger = org.apache.log4j.Logger.getLogger(Main.class);
-
+    /**
+     * Config instance
+     */
     private static final Config config = Config.getInstance();
 
-    private static TrayController tray;
+    /**
+     * Facade instance of this program (a sort of a control panel)
+     */
+    private static final GoBoxFacade facade = new GoBoxFacade();
 
-    private static Speaker speaker;
+    /**
+     * Model instance of the program
+     */
+    private final static Model goboxModel = new GoBoxModel(facade);
 
-    private static Storage storage;
-
-    private static Sync sync;
-
-    private static Client client;
+    private final static Presenter presenter = new GoBoxPresenter(goboxModel);
 
     public static void main(String[] args) {
-
-        // Configure the logger
-        PropertyConfigurator.configure(DEFAULT_LOG_CONFIG);
+        Config.loadLoggerConfig();
 
         // Check if this is the only instance
-        SingleInstancer singler = new SingleInstancer();
+        GoBoxInstance instance = new GoBoxInstance();
 
-        // Otherwise close the program
-        //if(!singler.isSingle())
-        //    error("GoBox already running");
-
-        // Set the shutdown action
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-
-            @Override
-            public void run () {
-                shutdown();
+        // Otherwise start the CLI interface
+        if(!instance.isSingle()) {
+            try {
+                instance.sendToMainInstance(args);
+            } catch (IOException ex) {
+                System.out.println("GoBox CLI is not available");
             }
-        });
+            return;
+        }
 
-        // Initialize controls
-        initializeControls();
+        // Set the presenter to this instance
+        instance.setPresenter(presenter);
 
-        // When the config change
-        config.addOnconfigChangeListener(new Config.OnConfigChangeListener() {
-            @Override
-            public void onChange() {
-
-                // Reload the proxy configuration
-                EasyProxy.manageProxy(config);
-                advice("Configuration reloaded");
-            }
-        });
+        // If there is a gui, create the tray view
+        if (!GraphicsEnvironment.isHeadless()) {
+            TrayView view = new TrayView(presenter);
+            presenter.addView(view);
+        }
 
         try {
 
             // Load the resources and initialize the classes
-            initializeEnvironment();
+            facade.initializeEnvironment();
         } catch (IOException ex) {
-
-            error("Can't load resources files");
+            logger.warn("Can't load resources from file");
         }
 
-        // If the user is not logged start the login wizard
-        if (config.getProperty("username") == null) {
-
-            advice("No Authentication token found. Start login procedure");
-
-            // Start login
-            startLogin();
+        // If the user is not logged (or if the configuration was not loaded) start the login wizard
+        if (config.isAuthDefined()) {
+            afterLogin();
         } else {
 
-            // Login already done
-            afterLogin();
+            // Start login procedure
+            startLogin();
         }
-    }
-
-    /**
-     * Initialize controls like the icon tray
-     */
-    private static void initializeControls () {
-
-        // If there is a graphic interface add the tray icon
-        if(!GraphicsEnvironment.isHeadless()) {
-            tray = new TrayController();
-
-            // Set the connection settings button
-            tray.setSettingsButtonListener(new ActionListener() {
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    new GUIConnectionTool().show();
-                }
-            });
-
-            // Set the close action
-            tray.setOnCloseListener(new ActionListener() {
-                @Override
-                public void actionPerformed(ActionEvent e) {
-
-                    shutdown();
-                    System.exit(0);
-                }
-            });
-
-            // Show the icon in the tray
-            tray.showTray();
-        }
-
-        // Initialize speaker
-        speaker = new Speaker(new Speaker.Listener() {
-            @Override
-            public void onMessage(String message) {
-                advice(message);
-            }
-        });
-    }
-
-    /**
-     * This method load the urls and the config
-     * @throws IOException File not found or invalid
-     */
-    private static void initializeEnvironment () throws IOException {
-
-        // Load the urls
-        config.loadUrls();
-
-        // Set the urls
-        Auth.setUrlBuilder(config.getUrls());
-        StandardClient.setUrlBuilder(config.getUrls());
-
-        // Load the other config
-        config.load();
-
-        // Apply this config and reload the needed components with the new config
-        config.apply();
     }
 
     /**
@@ -199,7 +125,7 @@ public class Main {
         try {
 
             // Try to authenticate
-            advice("Authenticating...");
+            goboxModel.setFlashMessage("Authenticating...");
 
             if(!auth.check()) {
 
@@ -213,7 +139,6 @@ public class Main {
 
                 // Restart the login procedure
                 startLogin();
-
                 return;
             }
 
@@ -226,18 +151,17 @@ public class Main {
             return;
         } catch (IOException ex) {
 
-            error("Cannot save config file");
+            logger.warn(ex);
         }
 
         // Start the right client
         switch (auth.getMode()) {
 
             case CLIENT:
-
                 startClientMode(auth);
                 break;
-            case STORAGE:
 
+            case STORAGE:
                 startStorageMode(auth);
                 break;
         }
@@ -248,25 +172,24 @@ public class Main {
      * @param auth Auth object to use to instantiate the client
      */
     private static void startClientMode (Auth auth) {
+        goboxModel.setFlashMessage("Connecting as client ...");
 
-        advice("Connecting as client ...");
+        // Create the client
+        StandardClient client = new StandardClient(auth);
+        facade.setClient(client);
+
         try {
 
-            // Create the client
-            client = new StandardClient(auth);
+            // Create the sync object
+            Sync sync = new Sync(client);
+            facade.setSync(sync);
 
-            // And the sync object
-            sync = new Sync(client);
-
-            // Set the speaker
-            sync.setSpeaker(speaker);
-
-            ((StandardClient) client).onDisconnect(new StandardClient.DisconnectedListener() {
+            client.onDisconnect(new StandardClient.DisconnectedListener() {
                 @Override
                 public void onDisconnect() {
 
                     // Call the shutdown method
-                    shutdown();
+                    facade.shutdown();
 
                     // And retry later
                     disconnected();
@@ -274,40 +197,27 @@ public class Main {
             });
 
             // Connect the client to the server and the storage
-            ((StandardClient) client).connect();
-
-            // If there is the gui
-            if (!GraphicsEnvironment.isHeadless()) {
-
-                // Update the tray icon
-                tray.setMode("Bridge");
-            }
+            client.init();
 
             try {
 
                 // Try to switch to direct mode
-                ((StandardClient) client).switchMode(StandardClient.ConnectionMode.DIRECT_MODE);
+                client.switchMode(StandardClient.ConnectionMode.DIRECT_MODE);
 
             } catch (ClientException ex) {
-
                 logger.warn(ex);
             }
 
             // Start sync
             sync.resyncAndStart();
 
-            advice("Ready");
-
-            if (!GraphicsEnvironment.isHeadless()) {
-
-                tray.setSyncCheckUsability(true);
-            }
+            goboxModel.setFlashMessage("Ready");
 
         } catch (ClientException ex) {
-
+            logger.warn(ex);
             disconnected();
         } catch (IOException ex) {
-
+            logger.warn(ex);
             disconnected();
         }
     }
@@ -317,7 +227,7 @@ public class Main {
      */
     private static void disconnected () {
 
-        advice("Connection Error");
+        goboxModel.setFlashMessage("Disconnected. Retry soon...");
 
         // wait some seconds...
         try {
@@ -325,7 +235,7 @@ public class Main {
             Thread.sleep(DEFAULT_RESTART_DELAY);
         } catch (InterruptedException ex) { }
 
-        advice("New connection attempt");
+        goboxModel.setFlashMessage("New connection attempt");
 
         // Restart
         afterLogin();
@@ -336,15 +246,18 @@ public class Main {
      * @param auth Auth object to use
      */
     private static void startStorageMode (Auth auth) {
+        goboxModel.setFlashMessage("Connecting as storage...");
 
-        advice("Connecting as storage...");
         try {
 
             // Create the storage
-            storage = new Storage(auth);
+            Storage storage = new Storage(auth);
+            facade.setStorage(storage);
+            facade.setClient(storage.getInternalClient());
 
             // Create the sync object
-            sync = new Sync(storage.getInternalClient());
+            Sync sync = new Sync(storage.getInternalClient());
+            facade.setSync(sync);
 
             // Set the sync object to the storage environment
             storage.getEnvironment().setSync(sync);
@@ -353,8 +266,7 @@ public class Main {
             storage.onDisconnected(new Storage.DisconnectedListener() {
                 @Override
                 public void onDisconnected() {
-
-                    shutdown();
+                    facade.shutdown();
 
                     // Call the function that will try to reconnect soon
                     disconnected();
@@ -366,14 +278,6 @@ public class Main {
 
             // Sync the folders and files
             sync.resyncAndStart();
-
-            // If the Graphics Environment is available, add a tray icon
-            if (!GraphicsEnvironment.isHeadless()) {
-
-                // configure the tray icon
-                tray.setSyncCheckUsability(false);
-                tray.setMode("Storage");
-            }
         } catch (StorageException e) {
 
             logger.warn(e);
@@ -388,7 +292,7 @@ public class Main {
             disconnected();
         }
 
-        advice("Ready");
+        goboxModel.setFlashMessage("Ready");
     }
 
     /**
@@ -401,44 +305,9 @@ public class Main {
     }
 
     private static void error (String message, boolean close) {
-        logger.fatal(message);
-        if (!GraphicsEnvironment.isHeadless())
-            JOptionPane.showMessageDialog(null, message, "Error", JOptionPane.ERROR_MESSAGE);
+        goboxModel.setError(message);
+
         if (close)
-            System.exit(-1);
-    }
-
-    /**
-     * Print in the console or untrash in the tray icon the message
-     * @param message Message to untrash
-     */
-    private static void advice (String message) {
-        logger.info(message);
-        if (tray != null) {
-            // Show in the icon tray
-            tray.setMessage(message);
-        }
-    }
-
-    /**
-     * Prepare the program to exit correctly disconnection all the object
-     */
-    private static void shutdown () {
-
-        if(storage != null) {
-            storage.shutdown();
-        }
-
-        if(sync != null) {
-            try {
-                sync.shutdown();
-            } catch (Exception ex) { }
-        }
-
-        if(client != null) {
-            try {
-                client.shutdown();
-            } catch (Exception ex) { }
-        }
+            facade.exit();
     }
 }

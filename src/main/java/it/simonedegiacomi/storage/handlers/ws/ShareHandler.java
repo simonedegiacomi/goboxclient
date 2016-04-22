@@ -9,6 +9,7 @@ import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import it.simonedegiacomi.storage.DAOStorageDB;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
@@ -44,16 +45,18 @@ public class ShareHandler implements WSQueryHandler {
         // Cast the request
         JsonObject request = data.getAsJsonObject();
 
+        if (request.has("ID")) {
+            response.addProperty("success", false);
+            return response;
+        }
+
         // Check if the file is to share or unshare
         boolean share = request.has("share") ? request.get("share").getAsBoolean() : false;
 
         try {
 
-            // Wrap the file from the request
-            GBFile file = db.getFileById(request.get("id").getAsLong());
-
             // Change the access of this file
-            db.changeAccess(file, share);
+            db.share(request.get("ID").getAsLong(), share);
 
             // Complete the response
             response.addProperty("success", true);
@@ -62,11 +65,11 @@ public class ShareHandler implements WSQueryHandler {
             if(share) {
 
                 // Add the link to the response
-                response.addProperty("link", generateLink(file));
-                log.info("New file shared: " + file.getName());
+                response.addProperty("link", generateLink(request.get("ID").getAsLong()));
+                log.info("New file shared");
             } else {
 
-                log.info("Unshared file: " + file.getName());
+                log.info("Unshared file");
             }
         } catch (StorageException ex) {
 
@@ -84,12 +87,12 @@ public class ShareHandler implements WSQueryHandler {
      * @param file File related to the link
      * @return Link of the file as string
      */
-    private String generateLink (GBFile file) {
+    private String generateLink (long file) {
         return new StringBuilder().append(urls.getAsString("getFile"))
                 .append("?host=")
                 .append(config.getAuth().getUsername())
                 .append("&ID=")
-                .append(file.getID())
+                .append(file)
                 .toString();
     }
 }

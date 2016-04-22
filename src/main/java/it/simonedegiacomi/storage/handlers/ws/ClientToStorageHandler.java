@@ -10,6 +10,7 @@ import it.simonedegiacomi.goboxapi.authentication.Auth;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
+import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import it.simonedegiacomi.storage.*;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
@@ -38,11 +39,11 @@ public class ClientToStorageHandler implements WSQueryHandler {
 
     private final Auth auth = config.getAuth();
 
-    private URLBuilder urls = config.getUrls();
+    private final URLBuilder urls = config.getUrls();
 
     private final String PATH = config.getProperty("path");
 
-    private final Gson gson = new Gson();
+    private final Gson gson = MyGsonBuilder.create();
 
     private final EventEmitter emitter;
 
@@ -67,33 +68,31 @@ public class ClientToStorageHandler implements WSQueryHandler {
         JsonObject json = data.getAsJsonObject();
 
         if (!json.has("uploadKey")) {
-
             queryResponse.addProperty("success", false);
             queryResponse.addProperty("error", "missing upload key");
+            return queryResponse;
+        }
+
+        if (!json.has("name") || ! json.has("father")) {
+            queryResponse.addProperty("success", false);
+            queryResponse.addProperty("error", "missing file");
             return queryResponse;
         }
 
         // Get the uploadKey
         String uploadKey = json.get("uploadKey").getAsString();
 
-        // Wrap the incoming file
-        GBFile incomingFile = gson.fromJson(data.toString(), GBFile.class);
-
-        // Set the path of the environment
-        incomingFile.setPrefix(PATH);
+        // Wrap the incoming file and the father
+        GBFile father = gson.fromJson(json.get("father"), GBFile.class);
 
         try {
 
-            // Find the path
-            db.findPath(incomingFile);
-        } catch (StorageException ex) {
+            // Get information about the father
+            GBFile dbFather = db.getFile(father);
 
-            queryResponse.addProperty("success", false);
-            queryResponse.addProperty("error", ex.toString());
-            return queryResponse;
-        }
+            // Create the gb new file
+            GBFile child = dbFather.generateChild(json.get("name").getAsString(), false);
 
-        try {
             // Make the https request to the main server
             URL url = urls.get("receiveFile");
             HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
@@ -107,15 +106,15 @@ public class ClientToStorageHandler implements WSQueryHandler {
             auth.authorize(conn);
 
             // Create the json that will identify the upload
-            JsonObject json = new JsonObject();
-            json.addProperty("uploadKey", uploadKey);
+            JsonObject jsonReq = new JsonObject();
+            jsonReq.addProperty("uploadKey", uploadKey);
 
             // Send this json
 
             // Specify the length of the json
-            conn.setRequestProperty("Content-Length", String.valueOf(json.toString().length()));
+            conn.setRequestProperty("Content-Length", String.valueOf(jsonReq.toString().length()));
             PrintWriter out = new PrintWriter(conn.getOutputStream());
-            out.println(json.toString());
+            out.println(jsonReq.toString());
 
             // Flush the request
             out.close();
@@ -131,13 +130,10 @@ public class ClientToStorageHandler implements WSQueryHandler {
             }
 
             // Tell the internal client to ignore this event
-            watcher.startIgnoring(incomingFile.toFile());
-
-            // Find the right path
-            db.findPath(incomingFile);
+            watcher.startIgnoring(child.toFile());
 
             // Create the stream to the disk
-            DataOutputStream toDisk = new DataOutputStream(new FileOutputStream(incomingFile.toFile()));
+            DataOutputStream toDisk = new DataOutputStream(new FileOutputStream(child.toFile()));
 
             // Copy the stream
             ByteStreams.copy(conn.getInputStream(), toDisk);
@@ -149,19 +145,18 @@ public class ClientToStorageHandler implements WSQueryHandler {
             conn.disconnect();
 
             // Read the info of the file
-            MyFileUtils.loadFileAttributes(incomingFile);
+            MyFileUtils.loadFileAttributes(child);
 
             // Insert the file in the database
-            SyncEvent event = db.insertFile(incomingFile);
+            SyncEvent event = db.insertFile(child);
 
             // The notification will contain the new file information
             emitter.emitEvent(event);
 
             // Stop ignoring
-            watcher.stopIgnoring(incomingFile.toFile());
+            watcher.stopIgnoring(child.toFile());
 
             queryResponse.addProperty("success", true);
-
         } catch (IOException ex) {
 
             log.warn(ex.toString(), ex);

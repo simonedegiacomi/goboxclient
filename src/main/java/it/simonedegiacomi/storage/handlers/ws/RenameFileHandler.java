@@ -7,6 +7,7 @@ import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
+import it.simonedegiacomi.storage.DAOStorageDB;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 
@@ -46,7 +47,7 @@ public class RenameFileHandler implements WSQueryHandler{
         try {
 
             // Fill with the info
-            db.fillFile(file);
+            GBFile dbFile = db.getFile(file);
 
             // Change the name on the filesystem
             Files.move(file.toFile().toPath(), new File(file.getPathAsString() + "/" + newName).toPath());

@@ -1,5 +1,6 @@
 package it.simonedegiacomi.goboxclient.ui;
 
+import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.sync.Work;
 
 import java.util.Set;
@@ -33,7 +34,7 @@ public interface View {
      *
      * @param state Current state of the client
      */
-    void setClientState (ClientState state);
+    void setClientState (Client.ClientState state);
 
     /**
      * Set if the sync is running
@@ -45,6 +46,18 @@ public interface View {
      * Set the current works
      * @param worksQueue Running works
      */
-    void setWorks (Set<Work> worksQueue);
+    void setCurrentWorks(Set<Work> worksQueue);
+
+    /**
+     * Set the message the is always visible and indicate the state
+     * @param message Message
+     */
+    void setMessage (String message);
+
+    /**
+     * Show the specified message to the user
+     * @param error Message to show
+     */
+    void showError (String error);
 
 }

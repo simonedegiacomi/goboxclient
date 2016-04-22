@@ -9,10 +9,7 @@ import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
-import it.simonedegiacomi.storage.EventEmitter;
-import it.simonedegiacomi.storage.StorageDB;
-import it.simonedegiacomi.storage.StorageEnvironment;
-import it.simonedegiacomi.storage.StorageException;
+import it.simonedegiacomi.storage.*;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.FileSystemWatcher;
 
@@ -51,19 +48,12 @@ public class CopyOrCutHandler implements WSQueryHandler {
         JsonObject json = data.getAsJsonObject();
 
         // Get the cut flag from the request
-        boolean cut = json.get("cut").getAsBoolean();
+        boolean cut = json.has("cut") ? json.get("cut").getAsBoolean() : false;
 
-        if (!json.has("file")) {
+        if (!json.has("file") || !json.has("newFather")) {
 
             response.addProperty("success", false);
             response.addProperty("error", "missing file");
-            return response;
-        }
-
-        if (!json.has("newFather")) {
-
-            response.addProperty("success", false);
-            response.addProperty("error", "missing new father");
             return response;
         }
 
@@ -73,81 +63,77 @@ public class CopyOrCutHandler implements WSQueryHandler {
         // Instance the new father from the json
         GBFile newFather = gson.fromJson(json.get("newFather"), GBFile.class);
 
+        GBFile dbFile, dbFather;
+
         try {
 
-            // Fill with the correct information
-            db.fillFile(file);
+            // I need to place another try/catch, so i can use the finally block in the second try/catch
+            // to stop ignoring the file.
 
-            // Fill with the information
-            db.fillFile(newFather);
+            // Get the file with all the information
+            dbFile = db.getFile(file);
+            dbFather = db.getFile(newFather);
+
+            if (file == null || dbFather == null) {
+                response.addProperty("success", false);
+                response.addProperty("error", "file not found");
+                return response;
+            }
+
+            dbFather.setPrefix(PATH);
+            dbFather.setPrefix(PATH);
         } catch (StorageException ex) {
-
             response.addProperty("success", false);
-            response.addProperty("error", "Cannot find file information");
             return response;
         }
 
-        // Create the new file
-        GBFile newFile = new GBFile(file.getName(), newFather.getID(), file.isDirectory());
-
-        // Set the path of this environment
-        file.setPrefix(PATH);
-        newFather.setPrefix(PATH);
-        newFile.setPrefix(PATH);
-
-        // Assert that the name is unique
-        while (newFile.toFile().exists()) {
-            newFile.setName(newFile.getName() + " - Copy");
-        }
-
-        // Tell the client to ignore this event (the copy)
-        watcher.startIgnoring(newFile.toFile());
-
         try {
 
-            // Copy the file to the new destination
-            MyFileUtils.copyR(file.toFile(), newFile.toFile());
+            // Generate the new file
+            GBFile newFile = dbFather.generateChild(dbFile.getName(), dbFile.isDirectory());
 
+            // Assert that the name is unique
+            while (newFile.toFile().exists()) {
+                newFile.setName(newFile.getName() + " - Copy");
+            }
+
+            // Tell the client to ignore this event (the copy)
+            watcher.startIgnoring(newFile.toFile());
+            watcher.startIgnoring(dbFile.toFile());
+
+            // Copy the file to the new destination
+            MyFileUtils.copyR(dbFile.toFile(), newFile.toFile());
+
+            // Create a new Sync event
+            SyncEvent creationEvent = db.copyFile(dbFile.getID(), dbFather.getID(), newFile.getName());
+
+            // Emit it
+            emitter.emitEvent(creationEvent);
+
+            // Remove the files if the operation is a cut
+            if (cut) {
+
+                // Delete from the disk
+                MyFileUtils.deleteR(dbFile.toFile());
+
+                SyncEvent deletion = db.removeFile(dbFile.getID());
+                emitter.emitEvent(deletion);
+            }
+
+            // Stop ignoring this file
+            watcher.stopIgnoring(newFile.toFile());
         } catch (IOException ex) {
 
             response.addProperty("success", false);
             response.addProperty("error", "IO error");
             return response;
-        } finally {
-
-            // Stop ignoring this file
-            watcher.stopIgnoring(newFile.toFile());
-        }
-
-        try {
-            // Create a new Sync event
-            SyncEvent creationEvent = db.copyFile(file, newFile);
-
-            // Emit it
-            emitter.emitEvent(creationEvent);
         } catch (StorageException ex) {
 
             // TODO: If the event is not insert in the database, i should remove the file copy
             response.addProperty("success", false);
             return response;
-        }
-
-        // Remove the files if the operation is a cut
-        if (cut) {
-
-            // Tell the file system watcher to ignore
-            watcher.startIgnoring(file.toFile());
-
-            // Delete from the disk
-            MyFileUtils.deleteR(file.toFile());watcher.stopIgnoring(file.toFile());
-
-            try {
-                SyncEvent deletion = db.removeFile(newFile);
-                emitter.emitEvent(deletion);
-            } catch (StorageException ex) {
-                response.addProperty("success", false);
-                return response;
-            }
+        } finally {
+            watcher.stopIgnoring(dbFile.toFile());
         }
 
         // Complete the response

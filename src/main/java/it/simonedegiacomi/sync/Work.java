@@ -2,12 +2,8 @@ package it.simonedegiacomi.sync;
 
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.client.Client;
-import it.simonedegiacomi.goboxapi.client.ClientException;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import org.apache.log4j.Logger;
-import org.apache.tika.utils.ExceptionUtils;
-
-import java.io.IOException;
 
 /**
  * Created on 17/02/16.

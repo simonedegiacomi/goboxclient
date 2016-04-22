@@ -61,7 +61,7 @@ public abstract class StorageDB {
      * @return Path of the file
      * @throws StorageException
      */
-    public abstract List<GBFile> getPathByID (long ID) throws StorageException;
+    public abstract List<GBFile> getPath (long ID) throws StorageException;
 
     /**
      * Calls {@link #getPathByID(long)} and then sets the path to the specified file
@@ -127,7 +127,7 @@ public abstract class StorageDB {
      * @return Generated event
      * @throws StorageException
      */
-    public abstract SyncEvent removeFile (long ID) throws StorageException;
+    public abstract SyncEvent removeFile (GBFile file) throws StorageException;
 
     /**
      * Copy the specified file to the father ID folder
@@ -178,7 +178,7 @@ public abstract class StorageDB {
      * @param ID File to add
      * @throws StorageException
      */
-    public abstract void addToRecent (long ID) throws StorageException;
+    public abstract void addToRecent (GBFile file) throws StorageException;
 
     /**
      * Return the list with the recent files in order.

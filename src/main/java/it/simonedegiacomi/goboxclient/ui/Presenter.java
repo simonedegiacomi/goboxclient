@@ -14,7 +14,7 @@ public interface Presenter {
 
     /**
      * Add a new view that the model will use to show the data from the model
-     * @param New view to add
+     * @param View to add
      */
     void addView (View view);
 
@@ -48,11 +48,6 @@ public interface Presenter {
     void connectClient ();
 
     /**
-     * This method can be called by the view and proxy the action to the model
-     */
-    void disconnectClient ();
-
-    /**
      * This method can be called by the view to exit the program (the Model method will be called).
      */
     void exitProgram ();
@@ -62,5 +57,4 @@ public interface Presenter {
      * @param state New state of the model
      */
     void setSync (boolean state);
-
 }

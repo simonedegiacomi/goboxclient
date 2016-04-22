@@ -8,6 +8,7 @@ import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
+import it.simonedegiacomi.storage.DAOStorageDB;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 
@@ -33,7 +34,7 @@ public class ShareListHandler implements WSQueryHandler{
         JsonObject response = new JsonObject();
 
         try {
-            List<GBFile> files = db.getSharedFiles();
+            List<GBFile> files = db.getSharedList();
             response.add("files", gson.toJsonTree(files, new TypeToken<List<GBFile>>(){}.getType()));
             response.addProperty("found", true);
         } catch (Exception ex) {

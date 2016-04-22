@@ -2,7 +2,6 @@ package it.simonedegiacomi.storage;
 
 import com.j256.ormlite.dao.Dao;
 import com.j256.ormlite.dao.DaoManager;
-import com.j256.ormlite.dao.GenericRawResults;
 import com.j256.ormlite.jdbc.JdbcConnectionSource;
 import com.j256.ormlite.jdbc.JdbcDatabaseConnection;
 import com.j256.ormlite.stmt.DeleteBuilder;
@@ -105,6 +104,7 @@ public class DAOStorageDB extends StorageDB {
      * Close the connection
      * @throws SQLException
      */
+    @Override
     public void close () throws SQLException {
 
         if (db == null)
@@ -113,6 +113,64 @@ public class DAOStorageDB extends StorageDB {
         db.close();
         connectionSource.close();
         log.info("Database disconnected");
+    }
+
+    /**
+     * Return the file from the database with this id
+     * @param id ID of the file to find
+     * @return File, null if not found
+     * @throws StorageException
+     */
+    @Override
+    public GBFile getFileByID(long id) throws StorageException {
+        try {
+            return fileTable.queryForId(id);
+        } catch (SQLException ex) {
+            throw new StorageException(ex.toString());
+        }
+    }
+
+    /**
+     * Return the file in the database with this path
+     * @param path Path of the file
+     * @return File, null if not found
+     * @throws StorageException
+     */
+    @Override
+    public GBFile getFileByPath(List<GBFile> path) throws StorageException {
+        if (path == null)
+            throw new InvalidParameterException("path is null");
+
+        try {
+            // Prepare the query that is the same each iteration
+            PreparedStatement stmt = db.prepareStatement("SELECT ID FROM file WHERE father_ID = ? AND name = ?");
+
+            // Start with the only file where i'm sure o know his father, the root
+            long fatherOfSomeone = GBFile.ROOT_ID;
+
+            // Find the father of every ancestor node
+            for(GBFile ancestor : path) {
+                ancestor.setFatherID(fatherOfSomeone);
+
+                // Query the database
+                stmt.setLong(1, fatherOfSomeone);
+                stmt.setString(2, ancestor.getName());
+                ResultSet res = stmt.executeQuery();
+
+                // If there is no result
+                if(!res.next())
+                    return ancestor;
+
+                fatherOfSomeone = res.getLong("ID");
+                res.close();
+                ancestor.setID(fatherOfSomeone);
+            }
+
+        } catch (SQLException ex) {
+            log.warn(ex.toString(), ex);
+            throw new StorageException("Cannot find ID");
+        }
+
     }
 
     /**
@@ -139,98 +197,32 @@ public class DAOStorageDB extends StorageDB {
     }
 
     /**
-     * Find the ID of the file and set it in the GBFile. This method works only when the path is set.
-     * If the file is not in the database, only the father ID will be found, same for his father etc..
-     * So, if you call this method when the file 'music/song.mp3' in not inserted yet into the database, as result
-     * you'll have the file music with his ID and father ID (the root in this case) and the father ID in 'song.mp3'
-     *
-     * TL;DR use this method to find the father
-     * @param file File to which find the id using the path
-     */
-    public void findIDByPath (GBFile file) throws StorageException {
-
-        if (file == null)
-            throw new InvalidParameterException("File can't be null");
-
-        // Get the path list
-        List<GBFile> path = file.getPathAsList();
-
-        if (path == null)
-            throw new InvalidParameterException("The file has a null path");
-
-        try {
-            // Prepare the query that is the same each iteration
-            PreparedStatement stmt = db.prepareStatement("SELECT ID FROM file WHERE father_ID = ? AND name = ?");
-
-            // Start with the only file where i'm sure o know his father, the root
-            long fatherOfSomeone = GBFile.ROOT_ID;
-
-            // Find the father of every ancestor node
-            for(GBFile ancestor : path) {
-                ancestor.setFatherID(fatherOfSomeone);
-
-                // Query the database
-                stmt.setLong(1, fatherOfSomeone);
-                stmt.setString(2, ancestor.getName());
-                ResultSet res = stmt.executeQuery();
-
-                // If there is no result
-                if(!res.next())
-                    return;
-
-                fatherOfSomeone = res.getLong("ID");
-                res.close();
-                ancestor.setID(fatherOfSomeone);
-            }
-
-        } catch (SQLException ex) {
-            log.warn(ex.toString(), ex);
-            throw new StorageException("Cannot find ID");
-        }
-    }
-
-    /**
      * Find the path of the file. This method works only if the father ID of the GBFile is set.
-     * However, if you call this method and the path field in the GBFile is set, the method 'findIDByPath'
-     * will be called.
      * @param file File that doesn't know his path
      */
-    public void findPath(GBFile file) throws StorageException {
-
-        // Check if the file is null
-        if (file == null)
-            throw new InvalidParameterException("File can't be null");
-
-        // Get the father id of the file
-        long fatherId = file.getFatherID();
-
-        // Check if it's known
-        if(fatherId == GBFile.UNKNOWN_ID) {
-            throw new InvalidParameterException("This file doesn't know his father id");
-        }
+    @Override
+    public List<GBFile> getPath (long id) throws StorageException {
+        if(id <= 0)
+            throw new InvalidParameterException("invalid id");
 
         // Create a new temporary list
         List<GBFile> path = new LinkedList<>();
 
         // Until the father is the root
-        while (fatherId != GBFile.ROOT_ID) {
+        while (id != GBFile.ROOT_ID) {
 
             // find the father of the father
-            GBFile node = this.getFileById(fatherId);
-            fatherId = node.getFatherID();
+            GBFile node = getFileByID(id);
+            id = node.getFatherID();
 
             // Add this father tot he list
             path.add(0, node);
          }
 
         // Finally add the root
-        path.add(0, new GBFile(1, 1, "", true));
+        path.add(0, GBFile.ROOT_FILE);
 
-        // Add also the file as last element
-        path.add(file);
-
-        // And set the path to the file
-        file.setPathByList(path);
+        return path;
     }
 
     /**
@@ -239,6 +231,7 @@ public class DAOStorageDB extends StorageDB {
      *                inserting the data (the ID)
      * @throws Exception Exception thrown during the insertion
      */
+    @Override
     public SyncEvent insertFile (GBFile newFile) throws StorageException {
 
         // Assert that the file is not null
@@ -247,7 +240,7 @@ public class DAOStorageDB extends StorageDB {
 
         // If the file doesn't know his father, let's find his
         if (newFile.getFatherID() == GBFile.UNKNOWN_ID)
-            findIDByPath(newFile);
+            throw new InvalidParameterException("father id not set");
 
         try {
 
@@ -291,6 +284,7 @@ public class DAOStorageDB extends StorageDB {
      * @param updatedFile File to update with the new information
      * @return Generated sync event
      */
+    @Override
     public SyncEvent updateFile (GBFile updatedFile) throws StorageException {
 
         // Check if the file is null
@@ -300,7 +294,7 @@ public class DAOStorageDB extends StorageDB {
         try {
             // If the file doesn't know his id, let's find it
             if(updatedFile.getID() == GBFile.UNKNOWN_ID)
-                findIDByPath(updatedFile);
+                updatedFile = getFileByPath(updatedFile.getPathAsList());
 
             // Update the file table
             fileTable.update(updatedFile);
@@ -316,20 +310,79 @@ public class DAOStorageDB extends StorageDB {
     }
 
     /**
+     * Return the list of the children of this file
+     * @param ID ID of the father
+     * @return List of children.
+     * @throws StorageException
+     */
+    @Override
+    public List<GBFile> getChildren(long ID) throws StorageException {
+        try {
+            return fileTable.queryBuilder()
+                    .orderBy("name", true)
+                    .where().eq("father_ID", ID)
+                    .query();
+        } catch (Exception ex) {
+            log.warn(ex.toString(), ex);
+            throw new StorageException("Cannot find children");
+        }
+    }
+
+    @Override
+    public SyncEvent trashFile(long ID, boolean toTrash) throws StorageException {
+        if (ID == GBFile.UNKNOWN_ID)
+            throw new InvalidParameterException("invalid ID");
+
+        try {
+            fileTable.executeRaw("UPDATE file SET trashed = ? WHERE ID = ?", String.valueOf(ID), String.valueOf(toTrash));
+        } catch (SQLException ex) {
+            throw new StorageException(ex.toString());
+        }
+    }
+
+    @Override
+    public void share(long ID, boolean share) throws StorageException {
+
+        try {
+            if(share) {
+                sharingTable.create(new Sharing(ID));
+            } else {
+
+                DeleteBuilder<Sharing, Long> stmt = sharingTable.deleteBuilder();
+                stmt.where().eq("file_ID", ID);
+                if(stmt.delete() < 0)
+                    throw new StorageException("Filed is nit shared");
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            throw new StorageException(ex.toString());
+        }
+    }
+
+    @Override
+    public List<GBFile> getSharedList() throws StorageException {
+        try {
+            QueryBuilder<GBFile, Long> fileQuery = fileTable.queryBuilder();
+            QueryBuilder<Sharing, Long> sharingQuery = sharingTable.queryBuilder();
+            return fileQuery.join(sharingQuery).query();
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            throw new StorageException(ex.toString());
+        }
+    }
+
+    /**
      * Remove a file from the database
      * @param fileToRemove File to remove
      * @return The generated sync event
      */
+    @Override
     public SyncEvent removeFile (GBFile fileToRemove) throws StorageException {
 
-        // Check if the file is null
-        if (fileToRemove == null)
-            throw new InvalidParameterException("File can't be null");
-
         try {
-            // If the file doesn't know his id, let's find it
-            if(fileToRemove.getID() == GBFile.UNKNOWN_ID)
-                findIDByPath(fileToRemove);
+
+            if (fileToRemove.getID() == GBFile.UNKNOWN_ID)
+                fileToRemove = getFileByPath(fileToRemove);
 
             // Remove from the database
             fileTable.deleteById(fileToRemove.getID());
@@ -352,177 +405,19 @@ public class DAOStorageDB extends StorageDB {
     }
 
     /**
-     * Query the database to find the children of a directory. this method works only if
-     * the ID of the file is set
-     * @param fatherID ID of the father directory
-     * @throws StorageException
-     */
-    public void findChildrenByFather(GBFile father) throws StorageException {
-        try {
-            QueryBuilder<GBFile, Long> stmt =  fileTable.queryBuilder();
-            stmt.where().eq("father_ID", father.getID());
-            stmt.orderBy("name", true);
-            father.setChildren(stmt.query());
-        } catch (Exception ex) {
-            log.warn(ex.toString(), ex);
-            throw new StorageException("Cannot find children");
-        }
-    }
-
-    public GBFile getFile (GBFile file) throws StorageException {
-        return getFile(file, true, true);
-    }
-
-    /**
-     * Fill the file with the information of the database, such as children and path
-     * @param file Fill to fill with his information
-     * @return The same file passed as argument, null if the file isn't found
-     */
-    public GBFile getFile (GBFile file, boolean path, boolean children) throws StorageException {
-
-        // assert that the file is not null
-        if (file == null)
-            throw new InvalidParameterException("This method doesn't accept null file.");
-
-        // Assert that the file know his id
-        if (file.getID() == GBFile.UNKNOWN_ID) {
-
-            if (file.getPathAsList() == null)
-                throw new InvalidParameterException("The file hasn't enough information");
-
-            // Find the id using the path
-            findIDByPath(file);
-        }
-
-        // Assert that know his father
-        GBFile fromDb;
-        try {
-            fromDb = fileTable.queryForId(file.getID());
-            if (fromDb == null)
-                return null;
-        } catch (SQLException es) {
-            throw new StorageException("Cannot find file in the database");
-        }
-
-        // Assert that know his path
-        if (path) {
-
-            // Find it
-            findPath(fromDb);
-        }
-
-        // Assert that know his children
-        if (children) {
-
-            // Find them
-            findChildrenByFather(fromDb);
-        }
-
-        return fromDb;
-    }
-
-    /**
-     * Query the database and return the requested file.
-     * This methodis just an alias for {@link #fillFile(GBFile, boolean, boolean)}
-     * @param id File Id to search in the database
-     * @param children If true, insert in the file also his children
-     * @return File retrieved from the database
-     */
-    public GBFile getFileById (long id, boolean path, boolean children) throws StorageException {
-
-        // Assert that the id is valid
-        if (id <= 0)
-            throw new InvalidParameterException("ID cannot be less than zero");
-
-        return getFile(new GBFile(id), path, children);
-    }
-
-    /**
-     * Query the database and return the GBFile. Either the children and path fields of this object will be null.
-     * This method is just an alias for {@link #getFileById(long, boolean, boolean)}
-     * @param id ID of the file
-     * @return The wrapped GBFile
-     */
-    public GBFile getFileById (long id) throws StorageException {
-        return getFileById(id, false, false);
-    }
-
-    public List<SyncEvent> getUniqueEventsFromID (long ID) throws StorageException {
-
-        try {
-
-            String stringID = String.valueOf(ID);
-
-            GenericRawResults<SyncEvent> eventsRaw = eventTable.queryRaw("SELECT * FROM event," +
-                    "(SELECT file_ID, MAX(date) as lastDate FROM event WHERE ID > ? GROUP BY file_ID) AS latestEvent" +
-                    "WHERE ID > ? AND" +
-                    "latestEvent.file_ID = event.file_ID AND event.date = latestEvent.lastDate", eventTable.getRawRowMapper(), stringID, stringID);
-
-            return eventsRaw.getResults();
-        } catch (SQLException ex) {
-            log.warn(ex);
-            throw new StorageException("Cannot find events");
-        }
-    }
-
-    /**
-     * Share/unshare a file
-     * @param file File to share or unshare
-     * @param share true to share, false otherwise
-     * @throws StorageException
-     */
-    public void changeAccess (GBFile file, boolean share) throws StorageException {
-
-        if (file == null)
-            throw new InvalidParameterException("Cannot share/unshare a null file");
-
-        try {
-            if(share) {
-
-                sharingTable.create(new Sharing(file));
-            } else {
-
-                DeleteBuilder<Sharing, Long> stmt = sharingTable.deleteBuilder();
-                stmt.where().eq("file_ID", file.getID());
-                if(stmt.delete() < 0)
-                    throw new StorageException("Filed is nit shared");
-            }
-        } catch (SQLException ex) {
-            ex.printStackTrace();
-            throw new StorageException(ex.toString());
-        }
-    }
-
-    /**
-     * Return a list of the shared files
-     * @return List of all the shared files
-     * @throws StorageException
-     */
-    public List<GBFile> getSharedFiles () throws StorageException {
-
-        try {
-            QueryBuilder<GBFile, Long> fileQuery = fileTable.queryBuilder();
-            QueryBuilder<Sharing, Long> sharingQuery = sharingTable.queryBuilder();
-            return fileQuery.join(sharingQuery).query();
-        } catch (SQLException ex) {
-            ex.printStackTrace();
-            throw new StorageException(ex.toString());
-        }
-    }
-
-    /**
      * Check if the specified file is shared or not
      * @param file File to check
      * @return Shared or not
      */
-    public boolean isShared (GBFile file) throws StorageException {
+    @Override
+    public boolean isShared (long ID) throws StorageException {
 
-        if (file == null)
+        if (ID < 0)
             throw new InvalidParameterException("File is null");
 
         try {
             PreparedStatement stmt = db.prepareStatement("SELECT ID FROM sharing WHERE file_ID = ?");
-            stmt.setLong(1, file.getID());
+            stmt.setLong(1, ID);
             ResultSet res = stmt.executeQuery();
             boolean exist = res.next();
             res.close();
@@ -542,6 +437,7 @@ public class DAOStorageDB extends StorageDB {
      * @return The list of the files. Empty (but not null) if any file match the request
      * @throws StorageException Database connection or query exception
      */
+    @Override
     public List<GBFile> search (String keyword, String kind, long from, long n) throws StorageException {
 
         try {
@@ -563,14 +459,22 @@ public class DAOStorageDB extends StorageDB {
         }
     }
 
-    /**
-     * Return a list of the recent files in date order
-     * @param from Offset of the result list
-     * @param size Limit of result
-     * @return List of recent files
-     */
-    public List<GBFile> getRecentFiles (long from, long size) throws StorageException {
+    @Override
+    public void addToRecent(GBFile file) throws StorageException {
+        try {
 
+            // Create the new event
+            SyncEvent newEvent = new SyncEvent(SyncEvent.EventKind.OPEN_FILE, file);
+
+            // Insert into the database
+            eventTable.create(newEvent);
+        } catch (SQLException ex) {
+            // No one cares...
+        }
+    }
+
+    @Override
+    public List<GBFile> getRecentList(long from, long size) throws StorageException {
         try {
 
             // Query builder event table
@@ -587,61 +491,31 @@ public class DAOStorageDB extends StorageDB {
                     .limit(size)
                     .query();
         } catch (SQLException ex) {
-
             throw new StorageException("Cannot search");
         }
     }
 
-    /**
-     * Move a file to/from the trash
-     * @param fileToMove File to move
-     * @param toTrash To trash/from trash
-     * @throws StorageException
-     */
-    public void moveToTrash (GBFile fileToMove, boolean toTrash) throws StorageException {
+    @Override
+    public List<GBFile> getTrashList() throws StorageException {
+            try {
 
-        if (fileToMove == null)
-            throw new InvalidParameterException("The file to remove cannot be null");
+                // Prepare the query
+                QueryBuilder<GBFile, Long> queryBuilder = fileTable.queryBuilder();
 
-        // Change the flag
-        fileToMove.setTrashed(toTrash);
+                // Make the query
+                return queryBuilder
+                        .orderBy("name", false)
+                        .where().eq("trashed", false)
+                        .query();
+            } catch (SQLException ex) {
 
-        try {
-
-            // Update the database
-            fileTable.update(fileToMove);
-        } catch (SQLException ex) {
-
-            throw new StorageException(ex.toString());
-        }
+                throw new StorageException("Cannot trash file");
+            }
     }
 
-    /**
-     * Return a list with the trashed files in alphabetic order
-     * @param from Offset of the list
-     * @param size Size of the result list
-     * @return List with the trashed files
-     */
-    public List<GBFile> getTrashedFiles (long from, long size) throws StorageException {
-        try {
-
-            // Prepare the query
-            QueryBuilder<GBFile, Long> queryBuilder = fileTable.queryBuilder();
-
-            // Make the query
-            return queryBuilder
-                    .orderBy("name", false)
-                    .where().eq("trashed", false)
-                    .query();
-        } catch (SQLException ex) {
-
-            throw new StorageException("Cannot trash file");
-        }
-    }
-
-    public SyncEvent copyFile(GBFile src, GBFile dst) throws StorageException {
-
-        src = getFileById(src.getID());
+    @Override
+    public SyncEvent copyFile(long ID, long fatherID, String newName) throws StorageException {
+        GBFile src = getFileByID(ID);
 
         SyncEvent event = null;
 
@@ -655,23 +529,5 @@ public class DAOStorageDB extends StorageDB {
                 copyFile(child, new GBFile(child.getName(), dst.getID(), true));
 
         return event;
-    }
-
-    /**
-     * Create a new event that says that this file was opened (useful for the recent file list)
-     * @param fileToRegister View file
-     */
-    public void registerView (GBFile fileToRegister) {
-
-        try {
-
-            // Create the new event
-            SyncEvent newEvent = new SyncEvent(SyncEvent.EventKind.OPEN_FILE, fileToRegister);
-
-            // Insert into the database
-            eventTable.create(newEvent);
-        } catch (SQLException ex) {
-            // No one cares...
-        }
     }
 }

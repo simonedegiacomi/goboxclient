@@ -6,7 +6,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -136,7 +137,6 @@ public class FileSystemWatcher extends Thread {
                     Path changePath = dir.resolve(name);
 
                     final File file = changePath.toFile();
-                    System.out.println("WATCHER PATH" + file.getPath());
 
                     if(shouldIgnore(file))
                         continue;

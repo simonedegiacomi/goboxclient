@@ -1,7 +1,8 @@
 package it.simonedegiacomi.storage;
 
 /**
- * Created by Degiacomi Simone onEvent 31/12/2015.
+ * Created on 31/12/2015.
+ * @author Degiacomi Simone
  */
 public class StorageException extends Exception {
 

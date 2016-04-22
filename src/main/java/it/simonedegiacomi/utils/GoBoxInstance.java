@@ -3,7 +3,10 @@ package it.simonedegiacomi.utils;
 import it.simonedegiacomi.goboxclient.ui.CLIView;
 import it.simonedegiacomi.goboxclient.ui.Presenter;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.logging.Level;
@@ -33,10 +36,7 @@ public class GoBoxInstance {
      */
     private final int port;
 
-    /**
-     * State of execution
-     */
-    private final boolean single;
+    private Socket mainInstance;
 
     /**
      * Presenter used to which add the view
@@ -50,9 +50,16 @@ public class GoBoxInstance {
      */
     public GoBoxInstance(int port) {
         this.port = port;
-        single = checkIfSingle();
-        if(single)
+
+        // Try to connect to another instance
+        try {
+            mainInstance = new Socket("localhost", port);
+        } catch (Exception ex) {
+
+            // If i cannot contact any server, i'm the only instance
             startLighthouse();
+            return;
+        }
     }
 
     /**
@@ -65,26 +72,9 @@ public class GoBoxInstance {
     }
 
     public boolean isSingle () {
-        return single;
+        return mainInstance == null;
     }
 
-    /**
-     * Try to connect to another instance
-     * @return state of running
-     */
-    private boolean checkIfSingle () {
-        try {
-            new Socket("localhost", port).close();
-        } catch (Exception ex) {
-            // If i cannot contact any server, i'm the only
-            // instance
-            return true;
-        }
-
-        // Another instance (or a server with this port.. ops)
-        // is running.
-        return false;
-    }
 
     /**
      * Start the server that will accept incoming
@@ -103,7 +93,7 @@ public class GoBoxInstance {
                             Socket console = server.accept();
 
                             // Create a new CLI view
-                            CLIView cli = new CLIView(console);
+                            CLIView cli = new CLIView(presenter, console);
 
                             // Add the view to the presenter
                             presenter.addView(cli);
@@ -121,5 +111,37 @@ public class GoBoxInstance {
      */
     public void setPresenter(Presenter presenter) {
         this.presenter = presenter;
+    }
+
+    public void sendToMainInstance(String[] args) throws IOException {
+
+        // Create the writer to the main instance
+        PrintWriter toMainInstance = new PrintWriter(mainInstance.getOutputStream());
+
+        // Create the reader from the main instance
+        BufferedReader fromMainInstance = new BufferedReader(new InputStreamReader(mainInstance.getInputStream()));
+
+        // Write the args to the main instance
+        // First the number of args
+        toMainInstance.println(args.length);
+
+        // The all the arguments
+        for (String arg : args)
+            toMainInstance.println(arg);
+
+        // Close the writer
+        toMainInstance.close();
+
+        // Read from the main instance
+        String string;
+        while (!(string = fromMainInstance.readLine()).equals("END"))
+            System.out.println(string);
+
+        // Close the reader
+        fromMainInstance.close();
+        mainInstance.close();
+
+        // Stop the program
+        System.exit(0);
     }
 }

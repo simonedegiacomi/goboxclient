@@ -1,15 +1,13 @@
 package it.simonedegiacomi.storage.handlers.http;
 
 import com.google.common.io.ByteStreams;
-import com.google.common.primitives.Bytes;
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
-import it.simonedegiacomi.storage.StorageDB;
+import it.simonedegiacomi.storage.DAOStorageDB;
 import it.simonedegiacomi.storage.StorageException;
 import it.simonedegiacomi.utils.MyHttpExchangeUtils;
 
@@ -25,13 +23,13 @@ import java.util.Map;
  */
 public class ToStorageHttpHandler implements HttpHandler {
 
-    private StorageDB db;
+    private DAOStorageDB db;
 
     private final Gson gson = MyGsonBuilder.create();
 
     private final String PATH = Config.getInstance().getProperty("path");
 
-    public ToStorageHttpHandler (StorageDB db) {
+    public ToStorageHttpHandler (DAOStorageDB db) {
         this.db = db;
     }
 

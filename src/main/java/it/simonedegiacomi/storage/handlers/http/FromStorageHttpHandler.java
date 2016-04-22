@@ -6,7 +6,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.storage.StorageDB;
+import it.simonedegiacomi.storage.DAOStorageDB;
 import it.simonedegiacomi.storage.sender.HttpExchangeDestination;
 import it.simonedegiacomi.storage.sender.Sender;
 import it.simonedegiacomi.storage.sender.SenderDestination;
@@ -23,13 +23,13 @@ import java.util.Map;
  */
 public class FromStorageHttpHandler implements HttpHandler {
 
-    private final StorageDB db;
+    private final DAOStorageDB db;
 
     private final Sender sender = new Sender();
 
     private final String PATH = Config.getInstance().getProperty("path");
 
-    public FromStorageHttpHandler (StorageDB db) {
+    public FromStorageHttpHandler (DAOStorageDB db) {
         this.db = db;
     }
 

@@ -1,8 +1,9 @@
 package it.simonedegiacomi.goboxclient.ui;
 
+import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.sync.Work;
 
-import java.util.List;
+import java.util.Set;
 
 /**
  * This is the Interface Model in the MVP.
@@ -19,17 +20,17 @@ public interface Model {
      * Return the current state of the client
      * @return
      */
-    ClientState getClientState ();
+    Client.ClientState getClientState ();
 
     /**
      * This method connects the client
      */
-    void connectClient ();
+    void connect ();
 
     /**
-     * This method stops the client
+     * This method stops the sync, client and if in the appropriate state, the storage
      */
-    void shutdownClient ();
+    void shutdown ();
 
     /**
      * Return true if the storage is connected
@@ -53,15 +54,21 @@ public interface Model {
      * Return the list of the running works
      * @return ist of current works
      */
-    List<Work> getWorks();
+    Set<Work> getCurrentWorks();
 
     /**
-     * Return true if the progrm is running in storage mode
+     * Return true if the program is running in storage mode
      */
     boolean isStorageMode ();
 
+
     /**
-     * Stop the works, shutdown the client and close the program
+     * Set the message of the current action
+     * @param s Message of current action
      */
-    void exitProgram ();
+    void setFlashMessage(String s);
+
+    String getFlashMessage();
+
+    void setError (String error);
 }

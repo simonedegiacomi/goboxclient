@@ -2,6 +2,7 @@ package it.simonedegiacomi.configuration;
 
 import it.simonedegiacomi.goboxapi.authentication.Auth;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import org.apache.log4j.PropertyConfigurator;
 
 import java.io.*;
 import java.util.LinkedList;
@@ -9,12 +10,20 @@ import java.util.List;
 import java.util.Properties;
 
 /**
- * @author Degiacomi Simone
  * Created on 27/12/2015.
+ * @author Degiacomi Simone
  */
 public class Config {
 
+    /**
+     * Degault configuration filename
+     */
     private static final String DEFAULT_LOCATION = "config/gobox.conf";
+
+    /**
+     * Default logger configuration file name
+     */
+    private static final String DEFAULT_LOG_CONFIG = "config/log.conf";
 
     /**
      * Singleton instance of the config
@@ -31,6 +40,9 @@ public class Config {
      */
     private final URLBuilder urls = new URLBuilder();
 
+    /**
+     * Auth object serialized in the configuration
+     */
     private Auth auth = new Auth();
 
     /**
@@ -52,21 +64,22 @@ public class Config {
         return ourInstance;
     }
 
+    public static void loadLoggerConfig () {
+        PropertyConfigurator.configure(DEFAULT_LOG_CONFIG);
+    }
+
     /**
      * Load from file the configuration
      * @param File file with the configuration
      * @throws Exception
      */
     public void load (File file) throws IOException {
-        // Open the file
         FileInputStream in = new FileInputStream(file);
         properties.load(in);
         in.close();
 
-        // Close the stream
-        in.close();
-
-        if(properties.getProperty("token") != null) {
+        // If the auth object was serialized, reload it
+        if(properties.getProperty("username") != null) {
             auth.setUsername(properties.getProperty("username"));
             auth.setToken(properties.getProperty("token"));
             auth.setMode(Auth.Modality.valueOf(properties.getProperty("mode")));
@@ -74,29 +87,15 @@ public class Config {
     }
 
     /**
-     * Load the configuration from the default file
+     * Load the configuration from the default file. This method is just an alias for {@link #load(File)}
      * @throws Exception
      */
     public void load () throws IOException {
-        try {
-            load(new File(DEFAULT_LOCATION));
-        } catch (IOException ex) {
-            save();
-        }
+        load(new File(DEFAULT_LOCATION));
     }
 
     /**
-     *
-     * @param file
-     * @throws IOException
-     */
-    public void loadUrls (InputStream in) throws IOException {
-        // load the urls
-        urls.load(in);
-    }
-
-    /**
-     *
+     * Load urls
      * @throws IOException
      */
     public void loadUrls () throws IOException {
@@ -105,23 +104,21 @@ public class Config {
 
     /**
      * Save the configuration to the file and call the apply method
-     * @param File
-     * @throws Exception
+     * @param File to which save the configuration
+     * @throws IOException
      */
     public void save (File file) throws IOException {
 
-        // update the properties with the auth
+        // Update the properties with the auth
         if(auth != null) {
             properties.setProperty("token", auth.getToken());
             properties.setProperty("username", auth.getUsername());
             properties.setProperty("mode", auth.getMode().toString());
         }
 
-        // Create or open the file
+        // Write to the file
         FileOutputStream out = new FileOutputStream(file);
-        // Save the config
         properties.store(out, new String());
-        // Close the stream
         out.close();
 
         // Execute all the listener
@@ -129,13 +126,16 @@ public class Config {
     }
 
     /**
-     * Save the configuration to the default file and
-     * then call the apply method
+     * This method is just an alias for {@link #save(File)}
      */
     public void save () throws IOException {
         save(new File(DEFAULT_LOCATION));
     }
 
+    /**
+     * Call this method when you change some properties and you want to be sure that all the object
+     * depending from them will receive the chamges
+     */
     public void apply () {
         for (OnConfigChangeListener listener : listeners)
             listener.onChange();
@@ -167,6 +167,10 @@ public class Config {
 
     public Auth getAuth () {
         return auth;
+    }
+
+    public boolean isAuthDefined () {
+        return properties.contains("username") && properties.containsKey("token") && properties.containsKey("mode");
     }
 
     public void setAuth (Auth auth) {

@@ -3,14 +3,14 @@ package it.simonedegiacomi.storage;
 import com.google.common.io.ByteStreams;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.client.*;
+import org.apache.log4j.Logger;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.security.InvalidParameterException;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * This client is used when the client is executed
@@ -26,7 +26,7 @@ public class InternalClient extends Client {
     /**
      * Database of the GoBox Storage
      */
-    private final StorageDB db;
+    private final DAOStorageDB db;
 
     /**
      * Reference to the storage used to communicate
@@ -42,27 +42,16 @@ public class InternalClient extends Client {
         this.emitter = env.getEmitter();
     }
 
-
-    /**
-     * Return the state of the connection with the storage. In this
-     * case this will return true, because the storage is the same
-     * instance
-     * @return state of the connection, true
-     */
-    @Override
-    public boolean isOnline() {
-        return true;
-    }
-
     @Override
     public GBFile getInfo(GBFile file) throws ClientException {
-        if(file.getID() == GBFile.UNKNOWN_ID)
-            db.findIDByPath(file);
+        if(file == null)
+            throw new InvalidParameterException("File is null");
+
         try {
-            return db.getFileById(file.getID(), true, true);
+            return db.getFile(file);
         } catch (StorageException ex) {
-            //ex.printStackTrace();
-            return null;
+
+            throw new ClientException(ex.toString());
         }
     }
 
@@ -98,7 +87,7 @@ public class InternalClient extends Client {
             emitter.emitEvent(event);
         } catch (Exception ex) {
 
-            log.log(Level.WARNING, ex.toString(), ex);
+            log.warn(ex.toString(), ex);
         }
     }
 
@@ -109,7 +98,7 @@ public class InternalClient extends Client {
             SyncEvent event = db.removeFile(file);
             emitter.emitEvent(event);
         } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
+            log.warn(ex.toString(), ex);
         }
     }
 
@@ -120,7 +109,7 @@ public class InternalClient extends Client {
             SyncEvent event = db.updateFile(file);
             emitter.emitEvent(event);
         } catch (Exception ex) {
-            log.log(Level.WARNING, ex.toString(), ex);
+            log.warn(ex.toString(), ex);
         }
     }
 
@@ -137,6 +126,22 @@ public class InternalClient extends Client {
     @Override
     public void requestEvents(long lastHeardId) {
         // Not implemented yet
+    }
+
+    @Override
+    public boolean isReady() {
+        return false;
+    }
+
+    @Override
+    public ClientState getState() {
+        return ClientState.READY;
+    }
+
+
+    @Override
+    public void init() throws ClientException {
+
     }
 
     @Override

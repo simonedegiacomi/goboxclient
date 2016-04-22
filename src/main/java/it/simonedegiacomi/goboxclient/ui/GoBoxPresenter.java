@@ -13,6 +13,10 @@ public class GoBoxPresenter implements Presenter {
 
     private Model model;
 
+    public GoBoxPresenter(Model model) {
+        this.model = model;
+    }
+
     @Override
     public void addView(View view) {
         views.add(view);
@@ -29,11 +33,6 @@ public class GoBoxPresenter implements Presenter {
     }
 
     @Override
-    public View getView() {
-        return view;
-    }
-
-    @Override
     public void setModel(Model model) {
         this.model = model;
     }
@@ -45,21 +44,28 @@ public class GoBoxPresenter implements Presenter {
 
     @Override
     public void connectClient() {
-        model.connectClient();
-    }
-
-    @Override
-    public void disconnectClient() {
-        model.shutdownClient();
+        model.connect();
     }
 
     @Override
     public void exitProgram() {
-        model.shutdownClient();
+        model.shutdown();
     }
 
     @Override
     public void setSync(boolean state) {
         model.setSyncing(state);
+    }
+
+    /**
+     * Call this method to refresh the view with the data from the model
+     */
+    public void refreshView () {
+        for (View view : views) {
+            view.setClientState(model.getClientState());
+            view.setMessage(model.getFlashMessage());
+            view.setSyncState(model.isSyncing());
+            view.setCurrentWorks(model.getCurrentWorks());
+        }
     }
 }

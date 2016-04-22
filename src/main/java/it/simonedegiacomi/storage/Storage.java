@@ -47,8 +47,7 @@ public class Storage {
     private final StorageEnvironment env = new StorageEnvironment();
 
     /**
-     * URLBuilder is used to get the appropriate
-     * url
+     * URLBuilder is used to get the appropriate url
      */
     private final static URLBuilder urls = config.getUrls();
 
@@ -67,7 +66,7 @@ public class Storage {
     public Storage(final Auth auth) throws StorageException {
 
         // Connect to the local database
-        env.setDB(new StorageDB(DEFAULT_DB_LOCATION));
+        env.setDB(new DAOStorageDB(DEFAULT_DB_LOCATION));
 
         try {
 

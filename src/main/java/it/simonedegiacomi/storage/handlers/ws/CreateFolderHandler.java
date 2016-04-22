@@ -11,13 +11,14 @@ import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.storage.EventEmitter;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
+import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.FileSystemWatcher;
 import org.apache.log4j.Logger;
 
 import java.nio.file.Files;
 
 /**
- * This hanle the request to create new directories
+ * This handle the request to create new directories
  *
  * @author Degiacomi Simone
  * Created on 08/02/16.
@@ -47,20 +48,36 @@ public class CreateFolderHandler implements WSQueryHandler {
     @Override
     public JsonElement onQuery(JsonElement data) {
         log.info("CreateFolder query");
-
-        // Wrap the new directory
-        GBFile newFolder = gson.fromJson(data, GBFile.class);
-        newFolder.setPrefix(PATH);
+        JsonObject json = data.getAsJsonObject();
 
         // Prepare the response
         JsonObject response = new JsonObject();
+
+        if (!json.has("father") || !json.has("name")) {
+            response.addProperty("created", false);
+            response.addProperty("error", "missing father or name");
+        }
+
+        // Wrap the new directory
+        GBFile father = gson.fromJson(json.get("father"), GBFile.class);
+
         try {
-            // Find the right path of the new folder
-            db.findPath(newFolder);
+            GBFile dbFather = db.getFile(father);
+
+            // Check that the father exists
+            if (dbFather == null) {
+                response.addProperty("created", false);
+                response.addProperty("errror", "father doesn't exist");
+                return response;
+            }
+
+            dbFather.setPrefix(PATH);
+            GBFile newFolder = dbFather.generateChild(json.get("name").getAsString(), true);
 
             // Check if another file with the same name already exists
             if(Files.exists(newFolder.toFile().toPath())) {
                 response.addProperty("created", false);
+                response.addProperty("error", "a folder with this name already exist");
                 return response;
             }
 
@@ -72,6 +89,9 @@ public class CreateFolderHandler implements WSQueryHandler {
 
             // Stop ignoring
             watcher.stopIgnoring(newFolder.toFile());
+
+            // Load the date from the fs to the logical file
+            MyFileUtils.loadFileAttributes(newFolder);
 
             // Insert the file and get the event
             SyncEvent event = db.insertFile(newFolder);
@@ -87,7 +107,7 @@ public class CreateFolderHandler implements WSQueryHandler {
             emitter.emitEvent(event);
         } catch (Exception ex) {
 
-            ex.printStackTrace();
+            log.warn(ex);
             response.addProperty("created", false);
         }
 

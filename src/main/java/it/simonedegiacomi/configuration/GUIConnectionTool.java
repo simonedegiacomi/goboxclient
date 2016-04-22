@@ -3,8 +3,8 @@ package it.simonedegiacomi.configuration;
 import javax.swing.*;
 
 /**
- * @author Degiacomi Simone
  * Created on 06/02/16.
+ * @author Degiacomi Simone
  */
 public class GUIConnectionTool {
 
