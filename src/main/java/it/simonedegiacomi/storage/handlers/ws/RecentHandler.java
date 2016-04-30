@@ -5,13 +5,14 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import it.simonedegiacomi.goboxapi.GBFile;
+import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
-import it.simonedegiacomi.storage.DAOStorageDB;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
+import org.apache.log4j.Logger;
 
 import java.util.List;
 
@@ -20,6 +21,8 @@ import java.util.List;
  * @author Degiacomi Simone
  */
 public class RecentHandler implements WSQueryHandler {
+
+    private final Logger log = Logger.getLogger(RecentHandler.class);
 
     private final Gson gson = MyGsonBuilder.create();
 
@@ -45,14 +48,16 @@ public class RecentHandler implements WSQueryHandler {
 
         try {
             // Query the database
-            List<GBFile> files = db.getRecentList(from, size);
+            List<SyncEvent> files = db.getRecentList(from, size);
 
             // Add the files list
-            response.add("files", gson.toJsonTree(files, new TypeToken<List<GBFile>>(){}.getType()));
+            response.add("files", gson.toJsonTree(files, new TypeToken<List<SyncEvent>>(){}.getType()));
 
-            response.addProperty("error", false);
+            response.addProperty("success", true);
         } catch (StorageException ex) {
-            response.addProperty("error", true);
+            log.warn(ex.toString(), ex);
+            response.addProperty("success", false);
+            response.addProperty("error", ex.toString());
         }
 
         return response;

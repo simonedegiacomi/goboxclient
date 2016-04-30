@@ -3,6 +3,8 @@ package it.simonedegiacomi.storage.direct;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.reflect.TypeToken;
+import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
@@ -17,6 +19,8 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.PublicKey;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.X509Certificate;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
@@ -48,22 +52,39 @@ public class HttpsStorageServer {
     /**
      * Java https server
      */
-    private final HttpsServer server;
+    private HttpsServer server;
 
-    public HttpsStorageServer (InetSocketAddress address, StorageEnvironment env) throws IOException, StorageException {
-
+    /**
+     * Create the https storage server
+     * @param address Address to listen
+     * @param env Environment to use
+     */
+    public HttpsStorageServer (InetSocketAddress address, StorageEnvironment env) {
         this.env = env;
         this.address = address;
+    }
 
-        // Prepare the https server
-        server = HttpsServer.create(address, 0);
-
+    /**
+     * Initialize the https server. This method must be called before the serve method.
+     * This method try rto lock the socket address, so if the address is already in use, this
+     * method will throw that specified exception
+     * @throws IOException
+     * @throws StorageException
+     */
+    public void init () throws IOException, StorageException {
         try {
-            // Initialize the https server with a new certificate
+            // create or load the https certificate
             certificateGenerator = new HttpsCertificateGenerator();
-            server.setHttpsConfigurator(certificateGenerator.getHttpsConfigurator());
+            HttpsConfigurator configurator = certificateGenerator.getHttpsConfigurator();
+
+            // Prepare the https server
+            server = HttpsServer.create(address, 0);
+
+            // Set the https configurator
+            server.setHttpsConfigurator(configurator);
 
         } catch (Exception ex) {
+            log.warn(ex.toString(), ex);
             throw new StorageException("HTTPS certificate generation failed");
         }
 
@@ -72,29 +93,34 @@ public class HttpsStorageServer {
     }
 
     /**
-     * Start the https server
+     * Start the https server listening at the specified address
      */
     public void serve () {
         server.start();
     }
 
+    /**
+     * Register the http handlers
+     */
     private void registerHandlers () {
 
+        CorsHeadersMiddleware corsMiddle = new CorsHeadersMiddleware();
+
         // Handler for test
-        server.createContext("/test", new TestHandler());
+        server.createContext("/test", corsMiddle.wrap(new TestHandler()));
 
         // Handler used to generate the token
         DirectLoginHandler directLoginHandler = new DirectLoginHandler(temporaryTokens);
-        server.createContext("/directLogin", directLoginHandler);
+        server.createContext("/directLogin", corsMiddle.wrap(directLoginHandler));
 
         // Crate the auth middleware
         AuthMiddleware authMiddleware = new AuthMiddleware(directLoginHandler.getJwtSecret());
 
         // Handler that receive new file (upload from client)
-        server.createContext("/toStorage", authMiddleware.wrap(new ToStorageHttpHandler(env.getDB())));
+        server.createContext("/toStorage", corsMiddle.wrap(authMiddleware.wrap(new ToStorageHttpHandler(env.getDB()))));
 
         // Handler that send file to the client (download from the storage to the client)
-        server.createContext("/fromStorage", authMiddleware.wrap(new FromStorageHttpHandler(env.getDB())));
+        server.createContext("/fromStorage", corsMiddle.wrap(authMiddleware.wrap(new FromStorageHttpHandler(env.getDB()))));
     }
 
     /**
@@ -123,17 +149,19 @@ public class HttpsStorageServer {
 
                     // And also the probable local ip
                     response.addProperty("localIP", IPFinder.findProbableLocal());
+
+                    // And the public port
+                    response.addProperty("port", address.getPort());
+
+                    // Finally send the public key of the https certificate
+                    response.add("publicKey", gson.toJsonTree(certificateGenerator.getCertificate().getEncoded(), new TypeToken<byte[]>(){}.getType()));
                 } catch (IOException ex) {
-
+                    log.warn(ex.toString(), ex);
                     response.addProperty("error", true);
-                    log.warn(ex.toString());
+                } catch (CertificateEncodingException ex) {
+                    log.warn(ex.toString(), ex);
+                    response.addProperty("error", true);
                 }
-
-                // And the public port
-                response.addProperty("port", address.getPort());
-
-                // Finally send the public key of the https certificate
-                response.add("publicKey", gson.toJsonTree(certificateGenerator.getPublicKey(), PublicKey.class));
 
                 return response;
             }
@@ -144,15 +172,8 @@ public class HttpsStorageServer {
      * Stop the https server
      */
     public void shutdown() {
-        server.stop(0);
-
+        if (server != null)
+            server.stop(0);
         temporaryTokens.clear();
-    }
-
-    /**
-     * Try to forward the https port
-     */
-    public void forwardPort () {
-
     }
 }

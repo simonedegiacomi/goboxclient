@@ -1,13 +1,15 @@
 package it.simonedegiacomi.storage.utils;
 
 import com.sun.net.httpserver.HttpsConfigurator;
+import it.simonedegiacomi.configuration.Config;
+import org.apache.log4j.Logger;
 import sun.security.tools.keytool.CertAndKeyGen;
 import sun.security.x509.X500Name;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
-import java.io.IOException;
+import java.io.*;
 import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -15,9 +17,16 @@ import java.util.Date;
 import java.util.Random;
 
 /**
- * Created by simone on 19/03/16.
+ * Created on 19/03/16.
+ * @author Degiacomi Simone
  */
 public class HttpsCertificateGenerator {
+
+    private static final String GOBOX_ALIAS = "GoBoxDirect";
+
+    private final Logger logger = Logger.getLogger(HttpsCertificateGenerator.class);
+
+    private final Config config = Config.getInstance();
 
     private static final int KEY_SIZE = 1024;
 
@@ -25,35 +34,45 @@ public class HttpsCertificateGenerator {
 
     private KeyStore keyStore;
 
+    private X509Certificate certificate;
+
     private SSLContext sslContext;
 
     private CertAndKeyGen keyPair;
 
     public HttpsCertificateGenerator () throws KeyStoreException, CertificateException, NoSuchAlgorithmException, NoSuchProviderException, SignatureException, InvalidKeyException, KeyManagementException, IOException, UnrecoverableKeyException {
 
-        generatePassword();
+        // Reload or create the password
+        initPassword();
 
-        // Create a new keystore
-        keyStore = KeyStore.getInstance("JKS");
+        // Reload or init keystore
+        initKeystore();
 
-        // Initialize the key store, The two null parameters are the input stream and the password used
-        // to recover a saved keystore (meaningless in our case)
-        keyStore.load(null, null);
+        if (!keyStore.containsAlias(GOBOX_ALIAS)) {
 
-        // Prepare the pair of key selecting the type of algorithm
-        keyPair = new CertAndKeyGen("RSA", "SHA1WithRSA", null);
-        X500Name x500Name = new X500Name("address", "GoBox", "GoBox", "city", "state", "country");
+            // Prepare the pair of key selecting the type of algorithm
+            keyPair = new CertAndKeyGen("RSA", "SHA1WithRSA", null);
+            X500Name x500Name = new X500Name("address", "GoBox", "GoBox", "city", "state", "country");
 
-        // Generate the key
-        keyPair.generate(KEY_SIZE);
+            // Generate the key
+            keyPair.generate(KEY_SIZE);
 
-        // Get the  generated private key
-        PrivateKey privateKey = keyPair.getPrivateKey();
+            // Get the  generated private key
+            PrivateKey privateKey = keyPair.getPrivateKey();
 
-        X509Certificate chain = keyPair.getSelfCertificate(x500Name, new Date(), (long) 1096 * 24 * 60 * 60);
+            certificate = keyPair.getSelfCertificate(x500Name, new Date(), (long) 1096 * 24 * 60 * 60);
 
-        // Save the generated key
-        keyStore.setKeyEntry("GoBox Direct", privateKey, password, new X509Certificate[] { chain });
+            // Save the generated key
+            keyStore.setKeyEntry(GOBOX_ALIAS, privateKey, password, new X509Certificate[]{certificate});
+
+            try {
+                keyStore.store(new FileOutputStream(new File(config.getProperty("keyStoreFile"))), password);
+            } catch (IOException ex) {
+                logger.warn("Cannot save keystore");
+            }
+        } else {
+            certificate = (X509Certificate) keyStore.getCertificate(GOBOX_ALIAS);
+        }
 
         // Create the ssl context
         sslContext = SSLContext.getInstance("TLS");
@@ -73,19 +92,53 @@ public class HttpsCertificateGenerator {
         sslContext.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
     }
 
-    private void generatePassword () {
+    /**
+     * Create or reload the password for the keystore
+     */
+    private void initPassword() {
+
+        // Check in the config
+        if (config.hasProperty("keyStorePassword")) {
+            password = config.getProperty("keyStorePassword").toCharArray();
+            return;
+        }
+
+        // Create a new one
         password = new char[255];
         Random r = new Random();
         for(int i = 0;i < password.length; i++)
             password[i] = (char) (r.nextInt(26) + 'a');
+
+        // Save the used password in the config
+        config.setProperty("keyStorePassword", new String(password));
     }
 
-    public PrivateKey getPrivateKey () {
-        return keyPair.getPrivateKey();
+    /**
+     * Reload or init a new keystore
+     * @throws KeyStoreException
+     * @throws CertificateException
+     * @throws NoSuchAlgorithmException
+     * @throws IOException
+     */
+    private void initKeystore () throws KeyStoreException, CertificateException, NoSuchAlgorithmException, IOException {
+
+        // Create a new keystore
+        keyStore = KeyStore.getInstance("JKS");
+
+        if (new File(config.getProperty("keyStoreFile")).exists()) {
+            try (FileInputStream in = new FileInputStream(new File(config.getProperty("keyStoreFile")))) {
+                keyStore.load(in, password);
+            } catch (FileNotFoundException e) {
+            } catch (IOException e) { }
+            return;
+        }
+
+        // Fallback with a new keystore
+        keyStore.load(null, null);
     }
 
-    public PublicKey getPublicKey () {
-        return keyPair.getPublicKey();
+    public X509Certificate getCertificate () {
+        return certificate;
     }
 
     public SSLContext getSSLContext () {
@@ -95,4 +148,5 @@ public class HttpsCertificateGenerator {
     public HttpsConfigurator getHttpsConfigurator() {
         return new HttpsConfigurator(sslContext);
     }
+
 }

@@ -9,7 +9,6 @@ import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
-import it.simonedegiacomi.storage.DAOStorageDB;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
@@ -45,8 +44,9 @@ public class ShareHandler implements WSQueryHandler {
         // Cast the request
         JsonObject request = data.getAsJsonObject();
 
-        if (request.has("ID")) {
+        if (!request.has("ID")) {
             response.addProperty("success", false);
+            response.addProperty("error", "missing file id");
             return response;
         }
 
@@ -56,7 +56,7 @@ public class ShareHandler implements WSQueryHandler {
         try {
 
             // Change the access of this file
-            db.share(request.get("ID").getAsLong(), share);
+            db.share(new GBFile(request.get("ID").getAsLong()), share);
 
             // Complete the response
             response.addProperty("success", true);
@@ -72,10 +72,9 @@ public class ShareHandler implements WSQueryHandler {
                 log.info("Unshared file");
             }
         } catch (StorageException ex) {
-
             ex.printStackTrace();
-
             response.addProperty("success", false);
+            response.addProperty("error", ex.toString());
         }
 
         return response;

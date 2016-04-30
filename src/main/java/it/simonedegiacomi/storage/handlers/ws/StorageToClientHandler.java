@@ -9,7 +9,6 @@ import it.simonedegiacomi.goboxapi.authentication.Auth;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
-import it.simonedegiacomi.storage.DAOStorageDB;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
@@ -95,9 +94,14 @@ public class StorageToClientHandler implements WSQueryHandler {
         boolean preview = jsonData.has("preview") ? jsonData.get("preview").getAsBoolean() : false;
 
         try {
+            GBFile temp = new GBFile(ID);
+            if (jsonData.has("path") && jsonData.get("path").getAsString().length() > 0)
+                temp.setPathByString(jsonData.get("path").getAsString());
+            GBFile dbFile = db.getFile(temp, true, true);
+            dbFile.setPrefix(PATH);
 
             // If the download is not authorized, check of the file is shared
-            if(!authorized && !db.isShared(ID)) {
+            if(!authorized && !db.isShared(dbFile)) {
 
                 // Unauthorized download
                 response.addProperty("error", "unauthorized");
@@ -105,12 +109,6 @@ public class StorageToClientHandler implements WSQueryHandler {
                 response.addProperty("success", false);
                 return response;
             }
-
-            // Get the file from the database
-            GBFile temp = new GBFile(ID);
-            temp.setPathByString(jsonData.get("path").getAsString());
-            GBFile dbFile = db.getFile(temp);
-            dbFile.setPrefix(PATH);
 
             // Create the url to upload the file
             URL url = new URL(urls.getAsString("sendFileToClient") + "?downloadKey=" + jsonData.get("downloadKey").getAsString());
@@ -159,7 +157,7 @@ public class StorageToClientHandler implements WSQueryHandler {
             response.addProperty("success", responseCode == 200);
 
             // Register the open action
-            db.addToRecent(ID);
+            db.addToRecent(dbFile);
 
             log.info("File sent to the client");
         } catch (StorageException ex) {

@@ -25,11 +25,11 @@ public class DirectLoginHandler implements HttpHandler {
 
     public DirectLoginHandler(Set<String> temporaryTokens) {
         new Random().nextBytes(jwtSecret);
+        this.temporaryTokens = temporaryTokens;
     }
 
     @Override
     public void handle(HttpExchange httpExchange) throws IOException {
-
         if (!httpExchange.getRequestMethod().equals("POST")){
             httpExchange.sendResponseHeaders(400, 0);
             httpExchange.getResponseBody().write("Method not allowed".getBytes());
@@ -47,15 +47,17 @@ public class DirectLoginHandler implements HttpHandler {
 
             // If it doesn't, the client is not authorized
             httpExchange.sendResponseHeaders(401, 0);
+            httpExchange.getResponseBody().write("Unauthorized".getBytes());
             httpExchange.close();
             return;
         }
 
         // Create a new jwt token
-        String jwt = Jwts.builder().signWith(SignatureAlgorithm.HS256, jwtSecret).compact();
+        String jwt = Jwts.builder()
+                .claim("logged", "true").signWith(SignatureAlgorithm.HS256, jwtSecret).compact();
 
         // Send the new token to the client how it prefers
-        boolean cookie = request.get("cookie").getAsBoolean();
+        boolean cookie = request.has("cookie") ? request.get("cookie").getAsBoolean() : true;
         if(cookie) {
             // Set the token as cookie
             httpExchange.getResponseHeaders().add("Set-Cookie", "GoBoxDirect=" + jwt);
@@ -66,6 +68,7 @@ public class DirectLoginHandler implements HttpHandler {
 
         // Send the response
         response.addProperty("success", true);
+        httpExchange.sendResponseHeaders(200, 0);
         httpExchange.getResponseBody().write(response.toString().getBytes());
         httpExchange.close();
     }

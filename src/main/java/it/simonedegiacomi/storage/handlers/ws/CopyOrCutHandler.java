@@ -9,7 +9,10 @@ import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
-import it.simonedegiacomi.storage.*;
+import it.simonedegiacomi.storage.EventEmitter;
+import it.simonedegiacomi.storage.StorageDB;
+import it.simonedegiacomi.storage.StorageEnvironment;
+import it.simonedegiacomi.storage.StorageException;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.FileSystemWatcher;
 
@@ -51,7 +54,6 @@ public class CopyOrCutHandler implements WSQueryHandler {
         boolean cut = json.has("cut") ? json.get("cut").getAsBoolean() : false;
 
         if (!json.has("file") || !json.has("newFather")) {
-
             response.addProperty("success", false);
             response.addProperty("error", "missing file");
             return response;
@@ -63,16 +65,14 @@ public class CopyOrCutHandler implements WSQueryHandler {
         // Instance the new father from the json
         GBFile newFather = gson.fromJson(json.get("newFather"), GBFile.class);
 
-        GBFile dbFile, dbFather;
-
         try {
 
             // I need to place another try/catch, so i can use the finally block in the second try/catch
             // to stop ignoring the file.
 
             // Get the file with all the information
-            dbFile = db.getFile(file);
-            dbFather = db.getFile(newFather);
+            GBFile dbFile = db.getFile(file, true, true);
+            GBFile dbFather = db.getFile(newFather, true, true);
 
             if (file == null || dbFather == null) {
                 response.addProperty("success", false);
@@ -80,14 +80,8 @@ public class CopyOrCutHandler implements WSQueryHandler {
                 return response;
             }
 
+            dbFile.setPrefix(PATH);
             dbFather.setPrefix(PATH);
-            dbFather.setPrefix(PATH);
-        } catch (StorageException ex) {
-            response.addProperty("success", false);
-            return response;
-        }
-
-        try {
 
             // Generate the new file
             GBFile newFile = dbFather.generateChild(dbFile.getName(), dbFile.isDirectory());
@@ -105,7 +99,7 @@ public class CopyOrCutHandler implements WSQueryHandler {
             MyFileUtils.copyR(dbFile.toFile(), newFile.toFile());
 
             // Create a new Sync event
-            SyncEvent creationEvent = db.copyFile(dbFile.getID(), dbFather.getID(), newFile.getName());
+            SyncEvent creationEvent = db.copyFile(dbFile, newFile);
 
             // Emit it
             emitter.emitEvent(creationEvent);
@@ -114,14 +108,15 @@ public class CopyOrCutHandler implements WSQueryHandler {
             if (cut) {
 
                 // Delete from the disk
-                MyFileUtils.deleteR(dbFile.toFile());
+                MyFileUtils.delete(dbFile);
 
-                SyncEvent deletion = db.removeFile(dbFile.getID());
+                SyncEvent deletion = db.removeFile(dbFile);
                 emitter.emitEvent(deletion);
             }
 
             // Stop ignoring this file
             watcher.stopIgnoring(newFile.toFile());
+            watcher.stopIgnoring(dbFile.toFile());
         } catch (IOException ex) {
 
             response.addProperty("success", false);
@@ -132,8 +127,6 @@ public class CopyOrCutHandler implements WSQueryHandler {
             // TODO: If the event is not insert in the database, i should remove the file copy
             response.addProperty("success", false);
             return response;
-        } finally {
-            watcher.stopIgnoring(dbFile.toFile());
         }
 
         // Complete the response

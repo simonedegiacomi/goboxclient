@@ -68,6 +68,7 @@ public class DAOStorageDB extends StorageDB {
      */
     public DAOStorageDB(String path) throws StorageException {
 
+        // assert that the path is valid
         if (path == null || path.length() <= 0)
             throw new InvalidParameterException("Invalid path string");
 
@@ -95,7 +96,6 @@ public class DAOStorageDB extends StorageDB {
             // Initialize the tables
             initDatabase();
         } catch (SQLException ex) {
-
             throw new StorageException("Can't connect to database");
         }
     }
@@ -107,6 +107,7 @@ public class DAOStorageDB extends StorageDB {
     @Override
     public void close () throws SQLException {
 
+        // Asset that the database is connected
         if (db == null)
             throw new IllegalStateException("The database connection is not open");
 
@@ -131,13 +132,17 @@ public class DAOStorageDB extends StorageDB {
     }
 
     /**
-     * Return the file in the database with this path
+     * Return the file in the database with this path. The object returned from this method contains the name,
+     * the creation and last update date and the trash flag. The children and the path are not determined. If you
+     * need them, use {@link #findChildren(GBFile)} (or {@link #getChildren(long)}) or {@link #findPath(GBFile)}
+     * (or {@link #findPath(GBFile)}.
      * @param path Path of the file
      * @return File, null if not found
      * @throws StorageException
      */
     @Override
     public GBFile getFileByPath(List<GBFile> path) throws StorageException {
+        // Assert that the path is valid
         if (path == null)
             throw new InvalidParameterException("path is null");
 
@@ -146,31 +151,33 @@ public class DAOStorageDB extends StorageDB {
             PreparedStatement stmt = db.prepareStatement("SELECT ID FROM file WHERE father_ID = ? AND name = ?");
 
             // Start with the only file where i'm sure o know his father, the root
-            long fatherOfSomeone = GBFile.ROOT_ID;
+            long fatherIDOfSomeone = GBFile.ROOT_ID;
+            GBFile fatherOfSomeone = null;
 
             // Find the father of every ancestor node
             for(GBFile ancestor : path) {
-                ancestor.setFatherID(fatherOfSomeone);
+                ancestor.setFatherID(fatherIDOfSomeone);
 
                 // Query the database
-                stmt.setLong(1, fatherOfSomeone);
+                stmt.setLong(1, fatherIDOfSomeone);
                 stmt.setString(2, ancestor.getName());
                 ResultSet res = stmt.executeQuery();
 
                 // If there is no result
                 if(!res.next())
-                    return ancestor;
+                    return null;
 
-                fatherOfSomeone = res.getLong("ID");
+                fatherIDOfSomeone = res.getLong("ID");
                 res.close();
-                ancestor.setID(fatherOfSomeone);
+                ancestor.setID(fatherIDOfSomeone);
+                fatherOfSomeone = ancestor;
             }
 
+            return fatherOfSomeone;
         } catch (SQLException ex) {
             log.warn(ex.toString(), ex);
             throw new StorageException("Cannot find ID");
         }
-
     }
 
     /**
@@ -265,7 +272,7 @@ public class DAOStorageDB extends StorageDB {
      * Add a new row in the event table
      * @param event Event to add
      */
-    private void registerEvent (SyncEvent event) throws StorageException {
+    private SyncEvent registerEvent (SyncEvent event) throws StorageException {
 
         // Assert that the event is not null
         if (event == null)
@@ -277,6 +284,20 @@ public class DAOStorageDB extends StorageDB {
             log.warn(ex.toString(), ex);
             throw new StorageException("Cannot insert event into database");
         }
+        return event;
+    }
+
+    /**
+     * Assert that the file know his id. If the id is unknown the method {@link #getFile(GBFile)} is called
+     * @param file File to which ind the id (if needed)
+     * @throws StorageException
+     */
+    private void assertID (GBFile file) throws StorageException {
+        if (file == null)
+            throw new InvalidParameterException("File can't be null");
+
+        if (file.getID() == GBFile.UNKNOWN_ID)
+            file.setID(getFile(file).getID());
     }
 
     /**
@@ -287,9 +308,8 @@ public class DAOStorageDB extends StorageDB {
     @Override
     public SyncEvent updateFile (GBFile updatedFile) throws StorageException {
 
-        // Check if the file is null
-        if (updatedFile == null)
-            throw new InvalidParameterException("File can't be null");
+        // assert that the file know his ID
+        assertID(updatedFile);
 
         try {
             // If the file doesn't know his id, let's find it
@@ -310,7 +330,8 @@ public class DAOStorageDB extends StorageDB {
     }
 
     /**
-     * Return the list of the children of this file
+     * Return the list of the children of this file.
+     * NOTE that one of the children is in the trash this method doesn't include it!
      * @param ID ID of the father
      * @return List of children.
      * @throws StorageException
@@ -320,38 +341,48 @@ public class DAOStorageDB extends StorageDB {
         try {
             return fileTable.queryBuilder()
                     .orderBy("name", true)
-                    .where().eq("father_ID", ID)
+                    .where()
+                    .eq("father_ID", ID)
+                    .and()
+                    .eq("trashed", false)
                     .query();
-        } catch (Exception ex) {
-            log.warn(ex.toString(), ex);
+        } catch (SQLException ex) {
+            log.warn(ex);
             throw new StorageException("Cannot find children");
         }
     }
 
     @Override
-    public SyncEvent trashFile(long ID, boolean toTrash) throws StorageException {
-        if (ID == GBFile.UNKNOWN_ID)
-            throw new InvalidParameterException("invalid ID");
+    public SyncEvent trashFile(GBFile file, boolean toTrash) throws StorageException {
+
+        // assert that the id is valid
+        assertID(file);
 
         try {
-            fileTable.executeRaw("UPDATE file SET trashed = ? WHERE ID = ?", String.valueOf(ID), String.valueOf(toTrash));
+            // Change the state
+            file.setTrashed(toTrash);
+
+            // Update the db
+            fileTable.update(file);
+            return registerEvent(new SyncEvent(SyncEvent.EventKind.REMOVE_FILE, file));
         } catch (SQLException ex) {
             throw new StorageException(ex.toString());
         }
     }
 
     @Override
-    public void share(long ID, boolean share) throws StorageException {
+    public void share(GBFile file, boolean share) throws StorageException {
+        assertID(file);
 
+        if (isShared(file) == share)
+            return;
         try {
             if(share) {
-                sharingTable.create(new Sharing(ID));
+                sharingTable.create(new Sharing(file));
             } else {
-
-                DeleteBuilder<Sharing, Long> stmt = sharingTable.deleteBuilder();
-                stmt.where().eq("file_ID", ID);
-                if(stmt.delete() < 0)
-                    throw new StorageException("Filed is nit shared");
+                DeleteBuilder<Sharing, Long> stmt =  sharingTable.deleteBuilder();
+                stmt.where().eq("file_ID", file.getID());
+                stmt.delete();
             }
         } catch (SQLException ex) {
             ex.printStackTrace();
@@ -378,14 +409,15 @@ public class DAOStorageDB extends StorageDB {
      */
     @Override
     public SyncEvent removeFile (GBFile fileToRemove) throws StorageException {
-
+        assertID(fileToRemove);
         try {
 
-            if (fileToRemove.getID() == GBFile.UNKNOWN_ID)
-                fileToRemove = getFileByPath(fileToRemove);
-
             // Remove from the database
-            fileTable.deleteById(fileToRemove.getID());
+            int rows = fileTable.deleteById(fileToRemove.getID());
+
+            if (rows != 1)
+                throw new StorageException("Removed " + rows + " instead of 1");
+            log.info("File removed from database");
 
             // Also his children
             if(fileToRemove.isDirectory())
@@ -410,18 +442,14 @@ public class DAOStorageDB extends StorageDB {
      * @return Shared or not
      */
     @Override
-    public boolean isShared (long ID) throws StorageException {
-
-        if (ID < 0)
-            throw new InvalidParameterException("File is null");
-
+    public boolean isShared (GBFile file) throws StorageException {
+        assertID(file);
         try {
-            PreparedStatement stmt = db.prepareStatement("SELECT ID FROM sharing WHERE file_ID = ?");
-            stmt.setLong(1, ID);
-            ResultSet res = stmt.executeQuery();
-            boolean exist = res.next();
-            res.close();
-            return exist;
+            return sharingTable.queryBuilder()
+                    .where()
+                    .eq("file_ID", file.getID())
+                    .query()
+                    .size() > 0;
         } catch (SQLException ex) {
             throw new StorageException("Cannot check if the file is shared");
         }
@@ -449,7 +477,7 @@ public class DAOStorageDB extends StorageDB {
 
             if(from > 0)
                 stmt.offset(from);
-            if(n > -1)
+            if(n > 0)
                 stmt.limit(new Long(n));
 
             return stmt.query();
@@ -461,6 +489,9 @@ public class DAOStorageDB extends StorageDB {
 
     @Override
     public void addToRecent(GBFile file) throws StorageException {
+        if(file == null)
+            throw new InvalidParameterException("file is null");
+
         try {
 
             // Create the new event
@@ -474,23 +505,24 @@ public class DAOStorageDB extends StorageDB {
     }
 
     @Override
-    public List<GBFile> getRecentList(long from, long size) throws StorageException {
+    public List<SyncEvent> getRecentList(long from, long size) throws StorageException {
         try {
 
             // Query builder event table
-            QueryBuilder<SyncEvent, Long> eventQuery = eventTable.queryBuilder();
+            QueryBuilder<SyncEvent, Long> eventQuery = eventTable.queryBuilder()
+                    .having("kind NOT 'REMOVE_FILE'")
+                    .orderBy("date", false)
+                    .offset(from)
+                    .limit(size);
 
             // Query builder file table
             QueryBuilder<GBFile, Long> fileQuery = fileTable.queryBuilder();
 
+
             // Make the query
-            return fileQuery.join(eventQuery)
-                    .having("kind NOT 'REMOVE_FILE'")
-                    .orderBy("date", false)
-                    .offset(from)
-                    .limit(size)
-                    .query();
+            return eventQuery.join(fileQuery).query();
         } catch (SQLException ex) {
+            log.warn(ex.toString(), ex);
             throw new StorageException("Cannot search");
         }
     }
@@ -505,7 +537,7 @@ public class DAOStorageDB extends StorageDB {
                 // Make the query
                 return queryBuilder
                         .orderBy("name", false)
-                        .where().eq("trashed", false)
+                        .where().eq("trashed", true)
                         .query();
             } catch (SQLException ex) {
 
@@ -514,20 +546,19 @@ public class DAOStorageDB extends StorageDB {
     }
 
     @Override
-    public SyncEvent copyFile(long ID, long fatherID, String newName) throws StorageException {
-        GBFile src = getFileByID(ID);
-
-        SyncEvent event = null;
+    public SyncEvent copyFile(GBFile src, GBFile dst) throws StorageException {
+        assertID(src);
 
         try {
-            event = insertFile(dst);
+            SyncEvent event = insertFile(dst);
+            if(src.isDirectory())
+                for(GBFile child : src.getChildren())
+                    copyFile(child, new GBFile(child.getName(), dst.getID(), true));
+
+            return event;
         } catch (Exception ex) {
 
         }
-        if(src.isDirectory())
-            for(GBFile child : src.getChildren())
-                copyFile(child, new GBFile(child.getName(), dst.getID(), true));
-
-        return event;
+        return null;
     }
 }

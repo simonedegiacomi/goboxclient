@@ -7,11 +7,16 @@ import java.sql.SQLException;
 import java.util.List;
 
 /**
+ * Interface of the database used by the storage
  * Created on 22/04/16.
  * @author Degiacomi Simone
  */
 public abstract class StorageDB {
 
+    /**
+     * Close the connection to the database
+     * @throws SQLException
+     */
     public abstract void close () throws SQLException;
 
     /**
@@ -55,6 +60,25 @@ public abstract class StorageDB {
     }
 
     /**
+     * This method call {@link #getFile(GBFile)} and then find the children and the path (if needed)
+     * @param file File to find
+     * @param path Find the path?
+     * @param children Find the children ?
+     * @return File with the request information
+     * @throws StorageException
+     */
+    public GBFile getFile (GBFile file, boolean path, boolean children) throws StorageException {
+        GBFile dbFile = getFile(file);
+        if (dbFile != null) {
+            if (children)
+                findChildren(dbFile);
+            if (path)
+                findPath(dbFile);
+        }
+        return dbFile;
+    }
+
+    /**
      * Find the path given the file ID. This return the list in the right format to call the setPath GBFile
      * method. If the file with this ID doesn't exist, return null
      * @param ID of the file
@@ -64,12 +88,12 @@ public abstract class StorageDB {
     public abstract List<GBFile> getPath (long ID) throws StorageException;
 
     /**
-     * Calls {@link #getPathByID(long)} and then sets the path to the specified file
+     * Calls {@link #getPath(long)} and then sets the path to the specified file
      * @param file
      * @throws StorageException
      */
     public void findPath (GBFile file) throws StorageException {
-        file.setPathByList(getPathByID(file.getID()));
+        file.setPathByList(getPath(file.getID()));
     }
 
     /**
@@ -112,7 +136,17 @@ public abstract class StorageDB {
      * @return Generated event
      * @throws StorageException
      */
-    public abstract SyncEvent trashFile (long ID, boolean toTrash) throws StorageException;
+    public abstract SyncEvent trashFile (GBFile file, boolean toTrash) throws StorageException;
+
+    /**
+     * Trash the specified file reading the trash property of the specified object
+     * @param file File to move to/from the trash
+     * @return generated event
+     * @throws StorageException
+     */
+    public SyncEvent trashFile (GBFile file) throws StorageException {
+        return trashFile(file, file.isTrashed());
+    }
 
     /**
      * Return the list of the trashed files
@@ -130,30 +164,29 @@ public abstract class StorageDB {
     public abstract SyncEvent removeFile (GBFile file) throws StorageException;
 
     /**
-     * Copy the specified file to the father ID folder
-     * @param ID ID of the file to copy
-     * @param fatherID Father of the new copy
-     * @param newName of the new copied file
-     * @return Generated event
+     * Copy the file
+     * @param src Source file
+     * @param dst Destination file (this must have a valid father id)
+     * @return Generate event
      * @throws StorageException
      */
-    public abstract SyncEvent copyFile (long ID, long fatherID, String newName) throws StorageException;
+    public abstract SyncEvent copyFile (GBFile src, GBFile dst) throws StorageException;
 
     /**
      * Share (or stop sharing) a file or a folder.
-     * @param ID ID of the file
+     * @param file File
      * @param share True to share, False to stop sharing
      * @throws StorageException
      */
-    public abstract void share (long ID, boolean share) throws StorageException;
+    public abstract void share (GBFile file, boolean share) throws StorageException;
 
     /**
      * Check if the specified file is shared or not, If a file with this ID doesn't exist, return false
-     * @param ID of the file
+     * @param file file
      * @return True if shared, false if not shared or if the file doesn't exist
      * @throws StorageException
      */
-    public abstract boolean isShared (long ID) throws StorageException;
+    public abstract boolean isShared (GBFile file) throws StorageException;
 
     /**
      * Return a list with all the shared files
@@ -188,5 +221,5 @@ public abstract class StorageDB {
      * @return List of recent files
      * @throws StorageException
      */
-    public abstract List<GBFile> getRecentList (long from, long size) throws StorageException;
+    public abstract List<SyncEvent> getRecentList (long from, long size) throws StorageException;
 }

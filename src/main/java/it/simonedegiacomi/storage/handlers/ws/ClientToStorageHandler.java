@@ -12,7 +12,10 @@ import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
-import it.simonedegiacomi.storage.*;
+import it.simonedegiacomi.storage.EventEmitter;
+import it.simonedegiacomi.storage.StorageDB;
+import it.simonedegiacomi.storage.StorageEnvironment;
+import it.simonedegiacomi.storage.StorageException;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.FileSystemWatcher;
 import org.apache.log4j.Logger;
@@ -61,21 +64,16 @@ public class ClientToStorageHandler implements WSQueryHandler {
     @Override
     public JsonElement onQuery(JsonElement data) {
         log.info("New come to get upload request");
+        JsonObject json = data.getAsJsonObject();
 
         // Prepare the response
         JsonObject queryResponse = new JsonObject();
 
-        JsonObject json = data.getAsJsonObject();
-
-        if (!json.has("uploadKey")) {
+        // Assert that the name of the file is present and also the father and the upload key
+        if (!json.has("uploadKey") || !json.has("name") || !json.has("father")) {
             queryResponse.addProperty("success", false);
-            queryResponse.addProperty("error", "missing upload key");
-            return queryResponse;
-        }
-
-        if (!json.has("name") || ! json.has("father")) {
-            queryResponse.addProperty("success", false);
-            queryResponse.addProperty("error", "missing file");
+            queryResponse.addProperty("error", "missing data");
+            queryResponse.addProperty("httpCode", 400);
             return queryResponse;
         }
 
@@ -88,7 +86,8 @@ public class ClientToStorageHandler implements WSQueryHandler {
         try {
 
             // Get information about the father
-            GBFile dbFather = db.getFile(father);
+            GBFile dbFather = db.getFile(father, true, true);
+            dbFather.setPrefix(PATH);
 
             // Create the gb new file
             GBFile child = dbFather.generateChild(json.get("name").getAsString(), false);
@@ -112,7 +111,6 @@ public class ClientToStorageHandler implements WSQueryHandler {
             // Send this json
 
             // Specify the length of the json
-            conn.setRequestProperty("Content-Length", String.valueOf(jsonReq.toString().length()));
             PrintWriter out = new PrintWriter(conn.getOutputStream());
             out.println(jsonReq.toString());
 
@@ -123,9 +121,10 @@ public class ClientToStorageHandler implements WSQueryHandler {
             int response = conn.getResponseCode();
 
             if(response != 200) {
-
                 log.warn("Upload file from client to storage failed");
                 queryResponse.addProperty("success", false);
+                queryResponse.addProperty("error", "http request failed");
+                queryResponse.addProperty("httpCode", response);
                 return queryResponse;
             }
 
@@ -138,10 +137,8 @@ public class ClientToStorageHandler implements WSQueryHandler {
             // Copy the stream
             ByteStreams.copy(conn.getInputStream(), toDisk);
 
-            // Close file
+            // Close file and http
             toDisk.close();
-
-            // And the http connection
             conn.disconnect();
 
             // Read the info of the file
@@ -155,7 +152,6 @@ public class ClientToStorageHandler implements WSQueryHandler {
 
             // Stop ignoring
             watcher.stopIgnoring(child.toFile());
-
             queryResponse.addProperty("success", true);
         } catch (IOException ex) {
 
@@ -170,8 +166,6 @@ public class ClientToStorageHandler implements WSQueryHandler {
             queryResponse.addProperty("error", ex.toString());
             queryResponse.addProperty("httpCode", 500);
         }
-
-        queryResponse.addProperty("success", true);
         return queryResponse;
     }
 }

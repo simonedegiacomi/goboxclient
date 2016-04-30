@@ -9,20 +9,28 @@ import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
-import it.simonedegiacomi.storage.*;
+import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
+import it.simonedegiacomi.storage.EventEmitter;
+import it.simonedegiacomi.storage.StorageDB;
+import it.simonedegiacomi.storage.StorageEnvironment;
+import it.simonedegiacomi.storage.StorageException;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.FileSystemWatcher;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.List;
 
 /**
+ * This handler manage all the ws query to manage the trash and to delete files
  * Created on 13/04/16.
  * @author Degiacomi Simone
  */
 public class TrashHandler {
 
-    private final Gson gson = new Gson();
+    private final static Logger log = Logger.getLogger(TrashHandler.class);
+
+    private final Gson gson = MyGsonBuilder.create();
 
     private final String PATH = Config.getInstance().getProperty("path");
 
@@ -33,7 +41,6 @@ public class TrashHandler {
     private final StorageDB db;
 
     public TrashHandler (StorageEnvironment env) {
-
         this.db = env.getDB();
         this.emitter = env.getEmitter();
         this.watcher = env.getSync().getFileSystemWatcher();
@@ -44,68 +51,52 @@ public class TrashHandler {
      * @return Handler that trash files
      */
     public WSQueryHandler getTrashHandler () {
-
         return new WSQueryHandler() {
 
             @WSQuery(name = "trashFile")
             @Override
             public JsonElement onQuery(JsonElement jsonElement) {
+                JsonObject json = jsonElement.getAsJsonObject();
 
                 // Prepare the response
                 JsonObject response = new JsonObject();
-                try {
-
-                    // Wrap the file from the request
-                    GBFile fileToTrash = gson.fromJson(jsonElement, GBFile.class);
-
-                    // Hide the file
-                    MyFileUtils.trash(fileToTrash.toFile());
-
-                    // Update the db
-                    db.trashFile(fileToTrash.getID(), true);
-
-                    response.addProperty("success", true);
-                } catch (StorageException ex) {
-
+                if (!json.has("toTrash") || !json.has("file")) {
                     response.addProperty("success", false);
-                } catch (IOException ex) {
-
-                    response.addProperty("success", false);
+                    response.addProperty("error", "missing file and/or trash flag");
+                    return response;
                 }
 
-                return response;
-            }
-        };
-    }
+                boolean toTrash = json.get("toTrash").getAsBoolean();
 
-    public WSQueryHandler getRecoverHandler () {
-
-        return new WSQueryHandler() {
-
-            @WSQuery(name = "recoverFile")
-            @Override
-            public JsonElement onQuery(JsonElement jsonElement) {
-
-                // Prepare the response
-                JsonObject response = new JsonObject();
                 try {
 
                     // Wrap the file from the request
-                    GBFile fileToTrash = gson.fromJson(jsonElement, GBFile.class);
+                    GBFile file = gson.fromJson(json.get("file"), GBFile.class);
+                    GBFile dbFile = db.getFile(file, true, false);
+                    dbFile.setPrefix(PATH);
+
+                    // Assert that the file exist
+                    if (dbFile == null) {
+                        response.addProperty("success", false);
+                        response.addProperty("error", "file not found");
+                        return response;
+                    }
 
                     // Hide the file
-                    MyFileUtils.untrash(fileToTrash.toFile());
+                    watcher.startIgnoring(dbFile.toFile());
+                    dbFile.setTrashed(toTrash);
+                    MyFileUtils.moveTrash(dbFile);
+                    watcher.stopIgnoring(dbFile.toFile());
 
                     // Update the db
-                    db.trashFile(fileToTrash.getID(), false);
+                    db.trashFile(dbFile, toTrash);
 
                     response.addProperty("success", true);
                 } catch (StorageException ex) {
-
                     response.addProperty("success", false);
                 } catch (IOException ex) {
-
                     response.addProperty("success", false);
+                    response.addProperty("error", ex.toString());
                 }
 
                 return response;
@@ -132,12 +123,12 @@ public class TrashHandler {
                     List<GBFile> files = db.getTrashList();
 
                     // Add the files to the response
-                    response.add("files", gson.toJsonTree(files, new TypeToken<List<GBFile>>() {
-                    }.getType()));
-
-                    response.addProperty("error", false);
+                    response.add("files", gson.toJsonTree(files, new TypeToken<List<GBFile>>() {}.getType()));
+                    response.addProperty("success", true);
                 } catch (StorageException ex) {
-                    response.addProperty("error", true);
+                    log.warn(ex.toString(), ex);
+                    response.addProperty("success", false);
+                    response.addProperty("error", ex.toString());
                 }
                 return response;
             }
@@ -149,44 +140,41 @@ public class TrashHandler {
      * @return Handler that delete the files
      */
     public WSQueryHandler getDeleteHandler () {
-
         return new WSQueryHandler() {
             @WSQuery(name = "removeFile")
             @Override
             public JsonElement onQuery (JsonElement data) {
+                JsonObject json = data.getAsJsonObject();
 
                 // Create the response object
                 JsonObject res = new JsonObject();
 
-                // Wrap the file to delete
-                GBFile fileToRemove = gson.fromJson(data, GBFile.class);
-                fileToRemove.setPrefix(PATH);
-
                 try {
 
-                    // Get the path of the file. Maybe the wrapped file already contains
-                    // the path, but maybe contains only the id
-                    db.findPath(fileToRemove);
+                    // Wrap the file to delete
+                    GBFile file = gson.fromJson(data, GBFile.class);
+                    GBFile dbFile = db.getFile(file, true, true);
 
                     // Tell the internal client to ignore this event
-                    watcher.startIgnoring(fileToRemove.toFile());
+                    watcher.startIgnoring(dbFile.toFile());
 
                     // Remove the file from the file system
-                    MyFileUtils.deleteR(fileToRemove.toFile());
+                    MyFileUtils.delete(dbFile);
 
-                    watcher.stopIgnoring(fileToRemove.toFile());
+                    watcher.stopIgnoring(dbFile.toFile());
 
                     // And then remove the file from the database
-                    SyncEvent event = db.removeFile(fileToRemove);
+                    SyncEvent event = db.removeFile(dbFile);
 
                     // Finally complete the response
                     res.addProperty("success", true);
 
                     // And send the notification will contain the deleted file
                     emitter.emitEvent(event);
-                } catch (Exception ex) {
-                    ex.printStackTrace();
+                } catch (StorageException ex) {
+                    log.warn(ex.toString(), ex);
                     res.addProperty("success", false);
+                    res.addProperty("error", ex.toString());
                 }
                 return res;
             }
@@ -198,7 +186,6 @@ public class TrashHandler {
      * @return The new handler
      */
     public WSQueryHandler getEmptyTrashHandler () {
-
         return new WSQueryHandler() {
 
             @WSQuery(name = "emptyTrash")
@@ -210,24 +197,29 @@ public class TrashHandler {
 
                 try {
                     // Get all the trashed files
-                    List<GBFile> files = db.getTrashList(0, Long.MAX_VALUE);
+                    List<GBFile> files = db.getTrashList();
 
                     // Iterate each file
                     for (GBFile file : files) {
+
+                        // Find the path and also the children
+                        db.findPath(file);
+                        db.findChildren(file);
 
                         // Set the environment prefix
                         file.setPrefix(PATH);
 
                         // Delete the hidden file
-                        MyFileUtils.deleteR(file.toFile(), true);
+                        MyFileUtils.delete(file);
 
                         // Remove form the database
-                        db.removeFile(file.getID());
+                        db.removeFile(file);
                     }
 
                     response.addProperty("success", true);
                 } catch (StorageException ex) {
                     response.addProperty("success", false);
+                    response.addProperty("error", ex.toString());
                 }
                 return response;
             }

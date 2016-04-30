@@ -7,7 +7,7 @@ import com.sun.net.httpserver.HttpHandler;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
-import it.simonedegiacomi.storage.DAOStorageDB;
+import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageException;
 import it.simonedegiacomi.utils.MyHttpExchangeUtils;
 
@@ -23,13 +23,13 @@ import java.util.Map;
  */
 public class ToStorageHttpHandler implements HttpHandler {
 
-    private DAOStorageDB db;
+    private StorageDB db;
 
     private final Gson gson = MyGsonBuilder.create();
 
     private final String PATH = Config.getInstance().getProperty("path");
 
-    public ToStorageHttpHandler (DAOStorageDB db) {
+    public ToStorageHttpHandler (StorageDB db) {
         this.db = db;
     }
 
@@ -46,7 +46,7 @@ public class ToStorageHttpHandler implements HttpHandler {
         }
 
         // Get the query string parameters
-        Map<String, String> params = MyHttpExchangeUtils.getQueryParams(httpExchange.getRequestURI().toURL());
+        Map<String, String> params = MyHttpExchangeUtils.getQueryParams(httpExchange.getRequestURI());
 
         // Get the json string that describe the upload
         String jsonString = params.get("json");

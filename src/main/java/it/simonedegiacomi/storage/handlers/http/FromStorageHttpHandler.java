@@ -6,7 +6,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.storage.DAOStorageDB;
+import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.sender.HttpExchangeDestination;
 import it.simonedegiacomi.storage.sender.Sender;
 import it.simonedegiacomi.storage.sender.SenderDestination;
@@ -23,13 +23,13 @@ import java.util.Map;
  */
 public class FromStorageHttpHandler implements HttpHandler {
 
-    private final DAOStorageDB db;
+    private final StorageDB db;
 
     private final Sender sender = new Sender();
 
     private final String PATH = Config.getInstance().getProperty("path");
 
-    public FromStorageHttpHandler (DAOStorageDB db) {
+    public FromStorageHttpHandler (StorageDB db) {
         this.db = db;
     }
 
@@ -38,7 +38,6 @@ public class FromStorageHttpHandler implements HttpHandler {
 
         // Assert that the method is GET
         if(!httpExchange.getRequestMethod().equals("GET")) {
-
             httpExchange.sendResponseHeaders(400, 0);
             httpExchange.close();
             return;
@@ -47,7 +46,7 @@ public class FromStorageHttpHandler implements HttpHandler {
         try {
 
             // Get the url query params
-            Map<String, String> params = MyHttpExchangeUtils.getQueryParams(httpExchange.getRequestURI().toURL());
+            Map<String, String> params = MyHttpExchangeUtils.getQueryParams(httpExchange.getRequestURI());
 
             // Id of the file
             long fileId = Long.parseLong(params.get("ID"));
@@ -56,12 +55,21 @@ public class FromStorageHttpHandler implements HttpHandler {
             boolean preview = params.containsKey("preview") ? Boolean.parseBoolean(params.get("preview")) : false;
 
             // Get the file form the database
-            GBFile gbFile = db.getFileById(fileId, true, false);
+            GBFile gbFile = db.getFileByID(fileId);
+
+            if (gbFile == null) {
+                httpExchange.sendResponseHeaders(404, 0);
+                httpExchange.close();
+                return;
+            }
+
+            db.findPath(gbFile);
 
             // Set the environment path
             gbFile.setPrefix(PATH);
 
             // Create the destination object for the sender
+            httpExchange.sendResponseHeaders(200, 0);
             SenderDestination dst = new HttpExchangeDestination(httpExchange);
 
             if (gbFile.isDirectory()) {
@@ -83,7 +91,7 @@ public class FromStorageHttpHandler implements HttpHandler {
                 }
 
             }
-
+            httpExchange.close();
         } catch (Exception ex) {
             ex.printStackTrace();
         }

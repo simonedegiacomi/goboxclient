@@ -1,4 +1,6 @@
-package it.simonedegiacomi.configuration;
+package it.simonedegiacomi.configuration.loginui;
+
+import it.simonedegiacomi.configuration.Config;
 
 import javax.swing.*;
 

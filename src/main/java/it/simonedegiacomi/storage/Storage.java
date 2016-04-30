@@ -92,18 +92,14 @@ public class Storage {
         // Create the event emitter
         env.setEmitter(new EventEmitter(mainServer));
 
-        // Set the trash path
-        MyFileUtils.setTrashPath(config.getProperty("trash"));
-
         try {
-
             // Create the local UDP server
-            env.setUdpServer(new UDPStorageServer(UDPStorageServer.DEFAULT_PORT));
+            UDPStorageServer udp = new UDPStorageServer(UDPStorageServer.DEFAULT_PORT);
+            udp.init();
+            env.setUdpServer(udp);
         } catch (UnknownHostException ex) {
-
             log.warn(ex.toString());
         } catch (IOException ex) {
-
             log.warn(ex.toString());
         }
 
@@ -116,10 +112,11 @@ public class Storage {
             // Create the inet address (the broadcast
             InetSocketAddress address = new InetSocketAddress("0.0.0.0", port);
 
-            // Set the http server in the environment
-            env.setHttpsServer(new HttpsStorageServer(address, env));
+            // Create the https server
+            HttpsStorageServer https = new HttpsStorageServer(address, env);
+            https.init();
+            env.setHttpsServer(https);
         } catch (IOException ex) {
-
             log.warn(ex.toString());
         }
 
@@ -132,10 +129,8 @@ public class Storage {
      * @throws StorageException
      */
     public void startStoraging () throws StorageException {
-
-        // Set all the others events and queries
-        assignEvent();
-
+        if(mainServer.isConnected())
+            throw new IllegalStateException("Storage already initialized");
         try {
 
             // Open the connection and start to listen
@@ -146,13 +141,15 @@ public class Storage {
         }
 
         // Start the UDP server
-        env.getUdpServer().start();
-
-        // Forward the port for the http server
-        env.getHttpsServer().forwardPort();
+        if(env.getUdpServer() != null)
+            env.getUdpServer().start();
 
         // Start the local http(s) server
-        env.getHttpsServer().serve();
+        if(env.getHttpsServer() != null)
+            env.getHttpsServer().serve();
+
+        // Assign event handler from the ws client
+        assignEvent();
     }
 
     /**
@@ -180,6 +177,9 @@ public class Storage {
         mainServer.addQueryHandler(trashHandler.getTrashHandler());
         mainServer.addQueryHandler(trashHandler.getEmptyTrashHandler());
 
+        // Rename handler
+        mainServer.addQueryHandler(new RenameFileHandler(env));
+
         // Handler that copy or cut files
         mainServer.addQueryHandler(new CopyOrCutHandler(env));
 
@@ -190,8 +190,12 @@ public class Storage {
         mainServer.addQueryHandler(new ShareListHandler(env));
         mainServer.addQueryHandler(new ShareHandler(env));
 
+        // Recent files
+        mainServer.addQueryHandler(new RecentHandler(env));
+
         // The http server that manage direct transfers also has an integrated WSQueryHandler
-        mainServer.addQueryHandler(env.getHttpsServer().getWSComponent());
+        if (env.getHttpsServer() != null)
+            mainServer.addQueryHandler(env.getHttpsServer().getWSComponent());
 
         // Add a simple ping handler
         mainServer.onQuery("ping", new WSQueryHandler() {
@@ -228,16 +232,18 @@ public class Storage {
     public void shutdown () {
         try {
             // Stop the udp server
-            env.getUdpServer().shutdown();
+            if(env.getUdpServer() != null)
+                env.getUdpServer().shutdown();
         } catch (InterruptedException ex) {
             log.warn(ex.toString());
         }
 
         // Stop the https server
-        env.getHttpsServer().shutdown();
+        if (env.getHttpsServer() != null)
+            env.getHttpsServer().shutdown();
 
         // Disconnect from the main server
-        //mainServer.disconnect();
+        mainServer.disconnect();
     }
 
     /**

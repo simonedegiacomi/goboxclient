@@ -20,7 +20,7 @@ public class ImagePreviewer extends Previewer {
      */
     private static final String DEFAULT_PREVIEW_KIND = "png";
 
-    private static final double RESIZE_RATIO = 0.1;
+    private static final int PREVIEW_WIDTH = 256;
 
     @Override
     public String getPreviewKind(GBFile file) {
@@ -34,8 +34,8 @@ public class ImagePreviewer extends Previewer {
         BufferedImage src = ImageIO.read(file.toFile());
 
         // Calculate final resolution
-        int finalWidth = (int)(src.getWidth() * RESIZE_RATIO);
-        int finalHeight = (int)(src.getHeight() * RESIZE_RATIO);
+        int finalWidth = PREVIEW_WIDTH;
+        int finalHeight = (int) (((double) src.getHeight()) / ((double)src.getWidth()) * PREVIEW_WIDTH);
 
         // Resize
         BufferedImage dst = resize(src, finalWidth, finalHeight);

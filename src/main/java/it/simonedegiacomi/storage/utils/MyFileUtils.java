@@ -1,12 +1,15 @@
 package it.simonedegiacomi.storage.utils;
 
+import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
 import org.apache.tika.Tika;
+import org.omg.CORBA.DynAnyPackage.Invalid;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.security.InvalidParameterException;
 
 /**
  * Created on 15/04/16.
@@ -14,11 +17,10 @@ import java.nio.file.attribute.BasicFileAttributes;
  */
 public class MyFileUtils {
 
-    private static String TRASH;
-
-    public static void setTrashPath (String trashPath) {
-        MyFileUtils.TRASH = trashPath;
-    }
+    /**
+     * Path of the trash folder
+     */
+    private final static String TRASH = Config.getInstance().getProperty("trash");
 
     /**
      * Copy a file from the source to the destination. If the file is a directory,
@@ -43,32 +45,42 @@ public class MyFileUtils {
 
     /**
      * Delete the specified file. If the file is a directory, also his children will be deleted
-     * @param fileToRemove File to remove
+     * @param file File to remove
      */
-    public static void deleteR (File fileToRemove) {
-        deleteR(fileToRemove, false);
+    public static void delete (File file) {
+        if (file == null || !file.exists())
+            throw new InvalidParameterException("file not valid");
+
+        // Remove the child first
+        if (file.isDirectory()) {
+            for(File child : file.listFiles()) {
+                delete(child);
+            }
+        }
+
+        // Finally the file
+        file.delete();
     }
 
     /**
-     * Delete the specified file. If the file is a directory, also his children will be deleted
+     * Check if the file is trashed. Then call the {@link #deleteR(File)} method
      * @param fileToRemove File to remove
      * @param trashed Was the file trashed?
      */
-    public static void deleteR (File fileToRemove, boolean trashed) {
-
-        // If it's a directory
-        if(fileToRemove.isDirectory()) {
-
-            // First remove all the children
-            for (File file : fileToRemove.listFiles())
-                deleteR(trashed ? file : new File(TRASH + fileToRemove.toString()));
+    public static void delete (GBFile fileToRemove){
+        // Change the prefix, so i can move the file easily
+        // TODO: Clean approach, this is not thread safe and it's not a good idea
+        String temp = null;
+        if (fileToRemove.isTrashed()) {
+            temp = fileToRemove.getPrefix();
+            fileToRemove.setPrefix(TRASH);
         }
 
-        // Delete the file
-        if (trashed)
-            new File(TRASH + fileToRemove.toString()).delete();
-        else
-            fileToRemove.delete();
+        delete(fileToRemove.toFile());
+
+        if (temp != null) {
+            fileToRemove.setPrefix(temp);
+        }
     }
 
     /**
@@ -77,41 +89,19 @@ public class MyFileUtils {
      * @throws IOException
      */
     public static void loadFileAttributes (GBFile file) throws IOException {
+        if(file == null || !file.toFile().exists())
+            throw new InvalidParameterException("file not valid");
 
         // Get the basic file attributes
         BasicFileAttributes attrs = Files.readAttributes(file.toFile().toPath(), BasicFileAttributes.class);
-
-        // Read the size
         file.setSize(attrs.size());
-
-        // Read the creation and last update date
         file.setCreationDate(attrs.creationTime().toMillis());
         file.setLastUpdateDate(attrs.lastAccessTime().toMillis());
 
-        // If is not a directory
+        // If is not a directory load the mime
         if(!file.isDirectory()) {
-
-            // Load the mime
             file.setMime(new Tika().detect(file.toFile()));
         }
-    }
-
-    /**
-     * Hide the specified file
-     * @param file File to trash
-     */
-    public static void trash(File file) throws IOException {
-
-        moveTrash(file, false);
-    }
-
-    /**
-     * Show the file that was hided
-     * @param file File to untrash
-     */
-    public static void untrash(File file) throws IOException {
-
-        moveTrash(file, true);
     }
 
     /**
@@ -120,20 +110,25 @@ public class MyFileUtils {
      * @param toTrash Trashed or not
      * @throws IOException
      */
-    public static void moveTrash(File file, boolean toTrash) throws IOException {
+    public static void moveTrash(GBFile file) throws IOException {
+        if (file == null)
+            throw new InvalidParameterException("file not valid");
 
-        // String path of the file
-        String stringPath = file.toString();
+        // TODO: clean
 
-        // Create the trashed file
-        File trashedFile;
-
-        if (toTrash)
-            trashedFile = new File(TRASH + stringPath);
-        else
-            trashedFile = new File(stringPath.substring(stringPath.indexOf(TRASH)));
+        File trashFile = file.toFile();
+        String oldPrefix = file.getPrefix();
+        file.setPrefix(TRASH);
+        if (file.isTrashed()) {
+            trashFile = file.toFile();
+            file.setPrefix(oldPrefix);
+        }
 
         // Move the file
-        Files.move(file.toPath(), trashedFile.toPath());
+        Files.move(file.toFile().toPath(), trashFile.toPath());
+
+        if (file.isTrashed()) {
+            file.setPrefix(oldPrefix);
+        }
     }
 }

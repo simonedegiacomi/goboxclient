@@ -93,13 +93,11 @@ public class Sender {
      * @throws IOException Exception while sending the file
      */
     public void sendFile (GBFile gbFile, SenderDestination dst, Range<Long> range) throws IOException {
+        if (gbFile == null || !gbFile.toFile().exists())
+            throw new InvalidParameterException("file not valid");
 
         // Get the java file
         File file = gbFile.toFile();
-
-        // Check if the file exist
-        if (!file.exists())
-            throw new InvalidParameterException("The file doesn't exist");
 
         // Check if the file is a directory
         if (file.isDirectory())

@@ -11,11 +11,14 @@ import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.storage.EventEmitter;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
+import it.simonedegiacomi.storage.StorageException;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.FileSystemWatcher;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
 import java.nio.file.Files;
+import java.util.List;
 
 /**
  * This handle the request to create new directories
@@ -62,24 +65,20 @@ public class CreateFolderHandler implements WSQueryHandler {
         GBFile father = gson.fromJson(json.get("father"), GBFile.class);
 
         try {
-            GBFile dbFather = db.getFile(father);
+            GBFile dbFather = db.getFile(father, true, true);
 
             // Check that the father exists
             if (dbFather == null) {
                 response.addProperty("created", false);
-                response.addProperty("errror", "father doesn't exist");
+                response.addProperty("error", "father doesn't exist");
                 return response;
             }
 
             dbFather.setPrefix(PATH);
             GBFile newFolder = dbFather.generateChild(json.get("name").getAsString(), true);
+            newFolder.setPrefix(PATH);
 
-            // Check if another file with the same name already exists
-            if(Files.exists(newFolder.toFile().toPath())) {
-                response.addProperty("created", false);
-                response.addProperty("error", "a folder with this name already exist");
-                return response;
-            }
+            uniqueName(newFolder, dbFather.getChildren());
 
             // Tell the internal client ot ignore this event
             watcher.startIgnoring(newFolder.toFile());
@@ -105,13 +104,27 @@ public class CreateFolderHandler implements WSQueryHandler {
 
             // The notification will contain the new file information
             emitter.emitEvent(event);
-        } catch (Exception ex) {
-
+        } catch (StorageException ex) {
             log.warn(ex);
             response.addProperty("created", false);
+            response.addProperty("error", ex.toString());
+        } catch (IOException ex) {
+            log.warn(ex.toString(), ex);
+            response.addProperty("created", false);
+            response.addProperty("error", ex.toString());
         }
 
         // Finally return the response
         return response;
+    }
+
+    private static void uniqueName (GBFile file, List<GBFile> brothers) {
+        for (GBFile brother : brothers) {
+            if (file.getName().equals(brother.getName())) {
+                file.setName(file.getName() + " - Copy");
+                uniqueName(file, brothers);
+                return;
+            }
+        }
     }
 }
