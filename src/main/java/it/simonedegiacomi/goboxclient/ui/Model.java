@@ -71,4 +71,8 @@ public interface Model {
     String getFlashMessage();
 
     void setError (String error);
+
+    String getError();
+
+    void addOnUpdateListener(Runnable runnable);
 }

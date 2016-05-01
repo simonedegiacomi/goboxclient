@@ -1,6 +1,7 @@
 package it.simonedegiacomi.storage;
 
 import com.google.common.io.ByteStreams;
+import com.google.gson.JsonElement;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.client.*;
 import org.apache.log4j.Logger;
@@ -9,6 +10,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URL;
 import java.security.InvalidParameterException;
 import java.util.List;
 
@@ -51,6 +53,9 @@ public class InternalClient extends Client {
         this.emitter = env.getEmitter();
     }
 
+    @Override
+    public boolean init() throws ClientException { return true; }
+
     /**
      * Return the file with the path and the children. This method uses the id if available, the path otherwise
      * @param file File
@@ -72,8 +77,14 @@ public class InternalClient extends Client {
         }
     }
 
+    @Override
+    public URL getUrl(TransferUrlUtils.Action action, JsonElement jsonElement) {
+        // Meaningless with the internal client
+        return null;
+    }
+
     /**
-     * THis method doesn't do anything, because the internal client already has the file
+     * This method doesn't do anything, because the internal client already has the file
      * @param file File to download
      * @throws ClientException
      */
@@ -93,15 +104,11 @@ public class InternalClient extends Client {
         ByteStreams.copy(fileStream, dst);
     }
 
-    /**
-     * Do nothing for the same reason as {@link #uploadFile(GBFile)}
-     * @param newDir
-     * @throws ClientException
-     */
     @Override
     public void createDirectory(GBFile newDir) throws ClientException {
         try {
-            db.insertFile(newDir);
+            SyncEvent event = db.insertFile(newDir);
+            emitter.emitEvent(event);
         } catch (StorageException ex) {
             log.warn(ex.toString(), ex);
             throw new ClientException(ex.toString());
@@ -109,12 +116,7 @@ public class InternalClient extends Client {
     }
 
     @Override
-    public void uploadFile(GBFile gbFile, InputStream inputStream) throws ClientException, IOException {
-
-    }
-
-    @Override
-    public void uploadFile(GBFile file) throws ClientException, IOException {
+    public void uploadFile(GBFile file, InputStream inputStream) throws ClientException, IOException {
         try {
             // Just insert the file into the database, the file is already here
             SyncEvent event = db.insertFile(file);
@@ -124,6 +126,9 @@ public class InternalClient extends Client {
             throw new ClientException(ex.toString());
         }
     }
+
+    @Override
+    public void trashFile(GBFile gbFile, boolean b) throws ClientException { }
 
     @Override
     public void removeFile(GBFile file) {
@@ -136,35 +141,30 @@ public class InternalClient extends Client {
         }
     }
 
+    /**
+     * Do nothing because all the events are handled by the storage
+     * @param syncEventListener
+     */
     @Override
-    public void updateFile(GBFile file, InputStream file2) {
-        try {
-            // The file is already updated...
-            SyncEvent event = db.updateFile(file);
-            emitter.emitEvent(event);
-        } catch (Exception ex) {
-            log.warn(ex.toString(), ex);
-        }
-    }
+    public void addSyncEventListener(SyncEventListener syncEventListener) { }
 
+    /**
+     * Do nothing. See {@link #addSyncEventListener(SyncEventListener)}
+     * @param syncEventListener
+     */
     @Override
-    public void updateFile(GBFile file) {
-        this.updateFile(file, null);
-    }
+    public void removeSyncEventListener(SyncEventListener syncEventListener) { }
 
+    /**
+     * Do nothing
+     * @param lastHeardId
+     */
     @Override
-    public void setSyncEventListener (SyncEventListener listener) {
-        // Nothing to do here because alla the events are handled by the storage
-    }
-
-    @Override
-    public void requestEvents(long lastHeardId) {
-        // Not implemented yet
-    }
+    public void requestEvents(long lastHeardId) { }
 
     @Override
     public boolean isReady() {
-        return false;
+        return true;
     }
 
     @Override
@@ -172,21 +172,14 @@ public class InternalClient extends Client {
         return ClientState.READY;
     }
 
+    @Override
+    public void shutdown() { }
 
     @Override
-    public void init() throws ClientException {
-
-    }
+    public List<GBFile> getSharedFiles() throws ClientException { return null; }
 
     @Override
-    public void shutdown() {
-
-    }
-
-    @Override
-    public List<GBFile> getSharedFiles() throws ClientException {
-        return null;
-    }
+    public void share(GBFile gbFile, boolean b) throws ClientException { }
 
     @Override
     public List<GBFile> getFilesByFilter(GBFilter gbFilter) throws ClientException {
@@ -199,7 +192,13 @@ public class InternalClient extends Client {
     }
 
     @Override
-    public List<GBFile> getTrashedFiles(long l, long l1) throws ClientException {
+    public List<GBFile> getTrashedFiles() throws ClientException {
         return null;
     }
+
+    @Override
+    public void emptyTrash() throws ClientException { }
+
+    @Override
+    public void rename(GBFile gbFile, String s) throws ClientException { }
 }

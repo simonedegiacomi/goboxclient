@@ -6,6 +6,7 @@ import com.j256.ormlite.jdbc.JdbcConnectionSource;
 import com.j256.ormlite.jdbc.JdbcDatabaseConnection;
 import com.j256.ormlite.stmt.DeleteBuilder;
 import com.j256.ormlite.stmt.QueryBuilder;
+import com.j256.ormlite.stmt.SelectArg;
 import com.j256.ormlite.support.ConnectionSource;
 import com.j256.ormlite.table.TableUtils;
 import it.simonedegiacomi.goboxapi.GBFile;
@@ -508,19 +509,13 @@ public class DAOStorageDB extends StorageDB {
     public List<SyncEvent> getRecentList(long from, long size) throws StorageException {
         try {
 
-            // Query builder event table
             QueryBuilder<SyncEvent, Long> eventQuery = eventTable.queryBuilder()
-                    .having("kind NOT 'REMOVE_FILE'")
                     .orderBy("date", false)
                     .offset(from)
                     .limit(size);
 
-            // Query builder file table
-            QueryBuilder<GBFile, Long> fileQuery = fileTable.queryBuilder();
-
-
             // Make the query
-            return eventQuery.join(fileQuery).query();
+            return eventQuery.where().eq("kind", SyncEvent.EventKind.OPEN_FILE).query();
         } catch (SQLException ex) {
             log.warn(ex.toString(), ex);
             throw new StorageException("Cannot search");

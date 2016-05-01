@@ -29,11 +29,15 @@ public class CorsHeadersMiddleware {
 
     private static void addHeader (HttpExchange httpExchange) {
         httpExchange.getResponseHeaders().add("Access-Control-Allow-Origin", "https://gobox-simonedegiacomi.c9users.io");
-        httpExchange.getResponseHeaders().add("Access-Control-Request-Headers", "X-PINGOTHER, Content-Type");
+
         httpExchange.getResponseHeaders().add("Access-Control-Allow-Headers", "X-PINGOTHER, Content-Type");
-        httpExchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST");
-        httpExchange.getResponseHeaders().add("Access-Control-Allow-Headers", "GET, POST");
+
+        httpExchange.getResponseHeaders().add("Access-Control-Allow-Headers", "GET, POST, PUT, OPTIONS");
+
+        httpExchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+
         httpExchange.getResponseHeaders().add("Access-Control-Allow-Credentials", "true");
+
         httpExchange.getResponseHeaders().add("Access-Control-Max-Age", "86400");
     }
 }

@@ -1,6 +1,7 @@
 package it.simonedegiacomi.sync;
 
 import com.sun.nio.file.SensitivityWatchEventModifier;
+import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
@@ -18,6 +19,11 @@ import java.util.concurrent.TimeUnit;
  * @author Degiacomi Simone
  */
 public class FileSystemWatcher extends Thread {
+
+    /**
+     * Logger of the class
+     */
+    private static final Logger logger = Logger.getLogger(FileSystemWatcher.class);
 
     /**
      * Kinds of event
@@ -62,7 +68,7 @@ public class FileSystemWatcher extends Thread {
      * @throws IOException thrown watching this path
      */
     public FileSystemWatcher (Path path) throws IOException {
-
+        super("FileSystemWatcher");
         pathToWatch = path;
         watchService = FileSystems.getDefault().newWatchService();
     }
@@ -108,9 +114,10 @@ public class FileSystemWatcher extends Thread {
      */
     @Override
     public void run () {
+        logger.info("start thread");
+
         // Register the already existing folder
         try {
-
             registerFolder(pathToWatch);
         } catch (Exception ex) {
             ex.printStackTrace();

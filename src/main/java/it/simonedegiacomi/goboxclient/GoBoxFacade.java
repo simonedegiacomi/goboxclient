@@ -33,8 +33,6 @@ public class GoBoxFacade {
      */
     private final Config config = Config.getInstance();
 
-
-
     /**
      * Storage of the program instance
      */
@@ -108,9 +106,15 @@ public class GoBoxFacade {
      */
     public void shutdown () {
         try {
-            sync.shutdown();
-            client.shutdown();
-            storage.shutdown();
+            if (sync != null) {
+                sync.shutdown();
+            }
+            if (client != null) {
+                client.shutdown();
+            }
+            if(storage != null) {
+                storage.shutdown();
+            }
         } catch (ClientException ex) {
             logger.warn(ex);
         } catch (InterruptedException ex) {
@@ -131,6 +135,9 @@ public class GoBoxFacade {
      * @throws IOException File not found or invalid
      */
     public void initializeEnvironment () throws IOException {
+
+        // Load logger config
+        Config.loadLoggerConfig();
 
         // Load the urls
         config.loadUrls();

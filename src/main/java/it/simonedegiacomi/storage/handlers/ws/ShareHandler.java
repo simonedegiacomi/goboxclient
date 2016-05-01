@@ -71,6 +71,7 @@ public class ShareHandler implements WSQueryHandler {
 
                 log.info("Unshared file");
             }
+
         } catch (StorageException ex) {
             ex.printStackTrace();
             response.addProperty("success", false);

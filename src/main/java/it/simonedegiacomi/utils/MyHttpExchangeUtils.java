@@ -1,5 +1,6 @@
 package it.simonedegiacomi.utils;
 
+import java.net.URI;
 import java.net.URL;
 import java.security.InvalidParameterException;
 import java.util.HashMap;
@@ -11,7 +12,7 @@ import java.util.Map;
  */
 public class MyHttpExchangeUtils {
 
-    public static Map<String, String> getQueryParams (URL uri) {
+    public static Map<String, String> getQueryParams (URI uri) {
 
         // Create the result hash map
         HashMap<String, String> headers = new HashMap<>();
@@ -22,9 +23,6 @@ public class MyHttpExchangeUtils {
         // assert that the url contains a query
         if (query == null || query.length() <= 0)
             throw new InvalidParameterException("The url doesn't contain any query parameter");
-
-        // Remove the '?'
-        query = query.substring(1);
 
         // Fill the map
         for (String pair : query.split("&")) {

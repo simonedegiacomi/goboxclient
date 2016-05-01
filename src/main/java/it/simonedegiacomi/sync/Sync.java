@@ -14,6 +14,8 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
+import static it.simonedegiacomi.goboxapi.GBFile.ROOT_ID;
+
 /**
  * A Sync object work with an implementation of the Client interface, and manage
  * the synchronization of the filesystem with the relative storage of the account.
@@ -94,7 +96,7 @@ public class Sync {
     public void resyncAndStart () throws IOException, ClientException {
         syncState = true;
 
-        checkR(new GBFile(GBFile.ROOT_ID, GBFile.ROOT_ID, PATH, true));
+        checkR(GBFile.ROOT_FILE);
 
         // Start watching for changes
         watcher.start();
@@ -122,6 +124,8 @@ public class Sync {
             return;
         }
 
+        detailedFile.setPrefix(PATH);
+
         // If it's a directory
         if(detailedFile.isDirectory()) {
 
@@ -132,7 +136,7 @@ public class Sync {
                 storageFiles.put(child.getName(), child);
 
             // Check every children (in the fs)
-            for (File child : file.toFile().listFiles()) {
+            for (File child : detailedFile.toFile().listFiles()) {
 
                 // Check
                 checkR(new GBFile(child, PATH));
@@ -197,7 +201,7 @@ public class Sync {
                     GBFile wrappedFile = new GBFile(editedFile, PATH);
 
                     // Call the right client method
-                    client.updateFile(wrappedFile);
+                    client.uploadFile(wrappedFile);
                 } catch (ClientException ex) {
 
                     log.warn(ex.toString(), ex);
@@ -239,7 +243,7 @@ public class Sync {
     private void assignSyncEventFromStorage () {
 
         // Set the listener
-        client.setSyncEventListener(new SyncEventListener() {
+        client.addSyncEventListener(new SyncEventListener() {
 
             @Override
             public void on(SyncEvent event) {

@@ -117,7 +117,7 @@ public class HttpsStorageServer {
         AuthMiddleware authMiddleware = new AuthMiddleware(directLoginHandler.getJwtSecret());
 
         // Handler that receive new file (upload from client)
-        server.createContext("/toStorage", corsMiddle.wrap(authMiddleware.wrap(new ToStorageHttpHandler(env.getDB()))));
+        server.createContext("/toStorage", corsMiddle.wrap(authMiddleware.wrap(new ToStorageHttpHandler(env))));
 
         // Handler that send file to the client (download from the storage to the client)
         server.createContext("/fromStorage", corsMiddle.wrap(authMiddleware.wrap(new FromStorageHttpHandler(env.getDB()))));
@@ -154,7 +154,7 @@ public class HttpsStorageServer {
                     response.addProperty("port", address.getPort());
 
                     // Finally send the public key of the https certificate
-                    response.add("publicKey", gson.toJsonTree(certificateGenerator.getCertificate().getEncoded(), new TypeToken<byte[]>(){}.getType()));
+                    response.add("certificate", gson.toJsonTree(certificateGenerator.getCertificate().getEncoded(), new TypeToken<byte[]>(){}.getType()));
                 } catch (IOException ex) {
                     log.warn(ex.toString(), ex);
                     response.addProperty("error", true);

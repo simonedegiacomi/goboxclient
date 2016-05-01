@@ -51,7 +51,7 @@ public class RecentHandler implements WSQueryHandler {
             List<SyncEvent> files = db.getRecentList(from, size);
 
             // Add the files list
-            response.add("files", gson.toJsonTree(files, new TypeToken<List<SyncEvent>>(){}.getType()));
+            response.add("events", gson.toJsonTree(files, new TypeToken<List<SyncEvent>>(){}.getType()));
 
             response.addProperty("success", true);
         } catch (StorageException ex) {

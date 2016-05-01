@@ -2,6 +2,7 @@ package it.simonedegiacomi.utils;
 
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.myws.MyWSClient;
+import org.apache.log4j.Logger;
 
 import java.net.Authenticator;
 import java.net.PasswordAuthentication;
@@ -13,6 +14,9 @@ import java.net.PasswordAuthentication;
  * @author Degiacomi Simone
  */
 public class EasyProxy {
+
+    private static final Logger log = Logger.getLogger(EasyProxy.class);
+
     /**
      * Apply the proxy configuration from the Config class.
      **/
@@ -29,17 +33,6 @@ public class EasyProxy {
         System.setProperty("https.proxyPort", config.getProperty("proxyPort"));
         MyWSClient.setProxy(config.getProperty("proxyIP"), Integer.parseInt(config.getProperty("proxyPort")));
 
-        System.out.printf("Proxy set (%s:%s)\n", config.getProperty("proxyIP"), config.getProperty("proxyPort"));
-
-        // Check if the proxy use an authentication
-        if(Boolean.parseBoolean(config.getProperty("authenticateProxy")))
-            Authenticator.setDefault(
-                    new Authenticator() {
-                        @Override
-                        public PasswordAuthentication getPasswordAuthentication() {
-                            return new PasswordAuthentication(config.getProperty("proxyUser"), config.getProperty("proxyPassword").toCharArray());
-                        }
-                    }
-            );
+        log.info("Proxy: " + config.getProperty("proxyIP") + ':' + config.getProperty("proxyPort"));
     }
 }

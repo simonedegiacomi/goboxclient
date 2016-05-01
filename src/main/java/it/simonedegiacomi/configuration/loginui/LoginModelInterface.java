@@ -17,4 +17,6 @@ public interface LoginModelInterface {
     char[] getPassword ();
 
     boolean getUseAsStorage ();
+
+    boolean check();
 }

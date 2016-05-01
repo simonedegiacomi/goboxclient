@@ -15,6 +15,13 @@ public class GoBoxPresenter implements Presenter {
 
     public GoBoxPresenter(Model model) {
         this.model = model;
+        model.addOnUpdateListener(new Runnable() {
+
+            @Override
+            public void run() {
+                refreshView();
+            }
+        });
     }
 
     @Override
@@ -66,6 +73,8 @@ public class GoBoxPresenter implements Presenter {
             view.setMessage(model.getFlashMessage());
             view.setSyncState(model.isSyncing());
             view.setCurrentWorks(model.getCurrentWorks());
+            if(model.getError() != null)
+                view.showError(model.getError());
         }
     }
 }

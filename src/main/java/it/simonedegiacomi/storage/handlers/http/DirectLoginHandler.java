@@ -13,7 +13,8 @@ import java.util.Random;
 import java.util.Set;
 
 /**
- * Created by simone on 25/02/16.
+ * Created on 25/02/16.
+ * @author Degiacomi Simone
  */
 public class DirectLoginHandler implements HttpHandler {
 

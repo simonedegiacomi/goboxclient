@@ -18,7 +18,9 @@ public class GoBoxModel implements Model {
      */
     private final GoBoxFacade facade;
 
-    private String flashMessage;
+    private Runnable listener;
+
+    private String flashMessage, error;
 
     public GoBoxModel (GoBoxFacade facade) {
         this.facade = facade;
@@ -75,6 +77,19 @@ public class GoBoxModel implements Model {
 
     @Override
     public void setError(String error) {
+        this.error = error;
+    }
 
+    public String getError () {
+        return error;
+    }
+
+    private void refresh() {
+        listener.run();
+    }
+
+    @Override
+    public void addOnUpdateListener(Runnable runnable) {
+        this.listener = runnable;
     }
 }

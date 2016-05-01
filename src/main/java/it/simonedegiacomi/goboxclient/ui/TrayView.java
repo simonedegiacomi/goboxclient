@@ -68,6 +68,7 @@ public class TrayView implements View {
     public TrayView (Presenter presenter) {
         this.presenter = presenter;
         desktop = Desktop.getDesktop();
+        trayMenu.setName("GoBox");
         addButtons();
     }
 
@@ -140,20 +141,18 @@ public class TrayView implements View {
         // Load the icon
         URL iconUrl = getClass().getResource(ICON_NAME);
         final TrayIcon icon = new TrayIcon(new ImageIcon(iconUrl).getImage());
+        icon.setToolTip("GoBox");
+        icon.setImageAutoSize(true);
 
         // Attach the menu to the icon
         icon.setPopupMenu(trayMenu);
 
         // Add the icon to the system tray
-        SwingUtilities.invokeLater(new Runnable() {
-
-            @Override
-            public void run() {
-                try {
-                    tray.add(icon);
-                } catch (AWTException ex) {
-                    logger.warn(ex);
-                }
+        SwingUtilities.invokeLater(() -> {
+            try {
+                tray.add(icon);
+            } catch (AWTException ex) {
+                logger.warn(ex);
             }
         });
     }

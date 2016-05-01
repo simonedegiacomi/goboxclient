@@ -2,12 +2,14 @@ package it.simonedegiacomi.configuration;
 
 import it.simonedegiacomi.goboxapi.authentication.Auth;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
-import java.io.*;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Properties;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.*;
 
 /**
  * Created on 27/12/2015.
@@ -16,7 +18,12 @@ import java.util.Properties;
 public class Config {
 
     /**
-     * Degault configuration filename
+     * Logger of the class
+     */
+    private final static Logger log = Logger.getLogger(Config.class);
+
+    /**
+     * Default configuration filename
      */
     private static final String DEFAULT_LOCATION = "config/gobox.conf";
 
@@ -41,20 +48,29 @@ public class Config {
     private final URLBuilder urls = new URLBuilder();
 
     /**
-     * Auth object serialized in the configuration
+     * Auth object serialized in the configuration. This is final to let you set new token lister one time
      */
-    private Auth auth = new Auth();
+    private final Auth auth = new Auth();
 
     /**
-     * Collection of listener that are called when the apply method
-     * is called
+     * Collection of listener that are called when the apply method is called
      */
-    private List<OnConfigChangeListener> listeners = new LinkedList<>();
+    private Set<OnConfigChangeListener> listeners = new HashSet<>();
 
     /**
      * Private constructor to make this class a singleton
      */
-    private Config () { }
+    private Config () {
+        // Add a listener to the auth object
+        getAuth().addOnTokenChangeListener(() -> {
+            try {
+                save();
+                log.info("config saved");
+            } catch (IOException ex) {
+                log.warn(ex.toString(), ex);
+            }
+        });
+    }
 
     /**
      * Return the singleton instance of the config
@@ -64,6 +80,9 @@ public class Config {
         return ourInstance;
     }
 
+    /**
+     * Load the default logger config
+     */
     public static void loadLoggerConfig () {
         PropertyConfigurator.configure(DEFAULT_LOG_CONFIG);
     }
@@ -79,7 +98,7 @@ public class Config {
         in.close();
 
         // If the auth object was serialized, reload it
-        if(properties.getProperty("username") != null) {
+        if(properties.containsKey("username")) {
             auth.setUsername(properties.getProperty("username"));
             auth.setToken(properties.getProperty("token"));
             auth.setMode(Auth.Modality.valueOf(properties.getProperty("mode")));
@@ -113,7 +132,8 @@ public class Config {
         if(auth != null) {
             properties.setProperty("token", auth.getToken());
             properties.setProperty("username", auth.getUsername());
-            properties.setProperty("mode", auth.getMode().toString());
+            if (auth.getMode() != null)
+                properties.setProperty("mode", auth.getMode().toString());
         }
 
         // Write to the file
@@ -161,6 +181,10 @@ public class Config {
         properties.remove("username");
     }
 
+    public boolean hasProperty(String key) {
+        return properties.containsKey(key);
+    }
+
     public interface OnConfigChangeListener {
         public void onChange ();
     }
@@ -170,10 +194,15 @@ public class Config {
     }
 
     public boolean isAuthDefined () {
-        return properties.contains("username") && properties.containsKey("token") && properties.containsKey("mode");
+        return properties.containsKey("username") && properties.containsKey("token") && properties.containsKey("mode");
     }
 
+    /**
+     * Update the internal auth object with the given one
+     * @param auth Object ot use to update the internal auth
+     */
     public void setAuth (Auth auth) {
-        this.auth = auth;
+        this.auth.setUsername(auth.getUsername());
+        this.auth.setToken(auth.getToken());
     }
 }

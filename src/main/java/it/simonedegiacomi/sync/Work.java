@@ -116,7 +116,7 @@ public class Work {
                             break;
                         case UPDATE:
 
-                            client.updateFile(file);
+                            client.uploadFile(file);
                             break;
                     }
                 } catch (Exception ex) {

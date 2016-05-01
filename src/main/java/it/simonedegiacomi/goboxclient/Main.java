@@ -12,7 +12,6 @@ import it.simonedegiacomi.storage.StorageException;
 import it.simonedegiacomi.sync.Sync;
 import it.simonedegiacomi.utils.GoBoxInstance;
 import org.apache.log4j.Logger;
-import org.apache.log4j.PropertyConfigurator;
 
 import java.awt.*;
 import java.io.IOException;
@@ -53,7 +52,11 @@ public class Main {
     private final static Presenter presenter = new GoBoxPresenter(goboxModel);
 
     public static void main(String[] args) {
-        Config.loadLoggerConfig();
+        try {
+            facade.initializeEnvironment();
+        } catch (IOException ex) {
+            logger.warn("Environment not initialized correctly.");
+        }
 
         // Check if this is the only instance
         GoBoxInstance instance = new GoBoxInstance();
@@ -77,20 +80,10 @@ public class Main {
             presenter.addView(view);
         }
 
-        try {
-
-            // Load the resources and initialize the classes
-            facade.initializeEnvironment();
-        } catch (IOException ex) {
-            logger.warn("Can't load resources from file");
-        }
-
         // If the user is not logged (or if the configuration was not loaded) start the login wizard
         if (config.isAuthDefined()) {
             afterLogin();
         } else {
-
-            // Start login procedure
             startLogin();
         }
     }
@@ -101,17 +94,14 @@ public class Main {
     private static void startLogin() {
 
         // Get and start the right login tool
-        LoginTool.getLoginTool(new LoginTool.EventListener() {
-            @Override
-            public void onLoginComplete() {
-                afterLogin();
+        LoginTool.startLogin(() -> {
+            try {
+                config.save();
+            } catch (IOException ex) {
+                logger.warn("Cannot save auth credentials");
             }
-
-            @Override
-            public void onLoginFailed() {
-                error("Login failed");
-            }
-        });
+            afterLogin();
+        }, () -> error("Login failed. Please restart GoBoxClient"));
     }
 
     /**
@@ -150,7 +140,6 @@ public class Main {
             disconnected();
             return;
         } catch (IOException ex) {
-
             logger.warn(ex);
         }
 
@@ -227,11 +216,14 @@ public class Main {
      */
     private static void disconnected () {
 
+        // Shutdown all the object
+        facade.shutdown();
+
+        // Advise the user
         goboxModel.setFlashMessage("Disconnected. Retry soon...");
 
-        // wait some seconds...
         try {
-
+            // wait some seconds...
             Thread.sleep(DEFAULT_RESTART_DELAY);
         } catch (InterruptedException ex) { }
 
@@ -279,11 +271,9 @@ public class Main {
             // Sync the folders and files
             sync.resyncAndStart();
         } catch (StorageException e) {
-
             logger.warn(e);
             disconnected();
         } catch (ClientException e) {
-
             logger.warn(e);
             disconnected();
         } catch (IOException e) {
