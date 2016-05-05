@@ -17,7 +17,7 @@ import java.io.OutputStream;
  */
 public class VideoPreviewer extends Previewer {
 
-    private static final int FRAME_LIMIT = 30;
+    private static final int FRAME_LIMIT = 100;
 
     private static final int FRAME_SKIP = 5;
 

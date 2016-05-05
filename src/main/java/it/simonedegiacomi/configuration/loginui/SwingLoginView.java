@@ -1,12 +1,9 @@
 package it.simonedegiacomi.configuration.loginui;
 
-import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.image.BufferedImage;
-import java.io.IOException;
 
 /**
  * Created on 23/04/16.
@@ -184,7 +181,7 @@ public class SwingLoginView implements LoginView {
     }
 
     @Override
-    public void showError() {
-        JOptionPane.showMessageDialog(null, "Invalid credentials", "Error", JOptionPane.ERROR_MESSAGE);
+    public void showError(String message) {
+        JOptionPane.showMessageDialog(null, message, "Error", JOptionPane.ERROR_MESSAGE);
     }
 }

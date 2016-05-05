@@ -1,6 +1,7 @@
 package it.simonedegiacomi.goboxclient.ui;
 
 import it.simonedegiacomi.configuration.Config;
+import it.simonedegiacomi.configuration.loginui.GUIConnectionTool;
 import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import it.simonedegiacomi.sync.Work;
@@ -12,6 +13,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
+import java.io.IOException;
 import java.net.URL;
 import java.util.Set;
 
@@ -79,6 +81,12 @@ public class TrayView implements View {
         // Client settings, this open the connection window
         connSettingsItem = new MenuItem();
         connSettingsItem.setLabel("Client Settings");
+        connSettingsItem.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                GUIConnectionTool.show();
+            }
+        });
         trayMenu.add(connSettingsItem);
 
         // This open the browser to GoBox WebApp page
@@ -90,8 +98,8 @@ public class TrayView implements View {
             public void actionPerformed(ActionEvent actionEvent) {
                 try {
                     desktop.browse(urls.getURI("webapp"));
-                } catch (Exception ex) {
-                    ex.printStackTrace();
+                } catch (IOException ex) {
+                    logger.warn(ex.toString(), ex);
                 }
             }
         });

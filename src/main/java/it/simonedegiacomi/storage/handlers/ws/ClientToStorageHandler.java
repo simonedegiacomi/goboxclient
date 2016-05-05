@@ -24,8 +24,8 @@ import javax.net.ssl.HttpsURLConnection;
 import java.io.DataOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.net.URL;
+import java.security.InvalidParameterException;
 
 /**
  * This handler is used to send a file from the storage
@@ -36,25 +36,66 @@ import java.net.URL;
  */
 public class ClientToStorageHandler implements WSQueryHandler {
 
+    /**
+     * Logger of the class
+     */
     private static final Logger log = Logger.getLogger(ClientToStorageHandler.class.getName());
 
-    private final Config config = Config.getInstance();
-
-    private final Auth auth = config.getAuth();
-
-    private final URLBuilder urls = config.getUrls();
-
-    private final String PATH = config.getProperty("path");
-
+    /**
+     * Gson to serialize/deserialize
+     */
     private final Gson gson = MyGsonBuilder.create();
 
+    /**
+     * Configuration
+     */
+    private final Config config = Config.getInstance();
+
+    /**
+     * Account to use with this storage
+     */
+    private final Auth auth = config.getAuth();
+
+    /**
+     * Urls to use
+     */
+    private final URLBuilder urls = config.getUrls();
+
+    /**
+     * GoBox files folder
+     */
+    private final String PATH = config.getProperty("path");
+
+    /**
+     * Sync event emitter that broadcast event to all the clients
+     */
     private final EventEmitter emitter;
 
+    /**
+     * File system watcher for the GoBox files ({@link #PATH} folder
+     */
     private final FileSystemWatcher watcher;
 
+    /**
+     * Database to store files information, sharing and events
+     */
     private final StorageDB db;
 
+    /**
+     * Create a new Client to storage handler. The environment must have a valid File system sync, a valid db and a valid
+     * event emitter
+     * @param env Environment in which is the handler run
+     */
     public ClientToStorageHandler(StorageEnvironment env) {
+        if (env.getDB() == null)
+            throw new InvalidParameterException("Environment without db");
+
+        if (env.getEmitter() == null)
+            throw new InvalidParameterException("Environment without event emitter");
+
+        if (env.getSync() == null || env.getSync().getFileSystemWatcher() == null)
+            throw new InvalidParameterException("Environment without file system watcher");
+
         this.db = env.getDB();
         this.emitter = env.getEmitter();
         this.watcher = env.getSync().getFileSystemWatcher();
@@ -87,9 +128,18 @@ public class ClientToStorageHandler implements WSQueryHandler {
 
             // Get information about the father
             GBFile dbFather = db.getFile(father, true, true);
+
+            if (dbFather == null) {
+                queryResponse.addProperty("success", false);
+                queryResponse.addProperty("error", "father not found");
+                queryResponse.addProperty("httpCode", 400);
+                return queryResponse;
+            }
+
+            // Set the environment prefix
             dbFather.setPrefix(PATH);
 
-            // Create the gb new file
+            // Create the new child
             GBFile child = dbFather.generateChild(json.get("name").getAsString(), false);
 
             // Make the https request to the main server
@@ -109,26 +159,18 @@ public class ClientToStorageHandler implements WSQueryHandler {
             jsonReq.addProperty("uploadKey", uploadKey);
 
             // Send this json
-
-            // Specify the length of the json
-            PrintWriter out = new PrintWriter(conn.getOutputStream());
-            out.println(jsonReq.toString());
-
-            // Flush the request
-            out.close();
+            conn.getOutputStream().write(jsonReq.toString().getBytes());
 
             // Attend for the response ...
-            int response = conn.getResponseCode();
-
-            if(response != 200) {
+            if(conn.getResponseCode() != 200) {
                 log.warn("Upload file from client to storage failed");
                 queryResponse.addProperty("success", false);
                 queryResponse.addProperty("error", "http request failed");
-                queryResponse.addProperty("httpCode", response);
+                queryResponse.addProperty("httpCode", 500);
                 return queryResponse;
             }
 
-            // Tell the internal client to ignore this event
+            // Tell the internal client to ignore the creation of the file
             watcher.startIgnoring(child.toFile());
 
             // Create the stream to the disk
@@ -150,8 +192,10 @@ public class ClientToStorageHandler implements WSQueryHandler {
             // The notification will contain the new file information
             emitter.emitEvent(event);
 
-            // Stop ignoring
+            // Stop ignoring the new file
             watcher.stopIgnoring(child.toFile());
+
+            // Successful request!
             queryResponse.addProperty("success", true);
         } catch (IOException ex) {
 

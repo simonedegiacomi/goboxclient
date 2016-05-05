@@ -167,10 +167,11 @@ public abstract class StorageDB {
      * Copy the file
      * @param src Source file
      * @param dst Destination file (this must have a valid father id)
+     * @param cut True to cut the file, false to just copy
      * @return Generate event
      * @throws StorageException
      */
-    public abstract SyncEvent copyFile (GBFile src, GBFile dst) throws StorageException;
+    public abstract SyncEvent copyOrCutFile (GBFile src, GBFile dst, boolean cut) throws StorageException;
 
     /**
      * Share (or stop sharing) a file or a folder.
@@ -178,7 +179,7 @@ public abstract class StorageDB {
      * @param share True to share, False to stop sharing
      * @throws StorageException
      */
-    public abstract void share (GBFile file, boolean share) throws StorageException;
+    public abstract SyncEvent share (GBFile file, boolean share) throws StorageException;
 
     /**
      * Check if the specified file is shared or not, If a file with this ID doesn't exist, return false

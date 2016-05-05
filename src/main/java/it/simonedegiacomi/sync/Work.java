@@ -2,8 +2,11 @@ package it.simonedegiacomi.sync;
 
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.client.Client;
+import it.simonedegiacomi.goboxapi.client.ClientException;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import org.apache.log4j.Logger;
+
+import java.io.IOException;
 
 /**
  * Created on 17/02/16.
@@ -19,7 +22,7 @@ public class Work {
     /**
      * Kinds of works
      */
-    public enum WorkKind { DOWNLOAD, UPLOAD, UPDATE };
+    public enum WorkKind { DOWNLOAD, UPLOAD };
 
     /**
      * State of works
@@ -41,18 +44,25 @@ public class Work {
      */
     private final GBFile file;
 
+    private Client client;
+
     /**
      * File system watcher that listen for new changes on the local fs
      */
     private static FileSystemWatcher watcher;
+
+    private static Worker worker;
 
     /**
      * Set the file system watcher
      * @param watcher File system watcher
      */
     public static void setWatcher (FileSystemWatcher watcher) {
-
         Work.watcher = watcher;
+    }
+
+    public static void setWorker (Worker worker) {
+        Work.worker = worker;
     }
 
     /**
@@ -81,7 +91,6 @@ public class Work {
     }
 
     public Work (GBFile file, WorkKind kind) {
-
         this.file = file;
         this.kind = kind;
     }
@@ -92,6 +101,8 @@ public class Work {
      * @return Runnable to execute to complete
      */
     public Runnable getWork (Client client) {
+
+        this.client = client;
 
         return new Runnable() {
 
@@ -107,16 +118,10 @@ public class Work {
                 try {
                     switch (kind) {
                         case DOWNLOAD:
-
-                            client.getFile(file);
+                            download(file);
                             break;
                         case UPLOAD:
-
-                            client.uploadFile(file);
-                            break;
-                        case UPDATE:
-
-                            client.uploadFile(file);
+                            upload(file);
                             break;
                     }
                 } catch (Exception ex) {
@@ -143,5 +148,24 @@ public class Work {
      */
     public WorkState getState () {
         return state;
+    }
+
+    private void download (GBFile file) throws IOException, ClientException {
+        client.getFile(file);
+        if (file.isDirectory()) {
+            for (GBFile child : file.getChildren()) {
+                worker.addWork(new Work(child, WorkKind.DOWNLOAD));
+            }
+        }
+    }
+
+    private void upload (GBFile file) throws ClientException, IOException {
+        if (file.isDirectory()) {
+            client.createDirectory(file);
+            for (GBFile child : file.getChildren()) {
+                worker.addWork(new Work(child, WorkKind.UPLOAD));
+            }
+        }
+        client.uploadFile(file);
     }
 }

@@ -89,7 +89,6 @@ public class SimplePreviewer extends Previewer {
      * @return
      */
     private Previewer getAppropriatePreviewer (GBFile file) {
-
         String fileKind = file.getMime();
 
         // Check if a previewer with the same type of the file exist

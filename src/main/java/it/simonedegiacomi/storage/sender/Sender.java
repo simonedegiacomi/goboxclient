@@ -5,6 +5,7 @@ import com.google.common.io.ByteStreams;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.storage.sender.preview.CachedPreviewer;
 import it.simonedegiacomi.storage.sender.preview.Previewer;
+import it.simonedegiacomi.storage.utils.MyRange;
 import it.simonedegiacomi.storage.utils.MyZip;
 import org.h2.store.LimitInputStream;
 
@@ -59,7 +60,7 @@ public class Sender {
         if(!previewer.canHandle(file))
             return;
 
-        // Specify the type of previewe
+        // Specify the type of preview
         dst.setHeader("Content-Type", previewer.getPreviewKind(file));
 
         // Get the connection output stream
@@ -103,16 +104,9 @@ public class Sender {
         if (file.isDirectory())
             throw new InvalidParameterException("This method cannot send a directory");
 
-        // If the file know his length, specify it
-        if(gbFile.getSize() > 0)
-            dst.setHeader("Content-Length", String.valueOf(gbFile.getSize()));
-
         // If the file knows his mime, specify it
         if(gbFile.getMime() !=  null)
             dst.setHeader("Content-Type", gbFile.getMime());
-
-        // Get the output stream to the server
-        OutputStream rawStreamToServer = dst.getOutputStream();
 
         // Open the file
         InputStream fromFile = new FileInputStream(file);
@@ -120,14 +114,32 @@ public class Sender {
         // If the range is specified
         if (range != null) {
 
-            // Create a new limited input stream
-            LimitInputStream limitInputStream = new LimitInputStream(fromFile, range.upperEndpoint());
+            long start = Math.max(range.lowerEndpoint(), 0);
+            long end = Math.min(range.upperEndpoint(),file.length());
 
-            // Skip the first byte
-            limitInputStream.skip(range.lowerEndpoint());
+            // Create a new limited input stream
+            LimitInputStream limitInputStream = new LimitInputStream(fromFile, end);
+
+            // Skip the first bytes
+            limitInputStream.skip(start);
 
             fromFile = limitInputStream;
+
+            // Set the http header
+            dst.setHeader("Content-Length", String.valueOf(end - start));
+            dst.setHeader("Content-Range", "bytes " + range.lowerEndpoint() + "-" + (end - 1) + "/" + file.length());
+
+            dst.sendHeaders(206);
+        } else {
+            // If the file know his length, specify it
+            if(gbFile.getSize() > 0)
+                dst.setHeader("Content-Length", String.valueOf(file.length()));
+
+            dst.sendHeaders(200);
         }
+
+        // Get the output stream to the server
+        OutputStream rawStreamToServer = dst.getOutputStream();
 
         // Send the file
         ByteStreams.copy(fromFile, rawStreamToServer);

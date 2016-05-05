@@ -18,6 +18,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.security.InvalidParameterException;
 import java.util.List;
 
 /**
@@ -28,19 +29,42 @@ import java.util.List;
  */
 public class CreateFolderHandler implements WSQueryHandler {
 
+    /**
+     * Logger of the class
+     */
     private static final Logger log = Logger.getLogger(CreateFolderHandler.class.getName());
-
-    private final StorageDB db;
-
-    private final EventEmitter emitter;
-
-    private final FileSystemWatcher watcher;
-
-    private final String PATH = Config.getInstance().getProperty("path");
 
     private final Gson gson = new Gson();
 
+    /**
+     * GoBox files folder
+     */
+    private final String PATH = Config.getInstance().getProperty("path");
+
+    /**
+     * Storage database
+     */
+    private final StorageDB db;
+
+    /**
+     * Event emitter to advise the clients
+     */
+    private final EventEmitter emitter;
+
+    /**
+     * File system watcher of the GoBox files folder
+     */
+    private final FileSystemWatcher watcher;
+
     public CreateFolderHandler (StorageEnvironment env) {
+        if (env.getDB() == null)
+            throw new InvalidParameterException("environment without db");
+
+        if (env.getEmitter() == null)
+            throw new InvalidParameterException("environment without event emitter");
+
+        if (env.getSync() == null || env.getSync().getFileSystemWatcher() == null)
+            throw new InvalidParameterException("environment without file system watcher");
 
         this.db = env.getDB();
         this.emitter = env.getEmitter();
@@ -59,6 +83,7 @@ public class CreateFolderHandler implements WSQueryHandler {
         if (!json.has("father") || !json.has("name")) {
             response.addProperty("created", false);
             response.addProperty("error", "missing father or name");
+            return response;
         }
 
         // Wrap the new directory
@@ -75,9 +100,11 @@ public class CreateFolderHandler implements WSQueryHandler {
             }
 
             dbFather.setPrefix(PATH);
-            GBFile newFolder = dbFather.generateChild(json.get("name").getAsString(), true);
-            newFolder.setPrefix(PATH);
 
+            // Generate the new child
+            GBFile newFolder = dbFather.generateChild(json.get("name").getAsString(), true);
+
+            // Assert that new name is unique
             uniqueName(newFolder, dbFather.getChildren());
 
             // Tell the internal client ot ignore this event
@@ -98,6 +125,7 @@ public class CreateFolderHandler implements WSQueryHandler {
             // Then complete the response
             response.addProperty("newFolderId", newFolder.getID());
             response.addProperty("created", true);
+            response.addProperty("success", true);
 
             // But first, send a broadcast message to advise the other
             // client that a new folder is created
@@ -105,7 +133,7 @@ public class CreateFolderHandler implements WSQueryHandler {
             // The notification will contain the new file information
             emitter.emitEvent(event);
         } catch (StorageException ex) {
-            log.warn(ex);
+            log.warn(ex.toString(), ex);
             response.addProperty("created", false);
             response.addProperty("error", ex.toString());
         } catch (IOException ex) {
@@ -118,6 +146,11 @@ public class CreateFolderHandler implements WSQueryHandler {
         return response;
     }
 
+    /**
+     * Assert that the specified file has an unique name.
+     * @param file File to check
+     * @param brothers Brother of the file
+     */
     private static void uniqueName (GBFile file, List<GBFile> brothers) {
         for (GBFile brother : brothers) {
             if (file.getName().equals(brother.getName())) {

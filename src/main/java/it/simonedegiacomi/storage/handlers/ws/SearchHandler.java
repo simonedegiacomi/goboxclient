@@ -10,7 +10,10 @@ import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
+import it.simonedegiacomi.storage.StorageException;
+import org.apache.log4j.Logger;
 
+import java.security.InvalidParameterException;
 import java.util.List;
 
 /**
@@ -19,11 +22,25 @@ import java.util.List;
  */
 public class SearchHandler implements WSQueryHandler {
 
+    /**
+     * Logger of the class
+     */
+    private static final Logger log = Logger.getLogger(SearchHandler.class);
+
+    /**
+     * Gson
+     */
     private final Gson gson = new MyGsonBuilder().create();
 
+    /**
+     * Database
+     */
     private final StorageDB db;
 
     public SearchHandler (StorageEnvironment env) {
+        if (env.getDB() == null)
+            throw new InvalidParameterException("environment without db");
+
         this.db = env.getDB();
     }
 
@@ -49,9 +66,11 @@ public class SearchHandler implements WSQueryHandler {
             response.add("result", gson.toJsonTree(resultList, new TypeToken<List<GBFile>>(){}.getType()));
 
             // Specify that there was no error
-            response.addProperty("error", false);
-        } catch (Exception ex) {
-            response.addProperty("error", true);
+            response.addProperty("success", true);
+        } catch (StorageException ex) {
+            log.warn(ex.toString(), ex);
+            response.addProperty("success", false);
+            response.addProperty("error", ex.toString());
         }
         return response;
     }

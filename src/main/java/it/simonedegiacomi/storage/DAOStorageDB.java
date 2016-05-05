@@ -6,7 +6,6 @@ import com.j256.ormlite.jdbc.JdbcConnectionSource;
 import com.j256.ormlite.jdbc.JdbcDatabaseConnection;
 import com.j256.ormlite.stmt.DeleteBuilder;
 import com.j256.ormlite.stmt.QueryBuilder;
-import com.j256.ormlite.stmt.SelectArg;
 import com.j256.ormlite.support.ConnectionSource;
 import com.j256.ormlite.table.TableUtils;
 import it.simonedegiacomi.goboxapi.GBFile;
@@ -372,11 +371,9 @@ public class DAOStorageDB extends StorageDB {
     }
 
     @Override
-    public void share(GBFile file, boolean share) throws StorageException {
+    public SyncEvent share(GBFile file, boolean share) throws StorageException {
         assertID(file);
 
-        if (isShared(file) == share)
-            return;
         try {
             if(share) {
                 sharingTable.create(new Sharing(file));
@@ -385,6 +382,10 @@ public class DAOStorageDB extends StorageDB {
                 stmt.where().eq("file_ID", file.getID());
                 stmt.delete();
             }
+
+            SyncEvent event = new SyncEvent(share ? SyncEvent.EventKind.SHARE_FILE : SyncEvent.EventKind.UNSHARE_FILE, file);
+            registerEvent(event);
+            return event;
         } catch (SQLException ex) {
             ex.printStackTrace();
             throw new StorageException(ex.toString());
@@ -541,19 +542,27 @@ public class DAOStorageDB extends StorageDB {
     }
 
     @Override
-    public SyncEvent copyFile(GBFile src, GBFile dst) throws StorageException {
+    public SyncEvent copyOrCutFile(GBFile src, GBFile dst, boolean cut) throws StorageException {
         assertID(src);
 
-        try {
-            SyncEvent event = insertFile(dst);
-            if(src.isDirectory())
-                for(GBFile child : src.getChildren())
-                    copyFile(child, new GBFile(child.getName(), dst.getID(), true));
-
-            return event;
-        } catch (Exception ex) {
-
+        insertFile(dst);
+        if(src.isDirectory()) {
+            for (GBFile child : src.getChildren()) {
+                copyOrCutFile(child, new GBFile(child.getName(), dst.getID(), true), cut);
+            }
         }
-        return null;
+
+        if (cut) {
+            removeFile(src);
+        }
+
+        // Create the sync event
+        SyncEvent detailedEvent = new SyncEvent(cut ? SyncEvent.EventKind.CUT_FILE : SyncEvent.EventKind.COPY_FILE);
+        detailedEvent.setBefore(src);
+        detailedEvent.setRelativeFile(dst);
+
+        // Register the event
+        registerEvent(detailedEvent);
+        return detailedEvent;
     }
 }

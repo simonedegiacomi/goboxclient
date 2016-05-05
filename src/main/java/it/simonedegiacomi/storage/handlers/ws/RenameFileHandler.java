@@ -19,6 +19,7 @@ import org.apache.log4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.security.InvalidParameterException;
 
 /**
  * @author Degiacomi Simone
@@ -31,17 +32,41 @@ public class RenameFileHandler implements WSQueryHandler{
      */
     private static final Logger log = Logger.getLogger(RenameFileHandler.class);
 
-    private final String PATH = Config.getInstance().getProperty("path");
-
-    private final StorageDB db;
-
-    private final EventEmitter emitter;
-
+    /**
+     * Gson
+     */
     private final Gson gson = MyGsonBuilder.create();
 
+    /**
+     * Path of the GoBox files folder
+     */
+    private final String PATH = Config.getInstance().getProperty("path");
+
+    /**
+     * Database
+     */
+    private final StorageDB db;
+
+    /**
+     * Event emitter to advice all the clients
+     */
+    private final EventEmitter emitter;
+
+    /**
+     * File system watcher
+     */
     private final FileSystemWatcher watcher;
 
     public RenameFileHandler(StorageEnvironment env) {
+        if (env.getDB() == null)
+            throw new InvalidParameterException("Environment without db");
+
+        if (env.getEmitter() == null)
+            throw new InvalidParameterException("Environment without event emitter");
+
+        if (env.getSync() == null || env.getSync().getFileSystemWatcher() == null)
+            throw new InvalidParameterException("Environment without file system watcher");
+
         this.db = env.getDB();
         this.emitter = env.getEmitter();
         this.watcher = env.getSync().getFileSystemWatcher();
@@ -93,13 +118,13 @@ public class RenameFileHandler implements WSQueryHandler{
             // complete the response
             response.addProperty("success", true);
         } catch (StorageException ex) {
+            log.warn(ex.toString(), ex);
             response.addProperty("success", false);
             response.addProperty("error", ex.toString());
-            log.warn(ex.toString(), ex);
         } catch (IOException ex) {
+            log.warn(ex.toString(), ex);
             response.addProperty("success", false);
             response.addProperty("error", ex.toString());
-            log.warn(ex.toString(), ex);
         }
         return response;
     }

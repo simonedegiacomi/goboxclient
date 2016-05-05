@@ -12,7 +12,7 @@ public interface SenderDestination {
 
     /**
      * Return the output stream to which the sender can write
-     * @return Output strea, to the destination
+     * @return Output stream, to the destination
      */
     OutputStream getOutputStream() throws IOException;
 
@@ -22,4 +22,6 @@ public interface SenderDestination {
      * @param headerValue Value of the header
      */
     void setHeader(String headerName, String headerValue);
+
+    void sendHeaders (int httpCode) throws IOException;
 }

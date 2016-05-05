@@ -4,9 +4,6 @@ import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.myws.MyWSClient;
 import org.apache.log4j.Logger;
 
-import java.net.Authenticator;
-import java.net.PasswordAuthentication;
-
 /**
  * This class expones a method used to set the
  * proxy configuration

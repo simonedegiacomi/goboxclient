@@ -18,7 +18,7 @@ public class Worker {
     /**
      * Default number of concurrent threads
      */
-    public final static int DEFAULT_THREADS = 2;
+    public final static int DEFAULT_THREADS = 4;
 
     /**
      * Real java executor.
@@ -55,7 +55,7 @@ public class Worker {
             @Override
             public void run() {
 
-                // Add to the crrent works set
+                // Add to the current works set
                 currentWorks.add(newWork);
 
                 // Run the work

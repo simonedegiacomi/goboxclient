@@ -18,9 +18,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.security.PublicKey;
 import java.security.cert.CertificateEncodingException;
-import java.security.cert.X509Certificate;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;

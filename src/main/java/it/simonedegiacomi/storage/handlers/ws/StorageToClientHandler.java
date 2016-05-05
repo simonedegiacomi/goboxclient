@@ -21,6 +21,7 @@ import org.apache.log4j.Logger;
 import javax.net.ssl.HttpsURLConnection;
 import java.io.IOException;
 import java.net.URL;
+import java.security.InvalidParameterException;
 
 /**
  * This handler receive the incoming file from the client
@@ -30,7 +31,10 @@ import java.net.URL;
  */
 public class StorageToClientHandler implements WSQueryHandler {
 
-    private static final Logger log = Logger.getLogger(StorageToClientHandler.class.getName());
+    /**
+     * Logger of the class
+     */
+    private static final Logger log = Logger.getLogger(StorageToClientHandler.class);
 
     /**
      * Configuration of the program. This is used to get the urls and the
@@ -59,11 +63,14 @@ public class StorageToClientHandler implements WSQueryHandler {
     private final StorageDB db;
 
     /**
-     * Onject that send the files to the storage trough a http request
+     * Object that send the files to the storage trough a http request
      */
     private final Sender sender = new Sender();
 
     public StorageToClientHandler(StorageEnvironment env) {
+        if (env.getDB() == null)
+            throw new InvalidParameterException("environment without db");
+
         this.db = env.getDB();
     }
 
@@ -71,12 +78,10 @@ public class StorageToClientHandler implements WSQueryHandler {
     @Override
     public JsonElement onQuery(JsonElement data) {
         log.info("New download request");
+        JsonObject jsonData = data.getAsJsonObject();
 
         // Prepare the response
         JsonObject response = new JsonObject();
-
-        // Get the id of the file and the key of the download
-        JsonObject jsonData = (JsonObject) data;
 
         if (!jsonData.has("ID") && !jsonData.has("path")) {
             response.addProperty("error", "file not found");
@@ -98,6 +103,16 @@ public class StorageToClientHandler implements WSQueryHandler {
             if (jsonData.has("path") && jsonData.get("path").getAsString().length() > 0)
                 temp.setPathByString(jsonData.get("path").getAsString());
             GBFile dbFile = db.getFile(temp, true, true);
+
+            if (dbFile == null) {
+
+                // File not found
+                response.addProperty("error", "file not found");
+                response.addProperty("httpCode", 404);
+                response.addProperty("success", false);
+                return response;
+            }
+
             dbFile.setPrefix(PATH);
 
             // If the download is not authorized, check of the file is shared
@@ -161,17 +176,15 @@ public class StorageToClientHandler implements WSQueryHandler {
 
             log.info("File sent to the client");
         } catch (StorageException ex) {
-
-            log.warn(ex);
+            log.warn(ex.toString(), ex);
             response.addProperty("error", "file not found");
-            response.addProperty("error", 404);
+            response.addProperty("httpCode", 404);
             response.addProperty("success", false);
         } catch (IOException ex) {
-
-            log.warn(ex);
+            log.warn(ex.toString(), ex);
             response.addProperty("error", "storage error");
             response.addProperty("success", false);
-            response.addProperty("error", 500);
+            response.addProperty("httpCode", 500);
         }
 
         return response;

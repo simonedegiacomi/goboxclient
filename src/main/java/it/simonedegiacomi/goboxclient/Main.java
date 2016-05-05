@@ -3,7 +3,6 @@ package it.simonedegiacomi.goboxclient;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.configuration.LoginTool;
 import it.simonedegiacomi.goboxapi.authentication.Auth;
-import it.simonedegiacomi.goboxapi.authentication.AuthException;
 import it.simonedegiacomi.goboxapi.client.ClientException;
 import it.simonedegiacomi.goboxapi.client.StandardClient;
 import it.simonedegiacomi.goboxclient.ui.*;
@@ -14,6 +13,7 @@ import it.simonedegiacomi.utils.GoBoxInstance;
 import org.apache.log4j.Logger;
 
 import java.awt.*;
+import java.io.File;
 import java.io.IOException;
 
 /**
@@ -124,23 +124,15 @@ public class Main {
                 // If can't authenticate because the data is wrong, delete the auth information
                 config.deleteAuth();
 
-                // And save the configuration
-                config.save();
-
                 // Restart the login procedure
                 startLogin();
                 return;
             }
-
-            // Save the configuration with the new token
-            config.save();
-        } catch (AuthException ex) {
+        } catch (IOException ex) {
 
             // If there was an error with the connection retry later
             disconnected();
             return;
-        } catch (IOException ex) {
-            logger.warn(ex);
         }
 
         // Start the right client
@@ -177,10 +169,7 @@ public class Main {
                 @Override
                 public void onDisconnect() {
 
-                    // Call the shutdown method
-                    facade.shutdown();
-
-                    // And retry later
+                    // Shutdown and then restart
                     disconnected();
                 }
             });
@@ -188,20 +177,22 @@ public class Main {
             // Connect the client to the server and the storage
             client.init();
 
+            // Try to switch to direct mode
             try {
-
-                // Try to switch to direct mode
-                client.switchMode(StandardClient.ConnectionMode.DIRECT_MODE);
-
+                client.switchMode(StandardClient.ConnectionMode.LOCAL_DIRECT_MODE);
             } catch (ClientException ex) {
-                logger.warn(ex);
+                logger.warn("Direct connection failed. Fallback in direct remote", ex);
+                try {
+                    client.switchMode(StandardClient.ConnectionMode.DIRECT_MODE);
+                } catch (ClientException e) {
+                    logger.warn("Direct Remote connection failed. Fallback in bridge remote", e);
+                }
             }
 
             // Start sync
             sync.resyncAndStart();
 
             goboxModel.setFlashMessage("Ready");
-
         } catch (ClientException ex) {
             logger.warn(ex);
             disconnected();
@@ -209,28 +200,6 @@ public class Main {
             logger.warn(ex);
             disconnected();
         }
-    }
-
-    /**
-     * Called when the client is disconnected
-     */
-    private static void disconnected () {
-
-        // Shutdown all the object
-        facade.shutdown();
-
-        // Advise the user
-        goboxModel.setFlashMessage("Disconnected. Retry soon...");
-
-        try {
-            // wait some seconds...
-            Thread.sleep(DEFAULT_RESTART_DELAY);
-        } catch (InterruptedException ex) { }
-
-        goboxModel.setFlashMessage("New connection attempt");
-
-        // Restart
-        afterLogin();
     }
 
     /**
@@ -277,12 +246,33 @@ public class Main {
             logger.warn(e);
             disconnected();
         } catch (IOException e) {
-
             logger.warn(e);
             disconnected();
         }
 
         goboxModel.setFlashMessage("Ready");
+    }
+
+    /**
+     * Called when the client is disconnected
+     */
+    private static void disconnected () {
+
+        // Shutdown all the object
+        facade.shutdown();
+
+        // Advise the user
+        goboxModel.setFlashMessage("Disconnected. Retry soon...");
+
+        try {
+            // wait some seconds...
+            Thread.sleep(DEFAULT_RESTART_DELAY);
+        } catch (InterruptedException ex) { }
+
+        goboxModel.setFlashMessage("New connection attempt");
+
+        // Restart
+        afterLogin();
     }
 
     /**

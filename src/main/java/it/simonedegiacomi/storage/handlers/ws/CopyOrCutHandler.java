@@ -15,8 +15,11 @@ import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.FileSystemWatcher;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.security.InvalidParameterException;
 
 /**
  * @author Degiacomi Simone
@@ -24,17 +27,50 @@ import java.io.IOException;
  */
 public class CopyOrCutHandler implements WSQueryHandler {
 
-    private final StorageDB db;
+    /**
+     * Logger of the class
+     */
+    private final static Logger log = Logger.getLogger(CopyOrCutHandler.class);
 
-    private final FileSystemWatcher watcher;
-
-    private final EventEmitter emitter;
-
+    /**
+     * Path of the GoBox files folder
+     */
     private final String PATH = Config.getInstance().getProperty("path");
 
+    /**
+     * Gson used to serialize/deserialize
+     */
     private final Gson gson = MyGsonBuilder.create();
 
+    /**
+     * Database to manage files
+     */
+    private final StorageDB db;
+
+    /**
+     * File system watcher of the GoBox files folder
+     */
+    private final FileSystemWatcher watcher;
+
+    /**
+     * Event emitter to notify the clients
+     */
+    private final EventEmitter emitter;
+
+    /**
+     * Create a new copy or cut handler with the specified environment
+     * @param env Environment to use
+     */
     public CopyOrCutHandler(StorageEnvironment env) {
+        if (env.getDB() == null)
+            throw new InvalidParameterException("environment without db");
+
+        if (env.getEmitter() == null)
+            throw new InvalidParameterException("environment without event emitter");
+
+        if (env.getSync() == null || env.getSync().getFileSystemWatcher() == null)
+            throw new InvalidParameterException("environment without file system watcher");
+
         this.db = env.getDB();
         this.watcher = env.getSync().getFileSystemWatcher();
         this.emitter = env.getEmitter();
@@ -43,21 +79,19 @@ public class CopyOrCutHandler implements WSQueryHandler {
     @WSQuery(name = "copyOrCutFile")
     @Override
     public JsonElement onQuery(JsonElement data) {
+        JsonObject json = data.getAsJsonObject();
 
         // Prepare the response
         JsonObject response = new JsonObject();
-
-        // Cast the request
-        JsonObject json = data.getAsJsonObject();
-
-        // Get the cut flag from the request
-        boolean cut = json.has("cut") ? json.get("cut").getAsBoolean() : false;
 
         if (!json.has("file") || !json.has("newFather")) {
             response.addProperty("success", false);
             response.addProperty("error", "missing file");
             return response;
         }
+
+        // Get the cut flag from the request
+        boolean cut = json.has("cut") ? json.get("cut").getAsBoolean() : false;
 
         // Instance the file from the json
         GBFile file = gson.fromJson(json.get("file"), GBFile.class);
@@ -66,9 +100,6 @@ public class CopyOrCutHandler implements WSQueryHandler {
         GBFile newFather = gson.fromJson(json.get("newFather"), GBFile.class);
 
         try {
-
-            // I need to place another try/catch, so i can use the finally block in the second try/catch
-            // to stop ignoring the file.
 
             // Get the file with all the information
             GBFile dbFile = db.getFile(file, true, true);
@@ -95,42 +126,40 @@ public class CopyOrCutHandler implements WSQueryHandler {
             watcher.startIgnoring(newFile.toFile());
             watcher.startIgnoring(dbFile.toFile());
 
-            // Copy the file to the new destination
-            MyFileUtils.copyR(dbFile.toFile(), newFile.toFile());
+            if (cut) {
+
+                // Just move the file
+                Files.move(dbFile.toFile().toPath(), newFile.toFile().toPath());
+            } else {
+
+                // Copy the file to the new destination
+                MyFileUtils.copyR(dbFile.toFile(), newFile.toFile());
+            }
 
             // Create a new Sync event
-            SyncEvent creationEvent = db.copyFile(dbFile, newFile);
+            SyncEvent creationEvent = db.copyOrCutFile(dbFile, newFile, cut);
 
             // Emit it
             emitter.emitEvent(creationEvent);
 
-            // Remove the files if the operation is a cut
-            if (cut) {
-
-                // Delete from the disk
-                MyFileUtils.delete(dbFile);
-
-                SyncEvent deletion = db.removeFile(dbFile);
-                emitter.emitEvent(deletion);
-            }
-
             // Stop ignoring this file
             watcher.stopIgnoring(newFile.toFile());
             watcher.stopIgnoring(dbFile.toFile());
-        } catch (IOException ex) {
 
+            // Complete the response
+            response.addProperty("success", true);
+        } catch (IOException ex) {
+            log.warn(ex.toString(), ex);
             response.addProperty("success", false);
             response.addProperty("error", "IO error");
             return response;
         } catch (StorageException ex) {
-
-            // TODO: If the event is not insert in the database, i should remove the file copy
+            log.warn(ex.toString(), ex);
             response.addProperty("success", false);
+            response.addProperty("error", ex.toString());
             return response;
         }
 
-        // Complete the response
-        response.addProperty("success", true);
         return response;
     }
 }

@@ -1,5 +1,7 @@
 package it.simonedegiacomi.configuration.loginui;
 
+import java.io.IOException;
+
 /**
  * Created on 4/23/16.
  * @author Degiacomi Simone
@@ -31,14 +33,19 @@ public class LoginPresenter implements LoginPresenterInterface {
     public void login() {
         updateModelFromView();
         view.setLoading(true);
-        if(model.check()) {
+        try {
+            if (model.check()) {
+                view.setLoading(false);
+                view.close();
+                loginListener.run();
+                return;
+            }
             view.setLoading(false);
-            view.close();
-            loginListener.run();
-            return;
+            view.showError("Invalid username or password");
+        } catch (IOException ex) {
+            view.setLoading(false);
+            view.showError("Connection error");
         }
-        view.setLoading(false);
-        view.showError();
     }
 
     @Override

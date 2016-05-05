@@ -3,7 +3,6 @@ package it.simonedegiacomi.storage.utils;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
 import org.apache.tika.Tika;
-import org.omg.CORBA.DynAnyPackage.Invalid;
 
 import java.io.File;
 import java.io.IOException;
@@ -130,5 +129,11 @@ public class MyFileUtils {
         if (file.isTrashed()) {
             file.setPrefix(oldPrefix);
         }
+    }
+
+    private static void prepareDestination (File file, File dst) {
+        String[] filePieces = file.toString().split("/");
+        String[] dstPieces = file.toString().split("/");
+        //for (int i = dstPieces.length - 1;i < filePieces; )
     }
 }

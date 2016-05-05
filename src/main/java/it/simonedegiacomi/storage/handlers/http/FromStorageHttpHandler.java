@@ -68,8 +68,6 @@ public class FromStorageHttpHandler implements HttpHandler {
             // Set the environment path
             gbFile.setPrefix(PATH);
 
-            // Create the destination object for the sender
-            httpExchange.sendResponseHeaders(200, 0);
             SenderDestination dst = new HttpExchangeDestination(httpExchange);
 
             if (gbFile.isDirectory()) {
@@ -81,9 +79,9 @@ public class FromStorageHttpHandler implements HttpHandler {
             } else {
 
                 Headers headers = httpExchange.getRequestHeaders();
-                if (headers.containsKey("Content-Range")) {
+                if (headers.containsKey("Range")) {
 
-                    Range range = MyRange.parse(httpExchange.getRequestHeaders().getFirst("Content-Range"));
+                    Range range = MyRange.parse(httpExchange.getRequestHeaders().getFirst("Range"));
                     sender.sendFile(gbFile, dst, range);
                 } else {
 

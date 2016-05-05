@@ -1,7 +1,5 @@
 package it.simonedegiacomi.configuration.loginui;
 
-import it.simonedegiacomi.goboxclient.ui.Presenter;
-
 import java.io.Console;
 
 /**
@@ -48,8 +46,8 @@ public class ConsoleLoginView implements LoginView {
     }
 
     @Override
-    public void showError() {
-        console.printf("Invalid login credentials!\nRetry? [Y/n]\n");
+    public void showError(String message) {
+        console.printf("%s\nRetry? [Y/n]\n", message);
         if(console.readLine().equalsIgnoreCase("y"))
             show();
         else

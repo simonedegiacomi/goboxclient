@@ -13,7 +13,6 @@ import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import it.simonedegiacomi.storage.direct.HttpsStorageServer;
 import it.simonedegiacomi.storage.direct.UDPStorageServer;
 import it.simonedegiacomi.storage.handlers.ws.*;
-import it.simonedegiacomi.storage.utils.MyFileUtils;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
@@ -35,6 +34,8 @@ public class Storage {
     private static final Logger log = Logger.getLogger(Storage.class.getName());
 
     private static final String DEFAULT_DB_LOCATION = "./config/db";
+
+    private static final int DIRECT_CONNECTION_DEFAULT_PORT = 6522;
 
     /**
      * Reference to the configuration
@@ -73,7 +74,7 @@ public class Storage {
             // Create the web socket
             mainServer = new MyWSClient(urls.getURI("socketStorage"));
         } catch (IOException ex) {
-
+            log.warn(ex.toString(), ex);
             throw new StorageException("Cannot connect to the main server");
         }
 
@@ -82,6 +83,16 @@ public class Storage {
 
             @Override
             public void onEvent(JsonElement data) {
+                log.warn("websocket error");
+                disconnectedListener.onDisconnected();
+            }
+        });
+
+        mainServer.onEvent("close", new WSEventListener() {
+
+            @Override
+            public void onEvent(JsonElement data) {
+                log.warn("websocket disconnected");
                 disconnectedListener.onDisconnected();
             }
         });
@@ -103,14 +114,27 @@ public class Storage {
             log.warn(ex.toString());
         }
 
+
+        // Create the http(s) storage server that is used for direct transfers
+        int directPort = DIRECT_CONNECTION_DEFAULT_PORT;
+
+        if (config.hasProperty("directConnectionPort")) {
+            directPort = Integer.parseInt(config.getProperty("directConnectionPort"));
+        } else {
+            log.info("No directConnectionPort property in config file. Using default " + DIRECT_CONNECTION_DEFAULT_PORT);
+        }
+
+        String strAddress = "0.0.0.0";
+        if (config.hasProperty("directConnectionListenAddress")) {
+            strAddress = config.getProperty("directConnectionListenAddress");
+        } else {
+            log.info("No directConnectionListenAddress property in config file. Using default: " + strAddress);
+        }
+
         try {
 
-            // Create the http(s) storage server that is used for direct transfers
-            // Get the port from the config
-            int port = Integer.parseInt(config.getProperty("directConnectionPort"));
-
             // Create the inet address (the broadcast
-            InetSocketAddress address = new InetSocketAddress("0.0.0.0", port);
+            InetSocketAddress address = new InetSocketAddress(strAddress, directPort);
 
             // Create the https server
             HttpsStorageServer https = new HttpsStorageServer(address, env);
@@ -150,6 +174,8 @@ public class Storage {
 
         // Assign event handler from the ws client
         assignEvent();
+
+        log.info("Storage started");
     }
 
     /**

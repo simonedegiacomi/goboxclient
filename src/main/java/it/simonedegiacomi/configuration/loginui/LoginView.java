@@ -24,5 +24,5 @@ public interface LoginView {
 
     void setLoading(boolean b);
 
-    void showError();
+    void showError(String error);
 }

@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
-import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
@@ -14,6 +13,7 @@ import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
 import org.apache.log4j.Logger;
 
+import java.security.InvalidParameterException;
 import java.util.List;
 
 /**
@@ -22,21 +22,31 @@ import java.util.List;
  */
 public class RecentHandler implements WSQueryHandler {
 
+    /**
+     * Logger of the class
+     */
     private final Logger log = Logger.getLogger(RecentHandler.class);
 
+    /**
+     * Gson
+     */
     private final Gson gson = MyGsonBuilder.create();
 
+    /**
+     * Database
+     */
     private final StorageDB db;
 
     public RecentHandler (StorageEnvironment env) {
+        if (env.getDB() == null)
+            throw new InvalidParameterException("environment withoutdatbase");
+
         this.db = env.getDB();
     }
 
     @WSQuery(name = "recent")
     @Override
     public JsonElement onQuery(JsonElement jsonElement) {
-
-        // Wrap the request
         JsonObject request = jsonElement.getAsJsonObject();
 
         // Prepare the response

@@ -12,6 +12,8 @@ import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
 import org.apache.log4j.Logger;
 
+import java.security.InvalidParameterException;
+
 /**
  * This handler return some information about a specific file. You can specify what
  * you want in the query. To make this work you need to provide the id of the file or
@@ -22,13 +24,25 @@ import org.apache.log4j.Logger;
  */
 public class FileInfoHandler implements WSQueryHandler {
 
-    private static final Logger log = Logger.getLogger(FileInfoHandler.class.getName());
+    /**
+     * Logger of the class
+     */
+    private static final Logger log = Logger.getLogger(FileInfoHandler.class);
 
+    /**
+     * Database
+     */
     private final StorageDB db;
 
+    /**
+     * Gson
+     */
     private final Gson gson = new MyGsonBuilder().create();
 
     public FileInfoHandler(StorageEnvironment env) {
+        if (env.getDB() == null)
+            throw new InvalidParameterException("environment without db");
+
         this.db = env.getDB();
     }
     
@@ -36,9 +50,17 @@ public class FileInfoHandler implements WSQueryHandler {
     @Override
     public JsonElement onQuery(JsonElement data) {
         log.info("File Info query");
+        JsonObject json = data.getAsJsonObject();
 
+        // Prepare the response
         JsonObject res = new JsonObject();
-        JsonObject json = (JsonObject) data;
+
+        if (!json.has("file")) {
+            res.addProperty("success", false);
+            res.addProperty("error", "missing file");
+            return res;
+        }
+
         boolean findPath = json.has("findPath") ? json.get("findPath").getAsBoolean() : false;
         boolean findChildren = json.has("findChildren") ? json.get("findChildren").getAsBoolean() : true;
 
@@ -51,8 +73,9 @@ public class FileInfoHandler implements WSQueryHandler {
 
                 // Check if the file is shared
                 if (!db.isShared(file)) {
-
+                    res.addProperty("success", false);
                     res.addProperty("found", false);
+                    res.addProperty("error", "file not shared");
                     return res;
                 }
             }
@@ -63,6 +86,8 @@ public class FileInfoHandler implements WSQueryHandler {
             // Check if the file exists
             if (dbFile == null) {
                 res.addProperty("found", false);
+                res.addProperty("success", false);
+                res.addProperty("error", "file not found");
                 return res;
             }
 
@@ -74,9 +99,12 @@ public class FileInfoHandler implements WSQueryHandler {
 
             res.add("file", gson.toJsonTree(dbFile, GBFile.class));
             res.addProperty("found", true);
+            res.addProperty("success", true);
         } catch (StorageException ex) {
-            ex.printStackTrace();
+            log.warn(ex.toString(), ex);
             res.addProperty("found", false);
+            res.addProperty("success", false);
+            res.addProperty("error", ex.toString());
         }
         return res;
     }

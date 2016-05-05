@@ -25,7 +25,9 @@ public class HttpUrlConnectionDestination implements SenderDestination {
 
     @Override
     public void setHeader(String headerName, String headerValue) {
-
         conn.addRequestProperty(headerName, headerValue);
     }
+
+    @Override
+    public void sendHeaders(int httpCode) throws IOException { }
 }

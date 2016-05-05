@@ -6,15 +6,15 @@ import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.goboxapi.client.ClientException;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.client.SyncEventListener;
+import it.simonedegiacomi.storage.utils.MyFileUtils;
 import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
-
-import static it.simonedegiacomi.goboxapi.GBFile.ROOT_ID;
 
 /**
  * A Sync object work with an implementation of the Client interface, and manage
@@ -70,6 +70,7 @@ public class Sync {
         this.client = client;
 
         worker = new Worker(client, Worker.DEFAULT_THREADS);
+        Work.setWorker(worker);
 
         // Create the new watcher for the fileSystem
         Path pathToWatch = new File(PATH).toPath();
@@ -94,9 +95,11 @@ public class Sync {
      * @throws ClientException If there is some problem with the client class
      */
     public void resyncAndStart () throws IOException, ClientException {
+        log.info("Start ReSync");
         syncState = true;
 
         checkR(GBFile.ROOT_FILE);
+        log.info("ReSync completed");
 
         // Start watching for changes
         watcher.start();
@@ -126,6 +129,14 @@ public class Sync {
 
         detailedFile.setPrefix(PATH);
 
+        // Check if i have this file
+        if (!detailedFile.toFile().exists()) {
+            worker.addWork(new Work(file, Work.WorkKind.DOWNLOAD));
+            return;
+        }
+
+        MyFileUtils.loadFileAttributes(detailedFile);
+
         // If it's a directory
         if(detailedFile.isDirectory()) {
 
@@ -153,9 +164,14 @@ public class Sync {
                 worker.addWork(new Work(entry.getValue(), Work.WorkKind.DOWNLOAD));
             }
 
-            // Empty the mash
+            // Empty the map
             storageFiles.clear();
         } else {
+
+            if (detailedFile.getLastUpdateDate() == file.getLastUpdateDate()) {
+                // Already up to date
+                return;
+            }
 
             // If it's not a directory but it's a file check who have the latest version
             Work.WorkKind action = detailedFile.getLastUpdateDate() > file.getLastUpdateDate() ? Work.WorkKind.UPLOAD : Work.WorkKind.DOWNLOAD;
@@ -252,6 +268,10 @@ public class Sync {
                 GBFile file = event.getRelativeFile();
                 file.setPrefix(PATH);
 
+                GBFile before = event.getBefore();
+                if (before != null)
+                    before.setPrefix(PATH);
+
                 try {
 
                     switch (event.getKind()) {
@@ -262,7 +282,13 @@ public class Sync {
 
                         case EDIT_FILE:
 
-                            worker.addWork(new Work(event));
+                            watcher.startIgnoring(before.toFile());
+                            watcher.startIgnoring(file.toFile());
+
+                            Files.move(before.toFile().toPath(), file.toFile().toPath());
+
+                            watcher.stopIgnoring(before.toFile());
+                            watcher.stopIgnoring(file.toFile());
                             break;
 
                         case REMOVE_FILE:
@@ -275,8 +301,27 @@ public class Sync {
 
                             break;
 
-                        default:
-                            log.warn("New unrecognized sync event from the storage");
+                        case COPY_FILE:
+
+                            watcher.startIgnoring(before.toFile());
+                            watcher.startIgnoring(file.toFile());
+
+                            MyFileUtils.copyR(before.toFile(), file.toFile());
+
+                            watcher.stopIgnoring(before.toFile());
+                            watcher.stopIgnoring(file.toFile());
+                            break;
+
+                        case CUT_FILE:
+
+                            watcher.startIgnoring(before.toFile());
+                            watcher.startIgnoring(file.toFile());
+
+                            Files.move(before.toFile().toPath(), file.toFile().toPath());
+
+                            watcher.stopIgnoring(before.toFile());
+                            watcher.stopIgnoring(file.toFile());
+                            break;
                     }
                     rememberEvent(event);
                 } catch (Exception ex) {

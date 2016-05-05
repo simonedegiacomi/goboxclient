@@ -2,6 +2,7 @@ package it.simonedegiacomi.storage.sender;
 
 import com.sun.net.httpserver.HttpExchange;
 
+import java.io.IOException;
 import java.io.OutputStream;
 
 /**
@@ -28,7 +29,11 @@ public class HttpExchangeDestination implements SenderDestination {
 
     @Override
     public void setHeader(String headerName, String headerValue) {
+        conn.getResponseHeaders().add(headerName, headerValue);
+    }
 
-        conn.setAttribute(headerName, headerValue);
+    @Override
+    public void sendHeaders(int httpCode) throws IOException {
+        conn.sendResponseHeaders(httpCode, 0);
     }
 }

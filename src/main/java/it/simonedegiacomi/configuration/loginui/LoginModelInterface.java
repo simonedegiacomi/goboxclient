@@ -1,5 +1,8 @@
 package it.simonedegiacomi.configuration.loginui;
 
+
+import java.io.IOException;
+
 /**
  * Created on 23/04/16.
  * @author Degiacomi Simone
@@ -18,5 +21,5 @@ public interface LoginModelInterface {
 
     boolean getUseAsStorage ();
 
-    boolean check();
+    boolean check() throws IOException;
 }

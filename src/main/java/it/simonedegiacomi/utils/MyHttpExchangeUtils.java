@@ -1,7 +1,6 @@
 package it.simonedegiacomi.utils;
 
 import java.net.URI;
-import java.net.URL;
 import java.security.InvalidParameterException;
 import java.util.HashMap;
 import java.util.Map;

@@ -2,14 +2,15 @@ package it.simonedegiacomi.configuration.loginui;
 
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.authentication.Auth;
-import it.simonedegiacomi.goboxapi.authentication.AuthException;
-import it.simonedegiacomi.goboxapi.client.StandardClient;
+
+import java.io.IOException;
 
 /**
  * Created on 4/23/16.
  * @author Degiacomi Simone
  */
-public class LoginModel implements LoginModelInterface {
+public class
+LoginModel implements LoginModelInterface {
 
     private final static Config config = Config.getInstance();
 
@@ -50,17 +51,13 @@ public class LoginModel implements LoginModelInterface {
     }
 
     @Override
-    public boolean check() {
+    public boolean check() throws IOException {
         Auth test = new Auth();
         test.setUsername(username);
         test.setMode(useAsStorage ? Auth.Modality.STORAGE : Auth.Modality.CLIENT);
-        try {
-            boolean logged = test.login(new String(password));
-            if(logged)
-                config.setAuth(test);
-            return logged;
-        } catch (AuthException ex) {
-            return false;
-        }
+        boolean logged = test.login(new String(password));
+        if(logged)
+            config.setAuth(test);
+        return logged;
     }
 }

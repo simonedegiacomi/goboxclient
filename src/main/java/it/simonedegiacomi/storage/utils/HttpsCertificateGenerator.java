@@ -129,7 +129,10 @@ public class HttpsCertificateGenerator {
             try (FileInputStream in = new FileInputStream(new File(config.getProperty("keyStoreFile")))) {
                 keyStore.load(in, password);
             } catch (FileNotFoundException e) {
-            } catch (IOException e) { }
+                keyStore.load(null, null);
+            } catch (IOException e) {
+                keyStore.load(null, null);
+            }
             return;
         }
 
