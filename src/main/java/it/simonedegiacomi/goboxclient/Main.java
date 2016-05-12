@@ -52,6 +52,7 @@ public class Main {
     private final static Presenter presenter = new GoBoxPresenter(goboxModel);
 
     public static void main(String[] args) {
+
         try {
             facade.initializeEnvironment();
         } catch (IOException ex) {
@@ -66,7 +67,7 @@ public class Main {
             try {
                 instance.sendToMainInstance(args);
             } catch (IOException ex) {
-                System.out.println("GoBox CLI is not available");
+                logger.warn("GoBox CLI is not available", ex);
             }
             return;
         }
@@ -79,6 +80,9 @@ public class Main {
             TrayView view = new TrayView(presenter);
             presenter.addView(view);
         }
+
+        // Add the log view
+        presenter.addView(new LogView());
 
         // If the user is not logged (or if the configuration was not loaded) start the login wizard
         if (config.isAuthDefined()) {

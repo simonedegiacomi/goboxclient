@@ -33,12 +33,6 @@ public class InternalClient extends Client {
     private final StorageDB db;
 
     /**
-     * Reference to the storage used to communicate
-     * new files to the other clients
-     */
-    private final Storage storage;
-
-    /**
      * Event emitter
      */
     private final EventEmitter emitter;
@@ -48,8 +42,13 @@ public class InternalClient extends Client {
      * @param env Environment to use
      */
     public InternalClient (StorageEnvironment env) {
+        if (env.getDB() == null)
+            throw new InvalidParameterException("environment without db");
+
+        if (env.getEmitter() == null)
+            throw new InvalidParameterException("environment without emitter");
+
         this.db = env.getDB();
-        this.storage = env.getStorage();
         this.emitter = env.getEmitter();
     }
 
@@ -78,7 +77,7 @@ public class InternalClient extends Client {
     }
 
     @Override
-    public URL getUrl(TransferUrlUtils.Action action, JsonElement jsonElement) {
+    public URL getUrl(TransferProfile.Action action, GBFile file, boolean preview) {
         // Meaningless with the internal client
         return null;
     }
@@ -89,10 +88,17 @@ public class InternalClient extends Client {
      * @throws ClientException
      */
     @Override
-    public void getFile(GBFile file) throws ClientException {  }
+    public void getFile(GBFile file) throws ClientException {
+        // Just add to the recent
+        try {
+            db.addToRecent(file);
+        } catch (StorageException ex) {
+            throw new ClientException(ex.toString());
+        }
+    }
 
     /**
-     * This method just copy the file obtained calling {@link #toFile()} method tot he output stream
+     * This method just copy the file obtained calling {@link #toFile()} method to the output stream
      * @param file File to download
      * @param dst Destination stream
      * @throws ClientException
@@ -102,8 +108,16 @@ public class InternalClient extends Client {
     public void getFile(GBFile file, OutputStream dst) throws ClientException, IOException {
         InputStream fileStream = new FileInputStream(file.toFile());
         ByteStreams.copy(fileStream, dst);
+
+        // Call the getFile method to register the event
+        getFile(file);
     }
 
+    /**
+     * Create a new folder updating the database end sending the event to all the clients
+     * @param newDir New directory to create
+     * @throws ClientException
+     */
     @Override
     public void createDirectory(GBFile newDir) throws ClientException {
         try {
@@ -130,6 +144,10 @@ public class InternalClient extends Client {
     @Override
     public void trashFile(GBFile gbFile, boolean b) throws ClientException { }
 
+    /**
+     * Remove the file from the database
+     * @param file File to remove
+     */
     @Override
     public void removeFile(GBFile file) {
         try {
@@ -142,7 +160,8 @@ public class InternalClient extends Client {
     }
 
     /**
-     * Do nothing because all the events are handled by the storage
+     * Do not use add the vent listener to the internal client. Use the storage.
+     * This method doesn't do anything
      * @param syncEventListener
      */
     @Override
@@ -156,17 +175,18 @@ public class InternalClient extends Client {
     public void removeSyncEventListener(SyncEventListener syncEventListener) { }
 
     /**
-     * Do nothing
-     * @param lastHeardId
+     * Return always true
+     * @return true
      */
-    @Override
-    public void requestEvents(long lastHeardId) { }
-
     @Override
     public boolean isReady() {
         return true;
     }
 
+    /**
+     * Return always Ready
+     * @return Ready
+     */
     @Override
     public ClientState getState() {
         return ClientState.READY;
@@ -181,24 +201,32 @@ public class InternalClient extends Client {
     @Override
     public void share(GBFile gbFile, boolean b) throws ClientException { }
 
+    /**
+     * Method not implemented in internal client. Use theStandard Client implementation
+     * @param gbFilter
+     * @return
+     * @throws ClientException
+     */
     @Override
     public List<GBFile> getFilesByFilter(GBFilter gbFilter) throws ClientException {
-        return null;
+        throw new UnsupportedOperationException("use the StandardClient implementation");
     }
 
     @Override
-    public List<GBFile> getRecentFiles(long l, long l1) throws ClientException {
-        return null;
+    public List<SyncEvent> getRecentFiles(long l, long l1) throws ClientException {
+        throw new UnsupportedOperationException("use the StandardClient implementation");
     }
 
     @Override
     public List<GBFile> getTrashedFiles() throws ClientException {
-        return null;
+        throw new UnsupportedOperationException("use the StandardClient implementation");
     }
 
     @Override
-    public void emptyTrash() throws ClientException { }
+    public void emptyTrash() throws ClientException {
+        throw new UnsupportedOperationException("use the StandardClient implementation");
+    }
 
     @Override
-    public void rename(GBFile gbFile, String s) throws ClientException { }
+    public void move (GBFile src, GBFile fatherDestination, String newName, boolean copy) throws ClientException { }
 }

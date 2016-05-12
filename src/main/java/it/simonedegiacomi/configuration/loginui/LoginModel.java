@@ -3,6 +3,7 @@ package it.simonedegiacomi.configuration.loginui;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.authentication.Auth;
 
+
 import java.io.IOException;
 
 /**

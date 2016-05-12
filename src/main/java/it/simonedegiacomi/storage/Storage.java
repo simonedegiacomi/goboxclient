@@ -207,7 +207,7 @@ public class Storage {
         mainServer.addQueryHandler(new RenameFileHandler(env));
 
         // Handler that copy or cut files
-        mainServer.addQueryHandler(new CopyOrCutHandler(env));
+        mainServer.addQueryHandler(new MoveHandler(env));
 
         // Search handler
         mainServer.addQueryHandler(new SearchHandler(env));

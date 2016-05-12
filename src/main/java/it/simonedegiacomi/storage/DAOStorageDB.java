@@ -251,21 +251,35 @@ public class DAOStorageDB extends StorageDB {
 
         try {
 
+            // Check if the file already exists
+            GBFile old = getFile(newFile);
+            if (old != null) {
+
+                // Set the id of the new file
+                newFile.setID(old.getID());
+                fileTable.update(newFile);
+
+                // Generate an update event
+                SyncEvent event = new SyncEvent(SyncEvent.EventKind.UPDATE_FILE, newFile);
+                registerEvent(event);
+                return event;
+            }
+
             // Insert into the database
             fileTable.create(newFile);
+
+            log.info("New file inserted on the database");
+
+            // Create the SyncEvent to return
+            SyncEvent event = new SyncEvent(SyncEvent.EventKind.NEW_FILE, newFile);
+
+            // And add it to the right db table
+            registerEvent(event);
+
+            return event;
         } catch (SQLException ex) {
             throw new StorageException("Cannot insert file into the database");
         }
-
-        log.info("New file inserted on the database");
-
-        // Create the SyncEvent to return
-        SyncEvent event = new SyncEvent(SyncEvent.EventKind.NEW_FILE, newFile);
-
-        // And add it to the right db table
-        registerEvent(event);
-
-        return event;
     }
 
     /**
@@ -516,7 +530,7 @@ public class DAOStorageDB extends StorageDB {
                     .limit(size);
 
             // Make the query
-            return eventQuery.where().eq("kind", SyncEvent.EventKind.OPEN_FILE).query();
+            return eventQuery.query();
         } catch (SQLException ex) {
             log.warn(ex.toString(), ex);
             throw new StorageException("Cannot search");
@@ -542,22 +556,22 @@ public class DAOStorageDB extends StorageDB {
     }
 
     @Override
-    public SyncEvent copyOrCutFile(GBFile src, GBFile dst, boolean cut) throws StorageException {
+    public SyncEvent move (GBFile src, GBFile dst, boolean copy) throws StorageException {
         assertID(src);
 
         insertFile(dst);
         if(src.isDirectory()) {
             for (GBFile child : src.getChildren()) {
-                copyOrCutFile(child, new GBFile(child.getName(), dst.getID(), true), cut);
+                move(child, new GBFile(child.getName(), dst.getID(), true), copy);
             }
         }
 
-        if (cut) {
+        if (!copy) {
             removeFile(src);
         }
 
         // Create the sync event
-        SyncEvent detailedEvent = new SyncEvent(cut ? SyncEvent.EventKind.CUT_FILE : SyncEvent.EventKind.COPY_FILE);
+        SyncEvent detailedEvent = new SyncEvent(copy ? SyncEvent.EventKind.FILE_MOVED : SyncEvent.EventKind.FILE_COPIED);
         detailedEvent.setBefore(src);
         detailedEvent.setRelativeFile(dst);
 

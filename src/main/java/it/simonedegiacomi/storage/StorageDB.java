@@ -164,14 +164,14 @@ public abstract class StorageDB {
     public abstract SyncEvent removeFile (GBFile file) throws StorageException;
 
     /**
-     * Copy the file
+     * Move, Rename or copy the file
      * @param src Source file
      * @param dst Destination file (this must have a valid father id)
-     * @param cut True to cut the file, false to just copy
+     * @param cut True to copy the file, false to move
      * @return Generate event
      * @throws StorageException
      */
-    public abstract SyncEvent copyOrCutFile (GBFile src, GBFile dst, boolean cut) throws StorageException;
+    public abstract SyncEvent move (GBFile src, GBFile dst, boolean copy) throws StorageException;
 
     /**
      * Share (or stop sharing) a file or a folder.

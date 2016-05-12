@@ -1,16 +1,12 @@
 package it.simonedegiacomi.sync;
 
-import com.sun.nio.file.SensitivityWatchEventModifier;
-import org.apache.log4j.Logger;
+import net.contentobjects.jnotify.JNotify;
+import net.contentobjects.jnotify.JNotifyListener;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Simple File System Watcher
@@ -18,166 +14,65 @@ import java.util.concurrent.TimeUnit;
  * Created on 24/12/2015.
  * @author Degiacomi Simone
  */
-public class FileSystemWatcher extends Thread {
-
-    /**
-     * Logger of the class
-     */
-    private static final Logger logger = Logger.getLogger(FileSystemWatcher.class);
-
-    /**
-     * Kinds of event
-     */
-    public static final String FILE_CREATED = StandardWatchEventKinds.ENTRY_CREATE.name();
-    public static final String FILE_DELETED = StandardWatchEventKinds.ENTRY_DELETE.name();
-    public static final String FILE_CHANGED = StandardWatchEventKinds.ENTRY_MODIFY.name();
-
-    /**
-     * Java Watch service
-     */
-    private WatchService watchService;
-
-    /**
-     * Map of watch key, one for each watched folder
-     */
-    private HashMap<WatchKey, Path> keys = new HashMap<>();
-
-    /**
-     * Map of listeners for the events
-     */
-    private HashMap<String, Listener> listeners = new HashMap<>();
+public class FileSystemWatcher {
 
     /**
      * Map of files to ignore
      */
     private final Map<String, Long> filesToIgnore = new HashMap<>();
 
-    /**
-     * Rot to watch
-     */
-    private Path pathToWatch;
-
-    /**
-     * Count down latch used to shutdown this watcher
-     */
-    private CountDownLatch shutdownLatch = new CountDownLatch(2);
+    private final int watcherId;
 
     /**
      * Create a new watcher and register the existing folder
      * @param path Path to watch
      * @throws IOException thrown watching this path
      */
-    public FileSystemWatcher (Path path) throws IOException {
-        super("FileSystemWatcher");
-        pathToWatch = path;
-        watchService = FileSystems.getDefault().newWatchService();
-    }
+    public FileSystemWatcher (String path, FileSystemEventListener listener) throws IOException {
 
-    /**
-     * Register (start watching) a new folder
-     * @param path Path of the folder to watch
-     * @throws IOException
-     */
-    private void registerFolder (Path path) throws IOException {
-        /**
-         * Walk trough the folder inside this folder
-         */
-        Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
+        watcherId = JNotify.addWatch(path, JNotify.FILE_ANY, true, new JNotifyListener() {
 
             @Override
-            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+            public void fileCreated(int wd, String rootPath, String name) {
+                if (!shouldIgnore()) {
+                    listener.onFileCreated(new File(name));
+                }
+            }
 
-                // Register this folder
-                WatchKey key = dir.register(watchService, new WatchEvent.Kind[]{StandardWatchEventKinds.ENTRY_CREATE,
-                    StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY}, SensitivityWatchEventModifier.HIGH);
+            @Override
+            public void fileDeleted(int wd, String rootPath, String name) {
+                if (!shouldIgnore()) {
+                    listener.onFileDeleted(new File(name));
+                }
+            }
 
-                // Save the watch key in the map
-                keys.put(key, dir);
+            @Override
+            public void fileModified(int wd, String rootPath, String name) {
+                if (!shouldIgnore()) {
+                    listener.onFileModified(new File(name));
+                }
+            }
 
-                // Continue the walk
-                return FileVisitResult.CONTINUE;
+            @Override
+            public void fileRenamed(int wd, String rootPath, String oldName, String newName) {
+                if (!shouldIgnore()) {
+                    listener.onFileMoved(new File(oldName), new File(newName));
+                }
             }
         });
     }
 
-    /**
-     * Assing a new event listener
-     * @param eventName Kind of event
-     * @param listener Listener of this event
-     */
-    public void addListener(String eventName, Listener listener) {
-        listeners.put(eventName, listener);
+    public interface FileSystemEventListener {
+
+        void onFileCreated (File newFile);
+
+        void onFileModified (File modifiedFile);
+
+        void onFileDeleted (File deletedFile);
+
+        void onFileMoved (File before, File movedFile);
     }
 
-    /**
-     * Thread that pool the fs
-     */
-    @Override
-    public void run () {
-        logger.info("start thread");
-
-        // Register the already existing folder
-        try {
-            registerFolder(pathToWatch);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-        while (shutdownLatch.getCount() > 1) {
-            try {
-
-                WatchKey watchKey = watchService.poll(500, TimeUnit.MICROSECONDS);
-                if(watchKey == null)
-                    continue;
-
-                Path dir = keys.get(watchKey);
-
-                for(WatchEvent<?> event : watchKey.pollEvents()) {
-
-                    final WatchEvent.Kind kind = event.kind();
-
-                    if (kind == StandardWatchEventKinds.OVERFLOW)
-                        continue;
-
-                    WatchEvent<Path> ev = (WatchEvent<Path>) event;
-
-                    Path name = ev.context();
-                    Path changePath = dir.resolve(name);
-
-                    final File file = changePath.toFile();
-
-                    if(shouldIgnore(file))
-                        continue;
-                    
-                    new Thread(new Runnable() {
-                        @Override
-                        public void run() {
-                            listeners.get(kind.name()).onEvent(file);
-                        }
-                    }).start();
-
-                    // If is a directory, start watch this
-                    if (file.isDirectory() && kind == StandardWatchEventKinds.ENTRY_CREATE)
-                        try{
-
-                            registerFolder(changePath);
-                        } catch (IOException ex) {
-                            ex.printStackTrace();
-                        }
-                }
-
-                if(!watchKey.reset())
-                    keys.remove(watchKey);
-            } catch (InterruptedException ex) {
-                ex.printStackTrace();
-            }
-        }
-        try {
-            watchService.close();
-        } catch (IOException ex) {
-            // TODO: handle this
-        }
-        shutdownLatch.countDown();
-    }
 
     /**
      * Ignore all the events relative to this file. If this file is a folder, all the children
@@ -252,18 +147,12 @@ public class FileSystemWatcher extends Thread {
     }
 
     /**
-     * Interface of the event listener
-     */
-    public interface Listener {
-        public void onEvent (File file);
-    }
-
-    /**
      * Stop watching for new file system events
-     * @throws InterruptedException
      */
-    public void shutdown () throws InterruptedException{
-        shutdownLatch.countDown();
-        shutdownLatch.await();
+    public void shutdown () {
+        if (watcherId <= 0)
+            throw new IllegalStateException("watcher already off");
+        JNotify.removeWatch(watcherId);
+        watcherId = -1;
     }
 }

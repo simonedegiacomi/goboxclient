@@ -46,6 +46,7 @@ public class CachedPreviewer extends Previewer {
      */
     public  CachedPreviewer () {
         this(Config.getInstance().getProperty("cachePath"));
+        System.out.println(CACHE_PATH);
     }
 
     /**

@@ -74,13 +74,12 @@ public class Sync {
 
         // Create the new watcher for the fileSystem
         Path pathToWatch = new File(PATH).toPath();
-        watcher = new FileSystemWatcher(pathToWatch);
 
         // Set the watcher in the work class
         Work.setWatcher(watcher);
 
         // Assign the event of the file watcher
-        assignFileWatcherEvents();
+        createWatcher();
     }
 
     public void setClient (Client client) {
@@ -101,8 +100,6 @@ public class Sync {
         checkR(GBFile.ROOT_FILE);
         log.info("ReSync completed");
 
-        // Start watching for changes
-        watcher.start();
 
         // And listen for event's from the storage
         assignSyncEventFromStorage();
@@ -179,73 +176,43 @@ public class Sync {
         }
     }
 
-    /**
-     * This method assign action for the possible events of
-     * the fileSystemWatcher. For each event the relative
-     * method of the client ( the object that wraps the API of
-     * the storage) will be called.
-     */
-    private void assignFileWatcherEvents () {
-        // At the beginning i download the file list, and make a control.
-        // I download the file from the server, and new files found are transmitted to server.
-        // If a file was deleted onEvent the client with the program not running, the file will
-        // redownloaded
-
-        // This event is called when a new file or directory is created
-        watcher.addListener(FileSystemWatcher.FILE_CREATED, new FileSystemWatcher.Listener() {
+    private void createWatcher () throws IOException {
+        watcher = new FileSystemWatcher(PATH, new FileSystemWatcher.FileSystemEventListener() {
 
             @Override
-            public void onEvent(File newFile) {
-
+            public void onFileCreated(File newFile) {
                 // Wrap the java File into a GoBoxFile
                 GBFile wrappedFile = new GBFile(newFile, PATH);
 
                 // Add the work
                 worker.addWork(new Work(wrappedFile, Work.WorkKind.UPLOAD));
             }
-        });
-
-        // Event thrown when the file is edited
-        watcher.addListener(FileSystemWatcher.FILE_CHANGED, new FileSystemWatcher.Listener() {
 
             @Override
-            public void onEvent(File editedFile) {
+            public void onFileModified(File modifiedFile) {
+                // Wrap the java File into a GoBoxFile
+                GBFile wrappedFile = new GBFile(modifiedFile, PATH);
 
-                try {
-
-                    // Wrap the java File into a GoBoxFile
-                    GBFile wrappedFile = new GBFile(editedFile, PATH);
-
-                    // Call the right client method
-                    client.uploadFile(wrappedFile);
-                } catch (ClientException ex) {
-
-                    log.warn(ex.toString(), ex);
-                } catch (IOException ex) {
-
-                    ex.printStackTrace();
-                }
+                // Create the new work
+                worker.addWork(new Work(wrappedFile, Work.WorkKind.UPLOAD));
             }
-        });
-
-        // Event called when a file is removed
-        watcher.addListener(FileSystemWatcher.FILE_DELETED, new FileSystemWatcher.Listener() {
 
             @Override
-            public void onEvent(File deletedFile) {
-                log.info("A file in the local fs was deleted");
+            public void onFileDeleted(File deletedFile) {
+                // Wrap the file
+                GBFile wrappedFile = new GBFile(deletedFile, PATH);
 
-                try {
+                // Create the work
+                worker.addWork(new Work(wrappedFile, Work.WorkKind.REMOVE));
+            }
 
-                    // Wrap the file
-                    GBFile wrappedFile = new GBFile(deletedFile, PATH);
+            @Override
+            public void onFileMoved(File before, File movedFile) {
+                // Wrap the file
+                GBFile wrappedFile = new GBFile(deletedFile, PATH);
 
-                    // and remove it
-                    client.removeFile(wrappedFile);
-                } catch (ClientException ex) {
-
-                    log.warn(ex.toString(), ex);
-                }
+                // Create the work
+                worker.addWork(new Work(wrappedFile, Work.WorkKind.RENAME));
             }
         });
     }

@@ -64,12 +64,10 @@ public class Worker {
                 // Remove from the set
                 currentWorks.remove(newWork);
 
-                // Get the state
-                Work.WorkState state = newWork.getState();
-
                 // If it's failed, add to the list
-                if (state == Work.WorkState.FAILED)
+                if (newWork.getState() == Work.WorkState.FAILED) {
                     failedWorks.add(newWork);
+                }
             }
         });
     }

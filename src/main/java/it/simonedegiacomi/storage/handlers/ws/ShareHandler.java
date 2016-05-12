@@ -63,10 +63,21 @@ public class ShareHandler implements WSQueryHandler {
         // Check if the file is to share or unshare
         boolean share = request.has("share") ? request.get("share").getAsBoolean() : false;
 
+        GBFile file = new GBFile(request.get("ID").getAsLong());
         try {
 
+            // Get the database file
+            GBFile dbFile = db.getFile(file);
+
+            // Assert that the file exists
+            if (dbFile == null) {
+                response.addProperty("success", false);
+                response.addProperty("error", "file doesn't exist");
+                return response;
+            }
+
             // Change the access of this file
-            SyncEvent event = db.share(new GBFile(request.get("ID").getAsLong()), share);
+            SyncEvent event = db.share(dbFile, share);
 
             // Advice all the clients
             emitter.emitEvent(event);

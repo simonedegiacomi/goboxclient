@@ -1,16 +1,17 @@
 package it.simonedegiacomi.utils;
 
+import com.google.gson.*;
+import com.google.gson.reflect.TypeToken;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
+import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
 import it.simonedegiacomi.goboxclient.ui.CLIView;
 import it.simonedegiacomi.goboxclient.ui.Presenter;
+import org.apache.log4j.Logger;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * This class is used to check if the program
@@ -30,6 +31,8 @@ public class GoBoxInstance {
      * is running onEvent the same machine
      */
     private static final int DEFAULT_PORT = 4212;
+
+    private final Gson gson = MyGsonBuilder.create();
 
     /**
      * Port used in this instance
@@ -93,13 +96,12 @@ public class GoBoxInstance {
                             Socket console = server.accept();
 
                             // Create a new CLI view
-                            CLIView cli = new CLIView(presenter, console);
-
-                            // Add the view to the presenter
-                            presenter.addView(cli);
-                        } catch (Exception ex) {}
+                            new CLIView(presenter, console);
+                        } catch (Exception ex) {
+                            log.warn(ex.toString(), ex);
+                        }
                 } catch (IOException ex) {
-                    log.log(Level.WARNING, ex.toString(), ex);
+                    log.warn(ex.toString(), ex);
                 }
             }
         }).start();
@@ -115,30 +117,25 @@ public class GoBoxInstance {
 
     public void sendToMainInstance(String[] args) throws IOException {
 
-        // Create the writer to the main instance
-        PrintWriter toMainInstance = new PrintWriter(mainInstance.getOutputStream());
+        // Create a json array with the arguments
+        JsonArray jsonArgs = new JsonArray();
+        for (String arg : args) {
+            jsonArgs.add(arg);
+        }
 
-        // Create the reader from the main instance
-        BufferedReader fromMainInstance = new BufferedReader(new InputStreamReader(mainInstance.getInputStream()));
+        // Send the arguments
+        JsonWriter writer = new JsonWriter(new OutputStreamWriter(mainInstance.getOutputStream()));
+        gson.toJson(jsonArgs, writer);
+        writer.flush();
+        mainInstance.shutdownOutput();
 
-        // Write the args to the main instance
-        // First the number of args
-        toMainInstance.println(args.length);
+        // Read the response
+        JsonObject res = new JsonParser().parse(new JsonReader(new InputStreamReader(mainInstance.getInputStream()))).getAsJsonObject();
 
-        // The all the arguments
-        for (String arg : args)
-            toMainInstance.println(arg);
-
-        // Close the writer
-        toMainInstance.close();
-
-        // Read from the main instance
-        String string;
-        while (!(string = fromMainInstance.readLine()).equals("END"))
-            System.out.println(string);
+        // Print the output
+        System.out.println(res.get("out").getAsString());
 
         // Close the reader
-        fromMainInstance.close();
         mainInstance.close();
 
         // Stop the program

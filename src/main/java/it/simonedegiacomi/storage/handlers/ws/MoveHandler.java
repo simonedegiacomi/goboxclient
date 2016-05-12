@@ -25,12 +25,12 @@ import java.security.InvalidParameterException;
  * @author Degiacomi Simone
  * Created on 14/02/16.
  */
-public class CopyOrCutHandler implements WSQueryHandler {
+public class MoveHandler implements WSQueryHandler {
 
     /**
      * Logger of the class
      */
-    private final static Logger log = Logger.getLogger(CopyOrCutHandler.class);
+    private final static Logger log = Logger.getLogger(MoveHandler.class);
 
     /**
      * Path of the GoBox files folder
@@ -61,7 +61,7 @@ public class CopyOrCutHandler implements WSQueryHandler {
      * Create a new copy or cut handler with the specified environment
      * @param env Environment to use
      */
-    public CopyOrCutHandler(StorageEnvironment env) {
+    public MoveHandler(StorageEnvironment env) {
         if (env.getDB() == null)
             throw new InvalidParameterException("environment without db");
 
@@ -76,7 +76,7 @@ public class CopyOrCutHandler implements WSQueryHandler {
         this.emitter = env.getEmitter();
     }
 
-    @WSQuery(name = "copyOrCutFile")
+    @WSQuery(name = "move")
     @Override
     public JsonElement onQuery(JsonElement data) {
         JsonObject json = data.getAsJsonObject();
@@ -84,67 +84,68 @@ public class CopyOrCutHandler implements WSQueryHandler {
         // Prepare the response
         JsonObject response = new JsonObject();
 
-        if (!json.has("file") || !json.has("newFather")) {
+        if (!json.has("src") || !json.has("dst") || !json.has("dstFather")) {
             response.addProperty("success", false);
             response.addProperty("error", "missing file");
             return response;
         }
 
-        // Get the cut flag from the request
-        boolean cut = json.has("cut") ? json.get("cut").getAsBoolean() : false;
+        boolean copy = json.has("copy") ? json.get("copy").getAsBoolean() : false;
 
         // Instance the file from the json
-        GBFile file = gson.fromJson(json.get("file"), GBFile.class);
+        GBFile src = gson.fromJson(json.get("src"), GBFile.class);
 
         // Instance the new father from the json
-        GBFile newFather = gson.fromJson(json.get("newFather"), GBFile.class);
+        GBFile dstFather = gson.fromJson(json.get("dstFather"), GBFile.class);
+
+        GBFile dst = gson.fromJson(json.get("dst"), GBFile.class);
 
         try {
 
             // Get the file with all the information
-            GBFile dbFile = db.getFile(file, true, true);
-            GBFile dbFather = db.getFile(newFather, true, true);
+            GBFile dbSrc = db.getFile(src, true, true);
+            GBFile dbDstFather = db.getFile(dstFather, true, true);
 
-            if (file == null || dbFather == null) {
+            if (dbSrc == null || dbDstFather == null) {
                 response.addProperty("success", false);
                 response.addProperty("error", "file not found");
                 return response;
             }
 
-            dbFile.setPrefix(PATH);
-            dbFather.setPrefix(PATH);
+            dbSrc.setPrefix(PATH);
+            dbDstFather.setPrefix(PATH);
 
             // Generate the new file
-            GBFile newFile = dbFather.generateChild(dbFile.getName(), dbFile.isDirectory());
+            GBFile dbDst = dbDstFather.generateChild(dst.getName(), dbSrc.isDirectory());
 
             // Assert that the name is unique
-            while (newFile.toFile().exists()) {
-                newFile.setName(newFile.getName() + " - Copy");
+            while (dbDst.toFile().exists()) {
+                dbDst.setName(dbDst.getName() + " - Copy");
             }
 
             // Tell the client to ignore this event (the copy)
-            watcher.startIgnoring(newFile.toFile());
-            watcher.startIgnoring(dbFile.toFile());
+            watcher.startIgnoring(dbDst.toFile());
+            watcher.startIgnoring(dbSrc.toFile());
 
-            if (cut) {
-
-                // Just move the file
-                Files.move(dbFile.toFile().toPath(), newFile.toFile().toPath());
-            } else {
+            if (copy) {
 
                 // Copy the file to the new destination
                 MyFileUtils.copyR(dbFile.toFile(), newFile.toFile());
+            } else {
+
+                // Just move the file
+                Files.move(dbFile.toFile().toPath(), newFile.toFile().toPath());
             }
 
             // Create a new Sync event
-            SyncEvent creationEvent = db.copyOrCutFile(dbFile, newFile, cut);
+            SyncEvent creationEvent = db.m(dbFile, newFile, cut);
 
             // Emit it
             emitter.emitEvent(creationEvent);
 
             // Stop ignoring this file
-            watcher.stopIgnoring(newFile.toFile());
-            watcher.stopIgnoring(dbFile.toFile());
+            watcher.stopIgnoring(dbDst.toFile());
+            watcher.stopIgnoring(dbSrc.toFile());
 
             // Complete the response
             response.addProperty("success", true);

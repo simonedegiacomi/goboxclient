@@ -28,7 +28,7 @@ public class Config {
     /**
      * Default configuration filename
      */
-    private static final String DEFAULT_LOCATION = "config/gobox.conf";
+    private static final String DEFAULT_LOCATION = "config/gobox.properties";
 
     /**
      * Default logger configuration file name

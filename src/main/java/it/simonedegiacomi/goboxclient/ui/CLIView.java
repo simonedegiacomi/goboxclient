@@ -1,12 +1,14 @@
 package it.simonedegiacomi.goboxclient.ui;
 
+import com.google.gson.*;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
 import it.simonedegiacomi.goboxapi.client.Client;
+import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
+import it.simonedegiacomi.goboxclient.GoBoxFacade;
 import it.simonedegiacomi.sync.Work;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.*;
 import java.net.Socket;
 import java.util.Set;
 
@@ -20,7 +22,7 @@ public class CLIView implements View {
 
     private Presenter presenter;
 
-    private PrintWriter toUser;
+    private final Gson gson = MyGsonBuilder.create();
 
     /**
      * Read the arguments from the reader from the other instance socket
@@ -28,26 +30,30 @@ public class CLIView implements View {
      * @return Array of read arguments
      * @throws IOException
      */
-    private static String[] readArgs (BufferedReader fromOtherInstance) throws IOException{
+    private static String[] readArgs (InputStreamReader in) throws IOException{
 
-        // Read the number of arguments
-        int n = Integer.parseInt(fromOtherInstance.readLine());
-        String[] args = new String[n];
-        for (int i = 0;i < n; i++)
-            args[i] = fromOtherInstance.readLine();
+        // Read the json array
+        JsonArray json = new JsonParser().parse(new JsonReader(in)).getAsJsonArray();
 
+        String[] args = new String[json.size()];
+        int i = 0;
+        for(JsonElement arg : json) {
+            args[i++] = arg.getAsString();
+        }
         return args;
     }
 
     public CLIView (Presenter presenter, Socket socket) throws IOException {
         this.presenter = presenter;
-
         // read the args
-        BufferedReader fromUser = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        String args[] = readArgs(fromUser);
+        String args[] = readArgs(new InputStreamReader(socket.getInputStream()));
 
-        // Create the print writer to the user
-        toUser = new PrintWriter(socket.getOutputStream());
+        JsonObject res = answer(args);
+
+        // Send the result
+        JsonWriter writer = new JsonWriter(new OutputStreamWriter(socket.getOutputStream()));
+        gson.toJson(res, writer);
+        writer.close();
     }
 
     @Override
@@ -74,4 +80,34 @@ public class CLIView implements View {
 
     @Override
     public void showError(String error) { }
+
+    private JsonObject answer (String[] args) {
+
+        // Prepare the response
+        JsonObject res = new JsonObject();
+
+        if (args.length <= 0) {
+            res.addProperty("out", "GoBox already running");
+            return res;
+        }
+
+        switch (args[0]) {
+            case "stop":
+                presenter.exitProgram();
+                res.addProperty("out", "Closed");
+            default:
+                res.addProperty("out", getHelp());
+                break;
+        }
+
+        return res;
+    }
+
+    private String getHelp () {
+        return "GoBox CLI\nAvailable commands:\n" +
+                "help) Show this list;\n" +
+                "stop) Stop the main GoBox instance;\n" +
+                "reset) Reset the GoBox environment;\n" +
+                "status) Get the current status;\n";
+    }
 }
