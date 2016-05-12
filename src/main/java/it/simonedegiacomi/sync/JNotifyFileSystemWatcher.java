@@ -16,7 +16,7 @@ import java.util.concurrent.ExecutionException;
  * Created on 24/12/2015.
  * @author Degiacomi Simone
  */
-public class FileSystemWatcher {
+public class JNotifyFileSystemWatcher extends MyFileSystemWatcher {
 
     /**
      * Map of files to ignore
@@ -30,13 +30,13 @@ public class FileSystemWatcher {
      * @param path Path to watch
      * @throws IOException thrown watching this path
      */
-    public FileSystemWatcher (String path, FileSystemEventListener listener) throws IOException {
+    public JNotifyFileSystemWatcher(String path, FileSystemEventListener listener) throws IOException {
 
         watcherId = JNotify.addWatch(path, JNotify.FILE_ANY, true, new JNotifyListener() {
 
             @Override
             public void fileCreated(int wd, String rootPath, String name) {
-                File newFile = new File(name);
+                File newFile = new File(rootPath + name);
                 if (!shouldIgnore(newFile)) {
                     listener.onFileCreated(newFile);
                 }
@@ -44,41 +44,32 @@ public class FileSystemWatcher {
 
             @Override
             public void fileDeleted(int wd, String rootPath, String name) {
-                File newFile = new File(name);
+                File newFile = new File(rootPath + name);
                 if (!shouldIgnore(newFile)) {
-                    listener.onFileDeleted(new File(name));
+                    listener.onFileDeleted(newFile);
                 }
             }
 
             @Override
             public void fileModified(int wd, String rootPath, String name) {
-                File newFile = new File(name);
+                File newFile = new File(rootPath + name);
                 if (!shouldIgnore(newFile)) {
-                    listener.onFileModified(new File(name));
+                    listener.onFileModified(newFile);
                 }
             }
 
             @Override
             public void fileRenamed(int wd, String rootPath, String oldName, String newName) {
-                File oldFile = new File(oldName);
-                File newFile = new File(newName);
+                File oldFile = new File(rootPath + oldName);
+                File newFile = new File(rootPath + newName);
                 if (!shouldIgnore(oldFile) && !shouldIgnore(newFile)) {
-                    listener.onFileMoved(new File(oldName), new File(newName));
+                    listener.onFileMoved(oldFile, newFile);
                 }
             }
         });
     }
 
-    public interface FileSystemEventListener {
 
-        void onFileCreated (File newFile);
-
-        void onFileModified (File modifiedFile);
-
-        void onFileDeleted (File deletedFile);
-
-        void onFileMoved (File before, File movedFile);
-    }
 
 
     /**
