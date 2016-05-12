@@ -260,7 +260,7 @@ public class DAOStorageDB extends StorageDB {
                 fileTable.update(newFile);
 
                 // Generate an update event
-                SyncEvent event = new SyncEvent(SyncEvent.EventKind.UPDATE_FILE, newFile);
+                SyncEvent event = new SyncEvent(SyncEvent.EventKind.FILE_MODIFIED, newFile);
                 registerEvent(event);
                 return event;
             }
@@ -271,7 +271,7 @@ public class DAOStorageDB extends StorageDB {
             log.info("New file inserted on the database");
 
             // Create the SyncEvent to return
-            SyncEvent event = new SyncEvent(SyncEvent.EventKind.NEW_FILE, newFile);
+            SyncEvent event = new SyncEvent(SyncEvent.EventKind.FILE_CREATED, newFile);
 
             // And add it to the right db table
             registerEvent(event);
@@ -334,7 +334,7 @@ public class DAOStorageDB extends StorageDB {
             fileTable.update(updatedFile);
 
             // Create sync event
-            SyncEvent event = new SyncEvent(SyncEvent.EventKind.EDIT_FILE, updatedFile);
+            SyncEvent event = new SyncEvent(SyncEvent.EventKind.FILE_MODIFIED, updatedFile);
             registerEvent(event);
             return  event;
         } catch (SQLException ex) {
@@ -378,7 +378,7 @@ public class DAOStorageDB extends StorageDB {
 
             // Update the db
             fileTable.update(file);
-            return registerEvent(new SyncEvent(SyncEvent.EventKind.REMOVE_FILE, file));
+            return registerEvent(new SyncEvent(SyncEvent.EventKind.FILE_TRASHED, file));
         } catch (SQLException ex) {
             throw new StorageException(ex.toString());
         }
@@ -397,7 +397,7 @@ public class DAOStorageDB extends StorageDB {
                 stmt.delete();
             }
 
-            SyncEvent event = new SyncEvent(share ? SyncEvent.EventKind.SHARE_FILE : SyncEvent.EventKind.UNSHARE_FILE, file);
+            SyncEvent event = new SyncEvent(share ? SyncEvent.EventKind.FILE_SHARED : SyncEvent.EventKind.FILE_UNSHARED, file);
             registerEvent(event);
             return event;
         } catch (SQLException ex) {
@@ -441,7 +441,7 @@ public class DAOStorageDB extends StorageDB {
                         removeFile(child);
 
             // Create the sync event
-            SyncEvent event = new SyncEvent(SyncEvent.EventKind.REMOVE_FILE, fileToRemove);
+            SyncEvent event = new SyncEvent(SyncEvent.EventKind.FILE_DELETED, fileToRemove);
             registerEvent(event);
 
             return event;
@@ -511,7 +511,7 @@ public class DAOStorageDB extends StorageDB {
         try {
 
             // Create the new event
-            SyncEvent newEvent = new SyncEvent(SyncEvent.EventKind.OPEN_FILE, file);
+            SyncEvent newEvent = new SyncEvent(SyncEvent.EventKind.FILE_OPENED, file);
 
             // Insert into the database
             eventTable.create(newEvent);

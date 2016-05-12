@@ -130,15 +130,15 @@ public class MoveHandler implements WSQueryHandler {
             if (copy) {
 
                 // Copy the file to the new destination
-                MyFileUtils.copyR(dbFile.toFile(), newFile.toFile());
+                MyFileUtils.copyR(dbSrc.toFile(), dbDst.toFile());
             } else {
 
                 // Just move the file
-                Files.move(dbFile.toFile().toPath(), newFile.toFile().toPath());
+                Files.move(dbSrc.toFile().toPath(), dbDst.toFile().toPath());
             }
 
             // Create a new Sync event
-            SyncEvent creationEvent = db.m(dbFile, newFile, cut);
+            SyncEvent creationEvent = db.move(dbSrc, dbSrc, copy);
 
             // Emit it
             emitter.emitEvent(creationEvent);
