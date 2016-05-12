@@ -7,12 +7,12 @@ import it.simonedegiacomi.goboxapi.client.ClientException;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.client.SyncEventListener;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
+import net.contentobjects.jnotify.JNotifyException;
 import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -69,22 +69,61 @@ public class Sync {
 
         this.client = client;
 
+        // Create a new work
         worker = new Worker(client, Worker.DEFAULT_THREADS);
         Work.setWorker(worker);
 
-        // Create the new watcher for the fileSystem
-        Path pathToWatch = new File(PATH).toPath();
-
-        // Set the watcher in the work class
-        Work.setWatcher(watcher);
-
-        // Assign the event of the file watcher
+        // Create the file system watcher
         createWatcher();
     }
 
-    public void setClient (Client client) {
+    /**
+     * create the file system watcher
+     * @throws IOException
+     */
+    private void createWatcher () throws IOException {
+        watcher = new FileSystemWatcher(PATH, new FileSystemWatcher.FileSystemEventListener() {
 
-        this.client = client;
+            @Override
+            public void onFileCreated(File newFile) {
+
+                // Wrap the java File into a GoBoxFile
+                GBFile wrappedFile = new GBFile(newFile, PATH);
+
+                // Add the work
+                worker.addWork(new Work(wrappedFile, Work.WorkKind.UPLOAD));
+            }
+
+            @Override
+            public void onFileModified(File modifiedFile) {
+
+                // Wrap the java File into a GoBoxFile
+                GBFile wrappedFile = new GBFile(modifiedFile, PATH);
+
+                // Create the new work
+                worker.addWork(new Work(wrappedFile, Work.WorkKind.UPLOAD));
+            }
+
+            @Override
+            public void onFileDeleted(File deletedFile) {
+
+                // Wrap the file
+                GBFile wrappedFile = new GBFile(deletedFile, PATH);
+
+                // Create the work
+                worker.addWork(new Work(wrappedFile, Work.WorkKind.REMOVE_IN_STORAGE));
+            }
+
+            @Override
+            public void onFileMoved(File before, File movedFile) {
+
+                // Wrap the file
+                GBFile wrappedFile = new GBFile(movedFile, PATH);
+
+                // Create the work
+                worker.addWork(new Work(wrappedFile, Work.WorkKind.MOVE_IN_STORAGE));
+            }
+        });
     }
 
     /**
@@ -93,13 +132,15 @@ public class Sync {
      * @throws IOException
      * @throws ClientException If there is some problem with the client class
      */
-    public void resyncAndStart () throws IOException, ClientException {
-        log.info("Start ReSync");
+    public void syncAndStart() throws IOException, ClientException {
+        log.info("Start synchronization with storage");
+
+        // Change sync flag
         syncState = true;
 
+        // Check the root and all the subfolder
         checkR(GBFile.ROOT_FILE);
         log.info("ReSync completed");
-
 
         // And listen for event's from the storage
         assignSyncEventFromStorage();
@@ -176,47 +217,6 @@ public class Sync {
         }
     }
 
-    private void createWatcher () throws IOException {
-        watcher = new FileSystemWatcher(PATH, new FileSystemWatcher.FileSystemEventListener() {
-
-            @Override
-            public void onFileCreated(File newFile) {
-                // Wrap the java File into a GoBoxFile
-                GBFile wrappedFile = new GBFile(newFile, PATH);
-
-                // Add the work
-                worker.addWork(new Work(wrappedFile, Work.WorkKind.UPLOAD));
-            }
-
-            @Override
-            public void onFileModified(File modifiedFile) {
-                // Wrap the java File into a GoBoxFile
-                GBFile wrappedFile = new GBFile(modifiedFile, PATH);
-
-                // Create the new work
-                worker.addWork(new Work(wrappedFile, Work.WorkKind.UPLOAD));
-            }
-
-            @Override
-            public void onFileDeleted(File deletedFile) {
-                // Wrap the file
-                GBFile wrappedFile = new GBFile(deletedFile, PATH);
-
-                // Create the work
-                worker.addWork(new Work(wrappedFile, Work.WorkKind.REMOVE));
-            }
-
-            @Override
-            public void onFileMoved(File before, File movedFile) {
-                // Wrap the file
-                GBFile wrappedFile = new GBFile(deletedFile, PATH);
-
-                // Create the work
-                worker.addWork(new Work(wrappedFile, Work.WorkKind.RENAME));
-            }
-        });
-    }
-
     /**
      * This method set the listener of the client object
      * that will listen at the events transmitted from
@@ -239,73 +239,10 @@ public class Sync {
                 if (before != null)
                     before.setPrefix(PATH);
 
-                try {
-
-                    switch (event.getKind()) {
-                        case NEW_FILE:
-
-                             worker.addWork(new Work(event));
-                             break;
-
-                        case EDIT_FILE:
-
-                            watcher.startIgnoring(before.toFile());
-                            watcher.startIgnoring(file.toFile());
-
-                            Files.move(before.toFile().toPath(), file.toFile().toPath());
-
-                            watcher.stopIgnoring(before.toFile());
-                            watcher.stopIgnoring(file.toFile());
-                            break;
-
-                        case REMOVE_FILE:
-
-                            watcher.startIgnoring(file.toFile());
-
-                            file.toFile().delete();
-
-                            watcher.stopIgnoring(file.toFile());
-
-                            break;
-
-                        case COPY_FILE:
-
-                            watcher.startIgnoring(before.toFile());
-                            watcher.startIgnoring(file.toFile());
-
-                            MyFileUtils.copyR(before.toFile(), file.toFile());
-
-                            watcher.stopIgnoring(before.toFile());
-                            watcher.stopIgnoring(file.toFile());
-                            break;
-
-                        case CUT_FILE:
-
-                            watcher.startIgnoring(before.toFile());
-                            watcher.startIgnoring(file.toFile());
-
-                            Files.move(before.toFile().toPath(), file.toFile().toPath());
-
-                            watcher.stopIgnoring(before.toFile());
-                            watcher.stopIgnoring(file.toFile());
-                            break;
-                    }
-                    rememberEvent(event);
-                } catch (Exception ex) {
-                    log.warn(ex.toString(), ex);
-                }
+                // Queue work
+                worker.addWork(new Work(event));
             }
         });
-    }
-
-    private void rememberEvent (SyncEvent eventToRemember) {
-
-        config.setProperty("lastEvent", String.valueOf(eventToRemember.getID()));
-        try {
-            config.save();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
     }
 
     /**
@@ -314,8 +251,12 @@ public class Sync {
      */
     public void shutdown () throws InterruptedException {
         syncState = false;
-        watcher.shutdown();
-        worker.shutdown();
+        try {
+            watcher.shutdown();
+            worker.shutdown();
+        } catch (JNotifyException ex) {
+            log.warn(ex.toString(), ex);
+        }
     }
 
     public FileSystemWatcher getFileSystemWatcher () {
@@ -326,9 +267,9 @@ public class Sync {
 
     public void setSyncing(boolean newState) throws InterruptedException, ClientException, IOException {
         if (newState == syncState)
-            throw new IllegalStateException("Already in this state");
+            return;
         if (newState)
-            resyncAndStart();
+            syncAndStart();
         else
             shutdown();
     }

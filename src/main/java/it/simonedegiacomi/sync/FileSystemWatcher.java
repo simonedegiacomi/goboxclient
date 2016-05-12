@@ -1,12 +1,14 @@
 package it.simonedegiacomi.sync;
 
 import net.contentobjects.jnotify.JNotify;
+import net.contentobjects.jnotify.JNotifyException;
 import net.contentobjects.jnotify.JNotifyListener;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Simple File System Watcher
@@ -34,28 +36,33 @@ public class FileSystemWatcher {
 
             @Override
             public void fileCreated(int wd, String rootPath, String name) {
-                if (!shouldIgnore()) {
-                    listener.onFileCreated(new File(name));
+                File newFile = new File(name);
+                if (!shouldIgnore(newFile)) {
+                    listener.onFileCreated(newFile);
                 }
             }
 
             @Override
             public void fileDeleted(int wd, String rootPath, String name) {
-                if (!shouldIgnore()) {
+                File newFile = new File(name);
+                if (!shouldIgnore(newFile)) {
                     listener.onFileDeleted(new File(name));
                 }
             }
 
             @Override
             public void fileModified(int wd, String rootPath, String name) {
-                if (!shouldIgnore()) {
+                File newFile = new File(name);
+                if (!shouldIgnore(newFile)) {
                     listener.onFileModified(new File(name));
                 }
             }
 
             @Override
             public void fileRenamed(int wd, String rootPath, String oldName, String newName) {
-                if (!shouldIgnore()) {
+                File oldFile = new File(oldName);
+                File newFile = new File(newName);
+                if (!shouldIgnore(oldFile) && !shouldIgnore(newFile)) {
                     listener.onFileMoved(new File(oldName), new File(newName));
                 }
             }
@@ -149,10 +156,7 @@ public class FileSystemWatcher {
     /**
      * Stop watching for new file system events
      */
-    public void shutdown () {
-        if (watcherId <= 0)
-            throw new IllegalStateException("watcher already off");
+    public void shutdown () throws JNotifyException {
         JNotify.removeWatch(watcherId);
-        watcherId = -1;
     }
 }
