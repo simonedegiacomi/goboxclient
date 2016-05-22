@@ -1,18 +1,15 @@
 package it.simonedegiacomi.storage;
 
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import static com.sun.xml.internal.ws.dump.LoggingDumpTube.Position.After;
-import static com.sun.xml.internal.ws.dump.LoggingDumpTube.Position.Before;
-import static org.junit.Assert.*;
-
 import java.io.File;
 import java.io.IOException;
 import java.sql.SQLException;
+
+import static org.junit.Assert.assertEquals;
 
 /**
  * Created on 27/04/16.
