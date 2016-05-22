@@ -1,6 +1,6 @@
 package it.simonedegiacomi.goboxclient.ui;
 
-import it.simonedegiacomi.goboxapi.client.Client;
+import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.sync.Work;
 
 import java.util.Set;
@@ -20,7 +20,7 @@ public interface Model {
      * Return the current state of the client
      * @return
      */
-    Client.ClientState getClientState ();
+    GBClient.ClientState getClientState ();
 
     /**
      * This method connects the client

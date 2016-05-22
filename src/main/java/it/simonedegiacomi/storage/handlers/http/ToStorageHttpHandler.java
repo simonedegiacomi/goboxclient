@@ -52,12 +52,15 @@ public class ToStorageHttpHandler implements HttpHandler {
      */
     private final String PATH = Config.getInstance().getProperty("path");
 
+    private final StorageEnvironment env;
+
     /**
      * Instance a new handler for incoming file
      * @param env Environment to use
      */
     public ToStorageHttpHandler (StorageEnvironment env) {
         this.db = env.getDB();
+        this.env = env;
     }
 
     @Override
@@ -104,12 +107,14 @@ public class ToStorageHttpHandler implements HttpHandler {
             GBFile dbFather = db.getFile(father, true, true);
 
             if (dbFather ==  null) {
-                // TODO: handle
+                httpExchange.sendResponseHeaders(400, 0);
+                httpExchange.close();
             }
 
             // Set the path and generate the child
             dbFather.setPrefix(PATH);
             GBFile newFile = dbFather.generateChild(json.get("name").getAsString(), false);
+            env.getSync().getFileSystemWatcher().startIgnoring(newFile.toFile());
 
             // Create the output stream to the disk
             OutputStream toDisk = new FileOutputStream(newFile.toFile());
@@ -124,8 +129,15 @@ public class ToStorageHttpHandler implements HttpHandler {
             fromClient.close();
             toDisk.close();
 
+            // Insert in the database
+            env.getEmitter().emitEvent(db.insertFile(newFile));
+
+            env.getSync().getFileSystemWatcher().stopIgnoring(newFile.toFile());
+
+            httpExchange.sendResponseHeaders(200, 0);
         } catch (StorageException ex) {
             log.warn(ex.toString(), ex);
+            httpExchange.sendResponseHeaders(500, 0);
         }
 
         // Close the http connection

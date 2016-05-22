@@ -1,6 +1,6 @@
 package it.simonedegiacomi.configuration;
 
-import it.simonedegiacomi.goboxapi.authentication.Auth;
+import it.simonedegiacomi.goboxapi.authentication.GBAuth;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
@@ -46,14 +46,9 @@ public class Config {
     private final Properties properties = new Properties();
 
     /**
-     * Container for the url
-     */
-    private final URLBuilder urls = new URLBuilder();
-
-    /**
      * Auth object serialized in the configuration. This is final to let you set new token lister one time
      */
-    private final Auth auth = new Auth();
+    private final GBAuth auth = new GBAuth();
 
     /**
      * Collection of listener that are called when the apply method is called
@@ -105,8 +100,8 @@ public class Config {
         // If the auth object was serialized, reload it
         if (properties.containsKey("username")) {
             auth.setUsername(properties.getProperty("username"));
+            auth.setMode(GBAuth.Modality.valueOf(properties.getProperty("mode")));
             auth.setToken(properties.getProperty("token"));
-            auth.setMode(Auth.Modality.valueOf(properties.getProperty("mode")));
         }
     }
 
@@ -120,15 +115,6 @@ public class Config {
     }
 
     /**
-     * Load urls
-     *
-     * @throws IOException
-     */
-    public void loadUrls() throws IOException {
-        urls.load();
-    }
-
-    /**
      * Save the configuration to the file and call the apply method
      *
      * @param File to which save the configuration
@@ -137,10 +123,11 @@ public class Config {
     public void save(File file) throws IOException {
 
         // Update the properties with the auth
-        properties.setProperty("token", auth.getToken());
-        properties.setProperty("username", auth.getUsername());
-        if (auth.getMode() != null)
+        if (auth.getToken() != null) {
+            properties.setProperty("token", auth.getToken());
+            properties.setProperty("username", auth.getUsername());
             properties.setProperty("mode", auth.getMode().toString());
+        }
 
         // Write to the file
         FileOutputStream out = new FileOutputStream(file);
@@ -166,16 +153,32 @@ public class Config {
             listener.onChange();
     }
 
-    public String getProperty(String key) {
+    /**
+     * Return the specified property, null if the key doesn't exist
+     * @param key Name of the property
+     * @return Value of the property, null if not found
+     */
+    public String getProperty (String key) {
         return properties.getProperty(key);
+    }
+
+    /**
+     * Return the request property value.
+     * @param key Name of the property
+     * @param defaultValue Default value if the property is not found
+     * @return Property value or default property value
+     */
+    public String getProperty (String key, String defaultValue) {
+        if(!properties.containsKey(key)) {
+            log.info("Property " + key + " not found, using default value: " + defaultValue);
+            properties.put(key, defaultValue);
+        }
+
+        return getProperty(key);
     }
 
     public void setProperty(String key, String value) {
         properties.setProperty(key, value);
-    }
-
-    public URLBuilder getUrls() {
-        return urls;
     }
 
     public void addOnconfigChangeListener(OnConfigChangeListener listener) {
@@ -194,7 +197,7 @@ public class Config {
         public void onChange();
     }
 
-    public Auth getAuth() {
+    public GBAuth getAuth() {
         return auth;
     }
 
@@ -207,7 +210,7 @@ public class Config {
      *
      * @param auth Object ot use to update the internal auth
      */
-    public void setAuth(Auth auth) {
+    public void setAuth(GBAuth auth) {
         this.auth.setUsername(auth.getUsername());
         this.auth.setToken(auth.getToken());
         this.auth.setMode(auth.getMode());

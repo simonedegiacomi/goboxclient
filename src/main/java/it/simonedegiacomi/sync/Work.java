@@ -1,15 +1,7 @@
 package it.simonedegiacomi.sync;
 
-import com.google.common.io.Files;
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.goboxapi.client.Client;
-import it.simonedegiacomi.goboxapi.client.ClientException;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
-import it.simonedegiacomi.storage.utils.MyFileUtils;
-import org.apache.log4j.Logger;
-
-import java.io.IOException;
-import java.security.InvalidParameterException;
 
 /**
  * This class manage the upload/download with the concept of a work queue
@@ -17,11 +9,6 @@ import java.security.InvalidParameterException;
  * @author Degiacomi Simone
  */
 public class Work {
-
-    /**
-     * Logger of the class
-     */
-    private static final Logger log = Logger.getLogger(Work.class);
 
     /**
      * Kinds of works
@@ -106,37 +93,6 @@ public class Work {
     private final GBFile file;
 
     /**
-     * Client to use to complete the work
-     */
-    private Client client;
-
-    /**
-     * File system watcher that listen for new changes on the local fs
-     */
-    private static FileSystemWatcher watcher;
-
-    /**
-     * Worker used in the environment. This is used to schedule new work
-     */
-    private static Worker worker;
-
-    /**
-     * Set the file system watcher
-     * @param watcher File system watcher
-     */
-    public static void setWatcher (FileSystemWatcher watcher) {
-        Work.watcher = watcher;
-    }
-
-    /**
-     * Set the Worker used in the environment
-     * @param worker Current used worker
-     */
-    public static void setWorker (Worker worker) {
-        Work.worker = worker;
-    }
-
-    /**
      * Create a new work from a SyncEvent received from the storage.
      * @param event SyncEvent (receiver from the storage) from which create a new work
      */
@@ -154,14 +110,14 @@ public class Work {
                 kind = WorkKind.DOWNLOAD;
                 break;
 
-            case FILE_MODIFIED:
+            case FILE_MOVED:
 
                 // Rename the file
                 kind = WorkKind.DOWNLOAD;
                 before = event.getBefore();
                 break;
 
-            case FILE_MOVED:
+            case FILE_MODIFIED:
 
                 // Download the new version
                 kind = WorkKind.MOVE_IN_CLIENT;
@@ -200,70 +156,6 @@ public class Work {
     }
 
     /**
-     * Return the runnable object that do the right thing to complete the work
-     * @param client Client to use to complete the work
-     * @return Runnable to execute to complete
-     */
-    public Runnable getWork (Client client) {
-
-        this.client = client;
-
-        return () -> {
-
-            // Change state of the work
-            state = WorkState.RUNNING;
-
-            // Tell the watcher to ignore the event
-            watcher.startIgnoring(file.toFile());
-
-            try {
-                switch (kind) {
-                    case DOWNLOAD:
-                        download(file);
-                        break;
-
-                    case UPLOAD:
-                        upload(file);
-                        break;
-
-                    case MOVE_IN_CLIENT:
-
-                        // TODO: implement
-                        break;
-
-                    case MOVE_IN_STORAGE:
-
-                        // TODO: implement
-                        break;
-
-                    case REMOVE_IN_CLIENT:
-
-                        MyFileUtils.delete(file);
-                        break;
-
-                    case REMOVE_IN_STORAGE:
-
-                        client.removeFile(file);
-                        break;
-                }
-            } catch (Exception ex) {
-
-                // Change the state
-                state = WorkState.FAILED;
-
-                // Log the exception
-                log.warn("work failed", ex);
-            }
-
-            // Stop ignoring the file
-            watcher.stopIgnoring(file.toFile());
-
-            // Change state of work
-            state = WorkState.END;
-        };
-    }
-
-    /**
      * Return the current state of the work
      * @return Current state of the work
      */
@@ -271,50 +163,21 @@ public class Work {
         return state;
     }
 
-    /**
-     * Download the file if a real file, schedule multiple download if a folder
-     * @param file File to download
-     * @throws IOException
-     * @throws ClientException
-     */
-    private void download (GBFile file) throws IOException, ClientException {
+    public void setState (WorkState state) { this.state = state; }
 
-        // If the file is a directory
-        if (file.isDirectory()) {
-
-            // Download each file
-            for (GBFile child : file.getChildren()) {
-                worker.addWork(new Work(child, WorkKind.DOWNLOAD));
-            }
-        }
-
-        // Otherwise just download the file
-        client.getFile(file);
+    public WorkKind getKind() {
+        return kind;
     }
 
-    /**
-     * Download the file if a file, schedule multiple upload if a folder
-     * @param file File to upload
-     * @throws ClientException
-     * @throws IOException
-     */
-    private void upload (GBFile file) throws ClientException, IOException {
+    public GBFile getBefore() {
+        return before;
+    }
 
-        // If the file is a folder
-        if (file.isDirectory()) {
+    public GBFile getFile() {
+        return file;
+    }
 
-            // Create the folder in the storage
-            client.createDirectory(file);
-
-            // And create enw works, to upload each file
-            for (GBFile child : file.getChildren()) {
-                worker.addWork(new Work(child, WorkKind.UPLOAD));
-            }
-
-            return;
-        }
-
-        // Upload the file
-        client.uploadFile(file);
+    public String toString () {
+        return kind + " file: " + file;
     }
 }

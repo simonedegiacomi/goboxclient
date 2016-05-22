@@ -2,12 +2,11 @@ package it.simonedegiacomi.storage;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.neovisionaries.ws.client.WebSocketException;
 import it.simonedegiacomi.configuration.Config;
-import it.simonedegiacomi.goboxapi.authentication.Auth;
-import it.simonedegiacomi.goboxapi.client.Client;
+import it.simonedegiacomi.goboxapi.authentication.GBAuth;
+import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.goboxapi.myws.MyWSClient;
-import it.simonedegiacomi.goboxapi.myws.WSEventListener;
+import it.simonedegiacomi.goboxapi.myws.WSException;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import it.simonedegiacomi.storage.direct.HttpsStorageServer;
@@ -33,8 +32,14 @@ public class Storage {
      */
     private static final Logger log = Logger.getLogger(Storage.class.getName());
 
+    /**
+     * Default database location
+     */
     private static final String DEFAULT_DB_LOCATION = "./config/db";
 
+    /**
+     * Default direct connection port
+     */
     private static final int DIRECT_CONNECTION_DEFAULT_PORT = 6522;
 
     /**
@@ -42,15 +47,17 @@ public class Storage {
      */
     private final static Config config = Config.getInstance();
 
+    private final String PATH = config.getProperty("path", "files/");
+
     /**
      * The environment is a singleton class that contains the object used by the storage
      */
-    private final StorageEnvironment env = new StorageEnvironment();
+    private final StorageEnvironment env;
 
     /**
      * URLBuilder is used to get the appropriate url
      */
-    private final static URLBuilder urls = config.getUrls();
+    private final static URLBuilder urls = URLBuilder.DEFAULT;
 
     /**
      * WebSocket communication with the main server
@@ -59,12 +66,17 @@ public class Storage {
 
     private DisconnectedListener disconnectedListener;
 
+    public Storage (GBAuth auth) throws StorageException {
+        this(auth, new StorageEnvironment());
+    }
+
     /**
      * Create a new storage given the Auth object for the appropriate account.
      * @param auth Authentication to use with the main server
      * @throws StorageException
      */
-    public Storage(final Auth auth) throws StorageException {
+    public Storage (final GBAuth auth, StorageEnvironment env) throws StorageException {
+        this.env = env;
 
         // Connect to the local database
         env.setDB(new DAOStorageDB(DEFAULT_DB_LOCATION));
@@ -79,33 +91,28 @@ public class Storage {
         }
 
         // Set the listener for the error event
-        mainServer.onEvent("error", new WSEventListener() {
-
-            @Override
-            public void onEvent(JsonElement data) {
-                log.warn("websocket error");
-                disconnectedListener.onDisconnected();
-            }
+        mainServer.onEvent("error", (data) -> {
+            log.warn("websocket error");
+            disconnectedListener.onDisconnected();
         });
 
-        mainServer.onEvent("close", new WSEventListener() {
+        mainServer.onEvent("close", (data) -> {
 
-            @Override
-            public void onEvent(JsonElement data) {
-                log.warn("websocket disconnected");
-                disconnectedListener.onDisconnected();
-            }
+            log.warn("websocket disconnected");
+            disconnectedListener.onDisconnected();
         });
 
         // Authorize the ws connection
-        auth.authorizeWs(mainServer);
+        auth.authorize(mainServer);
 
         // Create the event emitter
-        env.setEmitter(new EventEmitter(mainServer));
+        if (env.getEmitter() == null ) {
+            env.setEmitter(new EventEmitter(mainServer));
+        }
 
         try {
             // Create the local UDP server
-            UDPStorageServer udp = new UDPStorageServer(UDPStorageServer.DEFAULT_PORT);
+            UDPStorageServer udp = new UDPStorageServer(Integer.parseInt(config.getProperty("udpDirectConnectionPort", String.valueOf(UDPStorageServer.DEFAULT_PORT))));
             udp.init();
             env.setUdpServer(udp);
         } catch (UnknownHostException ex) {
@@ -116,20 +123,8 @@ public class Storage {
 
 
         // Create the http(s) storage server that is used for direct transfers
-        int directPort = DIRECT_CONNECTION_DEFAULT_PORT;
-
-        if (config.hasProperty("directConnectionPort")) {
-            directPort = Integer.parseInt(config.getProperty("directConnectionPort"));
-        } else {
-            log.info("No directConnectionPort property in config file. Using default " + DIRECT_CONNECTION_DEFAULT_PORT);
-        }
-
-        String strAddress = "0.0.0.0";
-        if (config.hasProperty("directConnectionListenAddress")) {
-            strAddress = config.getProperty("directConnectionListenAddress");
-        } else {
-            log.info("No directConnectionListenAddress property in config file. Using default: " + strAddress);
-        }
+        int directPort = Integer.parseInt(config.getProperty("directConnectionPort", String.valueOf(DIRECT_CONNECTION_DEFAULT_PORT)));
+        String strAddress = config.getProperty("directConnectionListenAddress", "0.0.0.0");
 
         try {
 
@@ -159,7 +154,7 @@ public class Storage {
 
             // Open the connection and start to listen
             mainServer.connect();
-        } catch (WebSocketException ex) {
+        } catch (WSException ex) {
 
             throw new StorageException("Cannot connect to main server");
         }
@@ -240,7 +235,7 @@ public class Storage {
      *
      * @return The internal client instance.
      */
-    public Client getInternalClient () {
+    public GBClient getInternalClient () {
         return env.getInternalClient();
     }
 

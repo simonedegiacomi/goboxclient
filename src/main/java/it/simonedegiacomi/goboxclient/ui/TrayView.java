@@ -2,7 +2,7 @@ package it.simonedegiacomi.goboxclient.ui;
 
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.configuration.loginui.GUIConnectionTool;
-import it.simonedegiacomi.goboxapi.client.Client;
+import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import it.simonedegiacomi.sync.Work;
 import org.apache.log4j.Logger;
@@ -37,7 +37,7 @@ public class TrayView implements View {
     /**
      * URLBuilder used to get the url if the website
      */
-    private final static URLBuilder urls = Config.getInstance().getUrls();
+    private final static URLBuilder urls = URLBuilder.DEFAULT;
 
     /**
      * Presenter that set the data to this class and to which this class class
@@ -176,7 +176,7 @@ public class TrayView implements View {
     }
 
     @Override
-    public void setClientState(Client.ClientState state) {
+    public void setClientState(GBClient.ClientState state) {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {

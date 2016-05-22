@@ -152,7 +152,7 @@ public class DAOStorageDB extends StorageDB {
 
             // Start with the only file where i'm sure o know his father, the root
             long fatherIDOfSomeone = GBFile.ROOT_ID;
-            GBFile fatherOfSomeone = null;
+            GBFile fatherOfSomeone = GBFile.ROOT_FILE;
 
             // Find the father of every ancestor node
             for(GBFile ancestor : path) {
@@ -246,7 +246,7 @@ public class DAOStorageDB extends StorageDB {
             throw new InvalidParameterException("File insert a null file");
 
         // If the file doesn't know his father, let's find his
-        if (newFile.getFatherID() == GBFile.UNKNOWN_ID)
+        if (assertFatherID(newFile) == GBFile.UNKNOWN_ID)
             throw new InvalidParameterException("father id not set");
 
         try {
@@ -257,6 +257,7 @@ public class DAOStorageDB extends StorageDB {
 
                 // Set the id of the new file
                 newFile.setID(old.getID());
+                findPath(newFile);
                 fileTable.update(newFile);
 
                 // Generate an update event
@@ -267,6 +268,7 @@ public class DAOStorageDB extends StorageDB {
 
             // Insert into the database
             fileTable.create(newFile);
+            findPath(newFile);
 
             log.info("New file inserted on the database");
 
@@ -304,14 +306,46 @@ public class DAOStorageDB extends StorageDB {
     /**
      * Assert that the file know his id. If the id is unknown the method {@link #getFile(GBFile)} is called
      * @param file File to which ind the id (if needed)
+     * @return ID of the file
      * @throws StorageException
      */
-    private void assertID (GBFile file) throws StorageException {
+    private long assertID (GBFile file) throws StorageException {
         if (file == null)
             throw new InvalidParameterException("File can't be null");
 
-        if (file.getID() == GBFile.UNKNOWN_ID)
-            file.setID(getFile(file).getID());
+        if (file.getID() == GBFile.UNKNOWN_ID) {
+            GBFile detailedFile = getFile(file);
+            if (detailedFile != null) {
+                file.setID(detailedFile.getID());
+            }
+        }
+
+        return file.getID();
+    }
+
+    /**
+     * Assert tthat the file know his father id, if it's not, try with the ID and then with the path
+     * @param file
+     * @return Father ID
+     * @throws StorageException
+     */
+    private long assertFatherID (GBFile file) throws StorageException {
+        if (file.getFatherID() == GBFile.UNKNOWN_ID) {
+
+            // Check if the file know his id
+            if (file.getID() != GBFile.UNKNOWN_ID) {
+                file.setID(getFileByID(file.getID()).getFatherID());
+            } else {
+                LinkedList<GBFile> fatherPath = new LinkedList<>(file.getPathAsList());
+                fatherPath.remove(fatherPath.size() - 1);
+                GBFile father = getFileByPath(fatherPath);
+
+                if (father != null) {
+                    file.setFatherID(father.getID());
+                }
+            }
+        }
+        return file.getFatherID();
     }
 
     /**
@@ -557,7 +591,10 @@ public class DAOStorageDB extends StorageDB {
 
     @Override
     public SyncEvent move (GBFile src, GBFile dst, boolean copy) throws StorageException {
-        assertID(src);
+        if (assertID(src) == GBFile.UNKNOWN_ID)
+            throw new InvalidParameterException("source not found");
+        if (assertFatherID(dst) == GBFile.UNKNOWN_ID)
+            throw new InvalidParameterException("destination not found");
 
         insertFile(dst);
         if(src.isDirectory()) {

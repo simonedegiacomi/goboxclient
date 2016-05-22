@@ -41,6 +41,12 @@ public class AuthMiddleware {
                     // Check in the cookies
                     String cookieString = httpExchange.getRequestHeaders().getFirst("Cookie");
 
+                    if (cookieString == null) {
+                        httpExchange.sendResponseHeaders(401, 0);
+                        httpExchange.close();
+                        return;
+                    }
+
                     // For each cookie
                     for(String cookie : cookieString.split(";")) {
 
@@ -57,7 +63,7 @@ public class AuthMiddleware {
                 // Check the token
                 if (token == null) {
 
-                    httpExchange.sendResponseHeaders(401, 1);
+                    httpExchange.sendResponseHeaders(401, 0);
                     httpExchange.close();
                     return;
                 }

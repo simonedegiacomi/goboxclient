@@ -2,17 +2,16 @@ package it.simonedegiacomi.sync;
 
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.goboxapi.client.Client;
 import it.simonedegiacomi.goboxapi.client.ClientException;
+import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.client.SyncEventListener;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
-import net.contentobjects.jnotify.JNotifyException;
+import it.simonedegiacomi.sync.fs.MyFileSystemWatcher;
 import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,31 +30,31 @@ public class Sync {
     private static final Logger log = Logger.getLogger(Sync.class.getName());
 
     /**
-     * Worker of the class. This worker is used to keep a simple queue for
+     * WorkManager of the class. This workManager is used to keep a simple queue for
      * thw works (uploads and downloads)
      */
-    private final Worker worker;
+    private final WorkManager workManager;
 
     /**
      * Client object used as API interface to communicate with the storage
      */
-    private Client client;
+    private GBClient client;
 
     /**
      * Configuration of the environment
      */
-    private static final Config config = Config.getInstance();
+    private final Config config = Config.getInstance();
 
     /**
-     * The FileSystemWatcher is the object that pool and watch the local fileSystem,
+     * The JNotifyFileSystemWatcher is the object that pool and watch the local fileSystem,
      * notifying any creation, changes or deletion of a file (or folder)
      */
-    private FileSystemWatcher watcher;
+    private MyFileSystemWatcher watcher;
 
     /**
      * Path of the files folder
      */
-    private static final String PATH = config.getProperty("path");
+    private final String PATH = config.getProperty("path");
 
     private volatile boolean syncState;
 
@@ -65,63 +64,65 @@ public class Sync {
      * the storage
      * @throws IOException Exception thrown assigning the file system watcher
      */
-    public Sync (Client client) throws IOException {
-
+    public Sync (GBClient client, MyFileSystemWatcher watcher) throws IOException {
         this.client = client;
+        this.watcher = watcher;
+
+        prepareWatcher();
 
         // Create a new work
-        worker = new Worker(client, Worker.DEFAULT_THREADS);
-        Work.setWorker(worker);
-
-        // Create the file system watcher
-        createWatcher();
+        workManager = new WorkManager(client, this, WorkManager.DEFAULT_THREADS);
     }
 
     /**
      * create the file system watcher
      * @throws IOException
      */
-    private void createWatcher () throws IOException {
-        watcher = new FileSystemWatcher(PATH, new FileSystemWatcher.FileSystemEventListener() {
+    private void prepareWatcher () throws IOException {
+        watcher.addListener(new MyFileSystemWatcher.FileSystemEventListener() {
 
             @Override
             public void onFileCreated(File newFile) {
+                log.info("new file created " + newFile);
 
                 // Wrap the java File into a GoBoxFile
                 GBFile wrappedFile = new GBFile(newFile, PATH);
 
                 // Add the work
-                worker.addWork(new Work(wrappedFile, Work.WorkKind.UPLOAD));
+                workManager.addWork(new Work(wrappedFile, Work.WorkKind.UPLOAD));
             }
 
             @Override
             public void onFileModified(File modifiedFile) {
+                log.info("new file modified " + modifiedFile);
 
                 // Wrap the java File into a GoBoxFile
                 GBFile wrappedFile = new GBFile(modifiedFile, PATH);
 
                 // Create the new work
-                worker.addWork(new Work(wrappedFile, Work.WorkKind.UPLOAD));
+                workManager.addWork(new Work(wrappedFile, Work.WorkKind.UPLOAD));
             }
 
             @Override
             public void onFileDeleted(File deletedFile) {
+                log.info("file deleted " + deletedFile);
 
                 // Wrap the file
                 GBFile wrappedFile = new GBFile(deletedFile, PATH);
 
                 // Create the work
-                worker.addWork(new Work(wrappedFile, Work.WorkKind.REMOVE_IN_STORAGE));
+                workManager.addWork(new Work(wrappedFile, Work.WorkKind.REMOVE_IN_STORAGE));
             }
 
             @Override
             public void onFileMoved(File before, File movedFile) {
+                log.info("file moved from " + before + " to " + movedFile);
 
                 // Wrap the file
                 GBFile wrappedFile = new GBFile(movedFile, PATH);
 
                 // Create the work
-                worker.addWork(new Work(wrappedFile, Work.WorkKind.MOVE_IN_STORAGE));
+                workManager.addWork(new Work(wrappedFile, Work.WorkKind.MOVE_IN_STORAGE));
             }
         });
     }
@@ -140,7 +141,7 @@ public class Sync {
 
         // Check the root and all the subfolder
         checkR(GBFile.ROOT_FILE);
-        log.info("ReSync completed");
+        log.info("sync completed");
 
         // And listen for event's from the storage
         assignSyncEventFromStorage();
@@ -161,7 +162,7 @@ public class Sync {
         if(detailedFile == null) {
 
             // Upload it
-            worker.addWork(new Work(file, Work.WorkKind.UPLOAD));
+            workManager.addWork(new Work(file, Work.WorkKind.UPLOAD));
             return;
         }
 
@@ -169,7 +170,7 @@ public class Sync {
 
         // Check if i have this file
         if (!detailedFile.toFile().exists()) {
-            worker.addWork(new Work(file, Work.WorkKind.DOWNLOAD));
+            workManager.addWork(new Work(file, Work.WorkKind.DOWNLOAD));
             return;
         }
 
@@ -197,9 +198,7 @@ public class Sync {
             // Wait! and the remaining files in the map?
             // This client doesn't have these file!
             for (Map.Entry<String, GBFile> entry : storageFiles.entrySet()) {
-
-                // Download it
-                worker.addWork(new Work(entry.getValue(), Work.WorkKind.DOWNLOAD));
+                checkR(entry.getValue());
             }
 
             // Empty the map
@@ -213,7 +212,7 @@ public class Sync {
 
             // If it's not a directory but it's a file check who have the latest version
             Work.WorkKind action = detailedFile.getLastUpdateDate() > file.getLastUpdateDate() ? Work.WorkKind.UPLOAD : Work.WorkKind.DOWNLOAD;
-            worker.addWork(new Work(detailedFile, action));
+            workManager.addWork(new Work(detailedFile, action));
         }
     }
 
@@ -240,7 +239,7 @@ public class Sync {
                     before.setPrefix(PATH);
 
                 // Queue work
-                worker.addWork(new Work(event));
+                workManager.addWork(new Work(event));
             }
         });
     }
@@ -251,19 +250,15 @@ public class Sync {
      */
     public void shutdown () throws InterruptedException {
         syncState = false;
-        try {
-            watcher.shutdown();
-            worker.shutdown();
-        } catch (JNotifyException ex) {
-            log.warn(ex.toString(), ex);
-        }
+        watcher.shutdown();
+        workManager.shutdown();
     }
 
-    public FileSystemWatcher getFileSystemWatcher () {
+    public MyFileSystemWatcher getFileSystemWatcher () {
         return watcher;
     }
 
-    public Worker getWorker () { return worker; }
+    public WorkManager getWorkManager() { return workManager; }
 
     public void setSyncing(boolean newState) throws InterruptedException, ClientException, IOException {
         if (newState == syncState)

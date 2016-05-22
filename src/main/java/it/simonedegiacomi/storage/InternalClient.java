@@ -1,7 +1,6 @@
 package it.simonedegiacomi.storage;
 
 import com.google.common.io.ByteStreams;
-import com.google.gson.JsonElement;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.client.*;
 import org.apache.log4j.Logger;
@@ -20,7 +19,7 @@ import java.util.List;
  * @author Degiacomi Simone
  * Created on 02/01/2016.
  */
-public class InternalClient extends Client {
+public class InternalClient extends GBClient {
 
     /**
      * Logger of the class
@@ -228,5 +227,12 @@ public class InternalClient extends Client {
     }
 
     @Override
-    public void move (GBFile src, GBFile fatherDestination, String newName, boolean copy) throws ClientException { }
+    public void move (GBFile src, GBFile dst, boolean copy) throws ClientException {
+        try {
+            SyncEvent syncEvent = db.move(src, dst,  copy);
+            emitter.emitEvent(syncEvent);
+        } catch (StorageException ex) {
+
+        }
+    }
 }

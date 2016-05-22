@@ -1,7 +1,9 @@
 package it.simonedegiacomi.utils;
 
-import com.google.gson.*;
-import com.google.gson.reflect.TypeToken;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
@@ -9,7 +11,9 @@ import it.simonedegiacomi.goboxclient.ui.CLIView;
 import it.simonedegiacomi.goboxclient.ui.Presenter;
 import org.apache.log4j.Logger;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 

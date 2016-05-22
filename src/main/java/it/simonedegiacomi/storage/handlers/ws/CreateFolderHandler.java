@@ -13,7 +13,7 @@ import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
-import it.simonedegiacomi.sync.FileSystemWatcher;
+import it.simonedegiacomi.sync.Sync;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
@@ -54,7 +54,7 @@ public class CreateFolderHandler implements WSQueryHandler {
     /**
      * File system watcher of the GoBox files folder
      */
-    private final FileSystemWatcher watcher;
+    private final Sync sync;
 
     public CreateFolderHandler (StorageEnvironment env) {
         if (env.getDB() == null)
@@ -63,12 +63,12 @@ public class CreateFolderHandler implements WSQueryHandler {
         if (env.getEmitter() == null)
             throw new InvalidParameterException("environment without event emitter");
 
-        if (env.getSync() == null || env.getSync().getFileSystemWatcher() == null)
-            throw new InvalidParameterException("environment without file system watcher");
+        if (env.getSync() == null)
+            throw new InvalidParameterException("environment without sync");
 
         this.db = env.getDB();
         this.emitter = env.getEmitter();
-        this.watcher = env.getSync().getFileSystemWatcher();
+        this.sync = env.getSync();
     }
 
     @WSQuery(name = "createFolder")
@@ -80,47 +80,23 @@ public class CreateFolderHandler implements WSQueryHandler {
         // Prepare the response
         JsonObject response = new JsonObject();
 
-        if (!json.has("father") || !json.has("name")) {
-            response.addProperty("created", false);
-            response.addProperty("error", "missing father or name");
-            return response;
-        }
-
         // Wrap the new directory
-        GBFile father = gson.fromJson(json.get("father"), GBFile.class);
+        GBFile newFolder = gson.fromJson(json, GBFile.class);
+        newFolder.setPrefix(PATH);
 
         try {
-            GBFile dbFather = db.getFile(father, true, true);
 
-            // Check that the father exists
-            if (dbFather == null) {
-                response.addProperty("created", false);
-                response.addProperty("error", "father doesn't exist");
-                return response;
-            }
-
-            dbFather.setPrefix(PATH);
-
-            // Generate the new child
-            GBFile newFolder = dbFather.generateChild(json.get("name").getAsString(), true);
-
-            // Assert that new name is unique
-            uniqueName(newFolder, dbFather.getChildren());
+            // Insert the file and get the event
+            SyncEvent event = db.insertFile(newFolder);
 
             // Tell the internal client ot ignore this event
-            watcher.startIgnoring(newFolder.toFile());
+            sync.getFileSystemWatcher().startIgnoring(newFolder.toFile());
 
             // Create the real file in the FS
             Files.createDirectory(newFolder.toFile().toPath());
 
             // Stop ignoring
-            watcher.stopIgnoring(newFolder.toFile());
-
-            // Load the date from the fs to the logical file
-            MyFileUtils.loadFileAttributes(newFolder);
-
-            // Insert the file and get the event
-            SyncEvent event = db.insertFile(newFolder);
+            sync.getFileSystemWatcher().stopIgnoring(newFolder.toFile());
 
             // Then complete the response
             response.addProperty("newFolderId", newFolder.getID());

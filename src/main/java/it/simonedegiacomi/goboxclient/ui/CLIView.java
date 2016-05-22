@@ -3,12 +3,13 @@ package it.simonedegiacomi.goboxclient.ui;
 import com.google.gson.*;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
-import it.simonedegiacomi.goboxapi.client.Client;
+import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
-import it.simonedegiacomi.goboxclient.GoBoxFacade;
 import it.simonedegiacomi.sync.Work;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.util.Set;
 
@@ -67,7 +68,7 @@ public class CLIView implements View {
     }
 
     @Override
-    public void setClientState(Client.ClientState state) { }
+    public void setClientState(GBClient.ClientState state) { }
 
     @Override
     public void setSyncState(boolean enabled) { }

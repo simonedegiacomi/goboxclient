@@ -1,6 +1,7 @@
 package it.simonedegiacomi.sync;
 
-import it.simonedegiacomi.goboxapi.client.Client;
+import it.simonedegiacomi.goboxapi.client.GBClient;
+import org.apache.log4j.Logger;
 
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -13,7 +14,12 @@ import java.util.concurrent.Executors;
  * @author Degiacomi Simone
  * Created on 17/02/16.
  */
-public class Worker {
+public class WorkManager {
+
+    /**
+     * Logger of the class
+     */
+    private final Logger log = Logger.getLogger(WorkManager.class);
 
     /**
      * Default number of concurrent threads
@@ -37,13 +43,13 @@ public class Worker {
     private final List<Work> failedWorks = new LinkedList<>();
 
     /**
-     * Client used by the works
+     * Employee that do the works. This employee is thread-safe so one in enough
      */
-    private final Client client;
+    private final Employee employee;
 
-    public Worker(Client client, int threads){
+    public WorkManager(GBClient client, Sync sync, int threads){
         executor = Executors.newFixedThreadPool(threads);
-        this.client = client;
+        employee = new Employee(client, sync, this);
     }
 
     /**
@@ -51,24 +57,18 @@ public class Worker {
      * @param newWork Work to add
      */
     public void addWork(Work newWork) {
-        executor.submit(new Runnable() {
-            @Override
-            public void run() {
+        executor.submit(() -> {
+            log.info("running work " + newWork);
 
-                // Add to the current works set
-                currentWorks.add(newWork);
+            // Add to the current works set
+            currentWorks.add(newWork);
 
-                // Run the work
-                newWork.getWork(client).run();
-
-                // Remove from the set
-                currentWorks.remove(newWork);
-
-                // If it's failed, add to the list
-                if (newWork.getState() == Work.WorkState.FAILED) {
-                    failedWorks.add(newWork);
-                }
+            if (!employee.submit(newWork)) {
+                log.warn("work failed " + newWork);
+                failedWorks.add(newWork);
             }
+            log.info("work completed " + newWork);
+            currentWorks.remove(newWork);
         });
     }
 

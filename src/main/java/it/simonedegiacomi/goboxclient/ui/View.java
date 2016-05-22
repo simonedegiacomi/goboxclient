@@ -1,6 +1,6 @@
 package it.simonedegiacomi.goboxclient.ui;
 
-import it.simonedegiacomi.goboxapi.client.Client;
+import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.sync.Work;
 
 import java.util.Set;
@@ -34,7 +34,7 @@ public interface View {
      *
      * @param state Current state of the client
      */
-    void setClientState (Client.ClientState state);
+    void setClientState (GBClient.ClientState state);
 
     /**
      * Set if the sync is running

@@ -13,7 +13,7 @@ import it.simonedegiacomi.storage.EventEmitter;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
-import it.simonedegiacomi.sync.FileSystemWatcher;
+import it.simonedegiacomi.sync.fs.MyFileSystemWatcher;
 import org.apache.log4j.Logger;
 
 import java.io.File;
@@ -55,7 +55,7 @@ public class RenameFileHandler implements WSQueryHandler{
     /**
      * File system watcher
      */
-    private final FileSystemWatcher watcher;
+    private final MyFileSystemWatcher watcher;
 
     public RenameFileHandler(StorageEnvironment env) {
         if (env.getDB() == null)

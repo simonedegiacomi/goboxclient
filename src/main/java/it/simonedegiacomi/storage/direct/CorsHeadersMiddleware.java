@@ -28,7 +28,7 @@ public class CorsHeadersMiddleware {
     }
 
     private static void addHeader (HttpExchange httpExchange) {
-        httpExchange.getResponseHeaders().add("Access-Control-Allow-Origin", "https://gobox-simonedegiacomi.c9users.io");
+        httpExchange.getResponseHeaders().add("Access-Control-Allow-Origin", httpExchange.getRequestHeaders().getFirst("Origin"));
 
         httpExchange.getResponseHeaders().add("Access-Control-Allow-Headers", "X-PINGOTHER, Content-Type");
 

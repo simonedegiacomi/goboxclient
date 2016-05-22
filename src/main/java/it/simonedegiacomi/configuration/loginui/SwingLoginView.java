@@ -117,11 +117,13 @@ public class SwingLoginView implements LoginView {
         // Proxy settings button
         c.gridx = 0;
         c.gridy = 5;
+        c.gridwidth = 2;
         JButton proxySettings = new JButton("Proxy settings");
         proxySettings.addActionListener((ActionEvent evt) -> {
             GUIConnectionTool tool = new GUIConnectionTool();
             tool.show();
         });
+        mainPanel.add(proxySettings, c);
 
         window.pack();
     }

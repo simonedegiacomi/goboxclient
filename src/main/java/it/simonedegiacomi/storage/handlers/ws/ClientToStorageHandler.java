@@ -6,7 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.goboxapi.authentication.Auth;
+import it.simonedegiacomi.goboxapi.authentication.GBAuth;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
@@ -17,7 +17,7 @@ import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
-import it.simonedegiacomi.sync.FileSystemWatcher;
+import it.simonedegiacomi.sync.fs.MyFileSystemWatcher;
 import org.apache.log4j.Logger;
 
 import javax.net.ssl.HttpsURLConnection;
@@ -54,12 +54,12 @@ public class ClientToStorageHandler implements WSQueryHandler {
     /**
      * Account to use with this storage
      */
-    private final Auth auth = config.getAuth();
+    private final GBAuth auth = config.getAuth();
 
     /**
      * Urls to use
      */
-    private final URLBuilder urls = config.getUrls();
+    private final URLBuilder urls = URLBuilder.DEFAULT;
 
     /**
      * GoBox files folder
@@ -74,7 +74,7 @@ public class ClientToStorageHandler implements WSQueryHandler {
     /**
      * File system watcher for the GoBox files ({@link #PATH} folder
      */
-    private final FileSystemWatcher watcher;
+    private final MyFileSystemWatcher watcher;
 
     /**
      * Database to store files information, sharing and events

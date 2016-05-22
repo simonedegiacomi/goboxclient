@@ -1,8 +1,7 @@
 package it.simonedegiacomi.configuration.loginui;
 
 import it.simonedegiacomi.configuration.Config;
-import it.simonedegiacomi.goboxapi.authentication.Auth;
-
+import it.simonedegiacomi.goboxapi.authentication.GBAuth;
 
 import java.io.IOException;
 
@@ -53,9 +52,9 @@ LoginModel implements LoginModelInterface {
 
     @Override
     public boolean check() throws IOException {
-        Auth test = new Auth();
+        GBAuth test = config.getAuth();
         test.setUsername(username);
-        test.setMode(useAsStorage ? Auth.Modality.STORAGE : Auth.Modality.CLIENT);
+        test.setMode(useAsStorage ? GBAuth.Modality.STORAGE : GBAuth.Modality.CLIENT);
         boolean logged = test.login(new String(password));
         if(logged)
             config.setAuth(test);

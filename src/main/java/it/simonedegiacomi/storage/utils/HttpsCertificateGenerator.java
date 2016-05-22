@@ -125,7 +125,7 @@ public class HttpsCertificateGenerator {
         // Create a new keystore
         keyStore = KeyStore.getInstance("JKS");
 
-        if (new File(config.getProperty("keyStoreFile")).exists()) {
+        if (new File(config.getProperty("keyStoreFile", "keystore.ks")).exists()) {
             try (FileInputStream in = new FileInputStream(new File(config.getProperty("keyStoreFile")))) {
                 keyStore.load(in, password);
             } catch (FileNotFoundException e) {

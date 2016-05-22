@@ -5,7 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.goboxapi.authentication.Auth;
+import it.simonedegiacomi.goboxapi.authentication.GBAuth;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
@@ -45,12 +45,12 @@ public class StorageToClientHandler implements WSQueryHandler {
     /**
      * Urls used to get the url to which make the request
      */
-    private final URLBuilder urls = config.getUrls();
+    private final URLBuilder urls = URLBuilder.DEFAULT;
 
     /**
      * Auth object used to authorize the http connection
      */
-    private final Auth auth = config.getAuth();
+    private final GBAuth auth = config.getAuth();
 
     /**
      * Path of the files folder on this machine
@@ -126,7 +126,7 @@ public class StorageToClientHandler implements WSQueryHandler {
             }
 
             // Create the url to upload the file
-            URL url = new URL(urls.getAsString("sendFileToClient") + "?downloadKey=" + jsonData.get("downloadKey").getAsString());
+            URL url = new URL(urls.get("sendFileToClient").toString() + "?downloadKey=" + jsonData.get("downloadKey").getAsString());
 
             // Create a connection from the url
             HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();

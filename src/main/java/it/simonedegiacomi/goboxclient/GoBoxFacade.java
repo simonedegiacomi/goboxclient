@@ -1,16 +1,18 @@
 package it.simonedegiacomi.goboxclient;
 
 import it.simonedegiacomi.configuration.Config;
-import it.simonedegiacomi.goboxapi.authentication.Auth;
-import it.simonedegiacomi.goboxapi.client.Client;
+import it.simonedegiacomi.goboxapi.authentication.GBAuth;
 import it.simonedegiacomi.goboxapi.client.ClientException;
-import it.simonedegiacomi.goboxapi.client.StandardClient;
+import it.simonedegiacomi.goboxapi.client.GBClient;
+import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import it.simonedegiacomi.storage.Storage;
 import it.simonedegiacomi.sync.Sync;
 import it.simonedegiacomi.sync.Work;
 import it.simonedegiacomi.utils.EasyProxy;
 import org.apache.log4j.Logger;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Set;
 
@@ -41,7 +43,7 @@ public class GoBoxFacade {
     /**
      * Client of the program instance
      */
-    private Client client;
+    private GBClient client;
 
     /**
      * Sync of the instance
@@ -81,7 +83,7 @@ public class GoBoxFacade {
      * Return the client used in this program instance
      * @return Instance of the client used in this program
      */
-    public Client getClient() {
+    public GBClient getClient() {
         return client;
     }
 
@@ -89,7 +91,7 @@ public class GoBoxFacade {
      * Set the client used in this program instance
      * @param client Used client
      */
-    public void setClient(Client client) {
+    public void setClient(GBClient client) {
         this.client = client;
     }
 
@@ -140,11 +142,7 @@ public class GoBoxFacade {
         Config.loadLoggerConfig();
 
         // Load the urls
-        config.loadUrls();
-
-        // Set the urls to the object that used this
-        Auth.setUrlBuilder(config.getUrls());
-        StandardClient.setUrlBuilder(config.getUrls());
+        URLBuilder.DEFAULT.init();
 
         // Load the other config (such as auth credentials)
         config.load();
@@ -157,7 +155,7 @@ public class GoBoxFacade {
      * Return a set with the current running sync work
      * @return Set of works
      */
-    public Set<Work> getRunningWorks () { return sync.getWorker().getCurrentWorks(); }
+    public Set<Work> getRunningWorks () { return sync.getWorkManager().getCurrentWorks(); }
 
     /**
      * Start or stop syncing
@@ -183,6 +181,6 @@ public class GoBoxFacade {
     }
 
     public boolean isStorageMode() {
-        return config.isAuthDefined() ? config.getAuth().getMode().equals(Auth.Modality.STORAGE) : false;
+        return config.isAuthDefined() ? config.getAuth().getMode().equals(GBAuth.Modality.STORAGE) : false;
     }
 }

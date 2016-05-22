@@ -15,7 +15,7 @@ import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
-import it.simonedegiacomi.sync.FileSystemWatcher;
+import it.simonedegiacomi.sync.fs.MyFileSystemWatcher;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
@@ -52,7 +52,7 @@ public class TrashHandler {
     /**
      * ile system watcher
      */
-    private final FileSystemWatcher watcher;
+    private final MyFileSystemWatcher watcher;
 
     /**
      * Database

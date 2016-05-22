@@ -1,6 +1,6 @@
 package it.simonedegiacomi.goboxclient.ui;
 
-import it.simonedegiacomi.goboxapi.client.Client;
+import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.sync.Work;
 import org.apache.log4j.Logger;
 
@@ -23,7 +23,7 @@ public class LogView implements View {
     }
 
     @Override
-    public void setClientState(Client.ClientState state) {
+    public void setClientState(GBClient.ClientState state) {
         log.info("Client state: " + state);
     }
 

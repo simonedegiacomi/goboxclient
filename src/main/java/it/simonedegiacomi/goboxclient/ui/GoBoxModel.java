@@ -1,6 +1,6 @@
 package it.simonedegiacomi.goboxclient.ui;
 
-import it.simonedegiacomi.goboxapi.client.Client;
+import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.goboxclient.GoBoxFacade;
 import it.simonedegiacomi.sync.Work;
 
@@ -27,7 +27,7 @@ public class GoBoxModel implements Model {
     }
 
     @Override
-    public Client.ClientState getClientState() {
+    public GBClient.ClientState getClientState() {
         return facade.getClient().getState();
     }
 
