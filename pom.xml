@@ -112,6 +112,12 @@
         </dependency>
 
         <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>javacpp</artifactId>
+            <version>1.1</version>
+        </dependency>
+
+        <dependency>
             <groupId>com.madgag</groupId>
             <artifactId>animated-gif-lib</artifactId>
             <version>1.2</version>
@@ -130,15 +136,27 @@
         </dependency>
 
         <dependency>
-            <groupId>com.github.simonedegiacomi</groupId>
-            <artifactId>goboxjavaapi</artifactId>
-            <version>90850ca91c</version>
+            <groupId>com.neovisionaries</groupId>
+            <artifactId>nv-websocket-client</artifactId>
+            <version>1.13</version>
         </dependency>
+
+        <!-- Jitpack goboxjavaapi -->
+        <!--<dependency>-->
+            <!--<groupId>com.github.simonedegiacomi</groupId>-->
+            <!--<artifactId>goboxjavaapi</artifactId>-->
+            <!--<version>89623450b6</version>-->
+        <!--</dependency>-->
+
+        <!-- Local goboxjavaapi -->
+
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>4.12</version>
             <scope>test</scope>
         </dependency>
+
+
     </dependencies>
 </project>
