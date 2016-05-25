@@ -14,6 +14,13 @@
                 <directory>src/main/resources</directory>
             </resource>
         </resources>
+
+        <testResources>
+            <testResource>
+                <directory>${basedir}/src/test/resources</directory>
+            </testResource>
+        </testResources>
+
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -24,6 +31,28 @@
                     <target>1.8</target>
                 </configuration>
             </plugin>
+
+            <!-- Exclude integration test in install task (run only unit tests) -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>2.11</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.apache.maven.surefire</groupId>
+                        <artifactId>surefire-junit47</artifactId>
+                        <version>2.12</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <includes>
+                        <include>**/*.class</include>
+                    </includes>
+                    <excludedGroups>it.simonedegiacomi.IntegrationTest</excludedGroups>
+                </configuration>
+            </plugin>
+
+            <!-- Source -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
@@ -37,6 +66,7 @@
                 </executions>
             </plugin>
 
+            <!-- Javadoc -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
@@ -149,6 +179,11 @@
         <!--</dependency>-->
 
         <!-- Local goboxjavaapi -->
+        <dependency>
+            <groupId>it.simonedegiacomi.goboxjavaapi</groupId>
+            <artifactId>goboxjavaapi</artifactId>
+            <version>0.1.9.3</version>
+        </dependency>
 
         <dependency>
             <groupId>junit</groupId>
