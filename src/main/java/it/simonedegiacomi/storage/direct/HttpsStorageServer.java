@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
+import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
@@ -173,5 +174,9 @@ public class HttpsStorageServer {
         if (server != null)
             server.stop(0);
         temporaryTokens.clear();
+    }
+
+    public void addHandler (String method, String name, HttpHandler handler) {
+        server.createContext(name, handler);
     }
 }

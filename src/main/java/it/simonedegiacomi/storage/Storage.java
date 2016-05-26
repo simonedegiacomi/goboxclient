@@ -2,21 +2,33 @@ package it.simonedegiacomi.storage;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.xml.internal.ws.api.Component;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.authentication.GBAuth;
 import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.goboxapi.myws.MyWSClient;
 import it.simonedegiacomi.goboxapi.myws.WSException;
 import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
+import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import it.simonedegiacomi.storage.components.AttachFailException;
+import it.simonedegiacomi.storage.components.ComponentConfig;
+import it.simonedegiacomi.storage.components.GBComponent;
+import it.simonedegiacomi.storage.components.HttpRequest;
 import it.simonedegiacomi.storage.direct.HttpsStorageServer;
 import it.simonedegiacomi.storage.direct.UDPStorageServer;
 import it.simonedegiacomi.storage.handlers.ws.*;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.util.HashSet;
+import java.util.ServiceLoader;
+import java.util.Set;
 
 /**
  * Storage works like a server, saving the incoming file from the other clients
@@ -65,6 +77,10 @@ public class Storage {
     private MyWSClient mainServer;
 
     private DisconnectedListener disconnectedListener;
+
+    private final Set<GBComponent> components = new HashSet<>();
+
+    private final HttpsStorageServer httpServer;
 
     public Storage (GBAuth auth) throws StorageException {
         this(auth, new StorageEnvironment());
@@ -167,15 +183,95 @@ public class Storage {
         if(env.getHttpsServer() != null)
             env.getHttpsServer().serve();
 
+
+        loadComponents();
+
+
         // Assign event handler from the ws client
-        assignEvent();
+        //assignEvent();
 
         log.info("Storage started");
+    }
+
+
+    private void loadComponents () {
+
+        // Create the service loader
+        ServiceLoader<GBComponent> loader = ServiceLoader.load(GBComponent.class);
+
+        // Array of parameters of the handlers
+        Class[] wsQueryHandlerParams = { JsonElement.class };
+        Class[] httpHandlerParams = { HttpExchange.class };
+
+        // Iterate each component
+        for (GBComponent component : loader) {
+
+            // Get the class of the component
+            Class componentClass = component.getClass();
+
+            // Get all the methods of the class
+            Method[] methods = componentClass.getMethods();
+
+            // Analyze every method
+            for (Method method : methods) {
+
+                // Check if this method is a query listener
+                if (method.getParameters().equals(wsQueryHandlerParams)) {
+
+                    // Find the query name
+                    WSQuery annotation = method.getAnnotation(WSQuery.class);
+
+                    // Attach the query handler
+                    mainServer.onQuery(annotation.name(), (data) -> {
+                        try {
+                            method.invoke(data);
+                        } catch (IllegalAccessException ex) {
+                            log.warn("Method in GBComponent with wrong access restriction", ex);
+                        } catch (InvocationTargetException e) {
+                            log.warn("GBComponent method invocation exception", ex);
+                        }
+                    });
+
+                    continue;
+                }
+
+                // check if this method is a http handler
+                if (method.getParameters().equals(httpHandlerParams)) {
+
+                    // Find the http method and name
+                    HttpRequest annotation = method.getAnnotation(HttpRequest.class);
+
+                    httpServer.addHandler(annotation.method(), annotation.name(), (httpExchange) -> {
+                        try {
+                            return method.invoke(httpExchange);
+                        } catch (IllegalAccessException ex) {
+                            log.warn("Method in GBComponent with wrong access restriction", ex);
+                        } catch (InvocationTargetException e) {
+                            log.warn("GBComponent method invocation exception", ex);
+                        }
+                    });
+                }
+            }
+
+            // Call the attach method
+            try {
+                component.onAttach(env, new ComponentConfig(config));
+
+                // Add the component to the components list
+                components.add(component);
+            } catch (AttachFailException ex) {
+                log.warn("Method attaching failed", ex);
+
+                // TODO: implement handlers removal
+            }
+        }
+
     }
 
     /**
      * Assign the events listener for the incoming events and incoming query from the main
      * server and the other clients trough handlers sockets.
+     * @deprecated
      */
     private void assignEvent () {
 

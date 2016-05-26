@@ -1,10 +1,13 @@
 package it.simonedegiacomi.storage;
 
+import com.j256.ormlite.support.ConnectionSource;
 import it.simonedegiacomi.storage.direct.HttpsStorageServer;
 import it.simonedegiacomi.storage.direct.UDPStorageServer;
 import it.simonedegiacomi.sync.Sync;
 
 public class StorageEnvironment {
+
+    private ConnectionSource dbConnection;
 
     private StorageDB db;
 
@@ -20,10 +23,24 @@ public class StorageEnvironment {
 
     private Sync sync;
 
+    /**
+     * @deprecated
+     */
     public StorageDB getDB() {
         return db;
     }
 
+    public ConnectionSource getDbConnection() {
+        return dbConnection;
+    }
+
+    public void setDbConnection(ConnectionSource dbConnection) {
+        this.dbConnection = dbConnection;
+    }
+
+    /**
+     * @deprecated
+     */
     public void setDB(StorageDB db) {
         this.db = db;
     }
@@ -36,6 +53,9 @@ public class StorageEnvironment {
         this.storage = storage;
     }
 
+    /**
+     * @deprecated
+     */
     public UDPStorageServer getUdpServer() {
         return udpServer;
     }
@@ -44,10 +64,16 @@ public class StorageEnvironment {
         this.udpServer = udpServer;
     }
 
+    /**
+     * @deprecated
+     */
     public HttpsStorageServer getHttpsServer() {
         return httpsServer;
     }
 
+    /**
+     * @deprecated
+     */
     public void setHttpsServer(HttpsStorageServer httpsServer) {
         this.httpsServer = httpsServer;
     }
