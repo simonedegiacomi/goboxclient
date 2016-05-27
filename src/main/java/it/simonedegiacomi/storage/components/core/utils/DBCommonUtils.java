@@ -1,6 +1,7 @@
 package it.simonedegiacomi.storage.components.core.utils;
 
 import com.j256.ormlite.dao.Dao;
+import com.j256.ormlite.stmt.QueryBuilder;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.Sharing;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
@@ -115,25 +116,17 @@ public class DBCommonUtils {
      * @param table Database table
      * @param fatherID Father id
      * @param childName Child name
-     * @return Foudn file, nul if the file doesn't exists
+     * @return Found file, nul if the file doesn't exists
      * @throws SQLException exception while querying the database
      */
     public static GBFile getFileByFatherAndName (Dao<GBFile, Long> table, long fatherID, String childName) throws SQLException {
 
-        // Find the father
-        GBFile father = getFileById(table, fatherID);
-
-        if (father == null) {
-            return null;
-        }
-
-        for (GBFile child : father.getChildren()) {
-            if (child.getName().equals(childName)) {
-                return table.queryForId(child.getID());
-            }
-        }
-
-        return null;
+        return table.queryBuilder()
+                .where()
+                .eq("father_ID", fatherID)
+                .and()
+                .eq("name", childName)
+                .queryForFirst();
     }
 
     /**
@@ -228,5 +221,33 @@ public class DBCommonUtils {
 
         // and set the path to the file
         dbFile.setPathByList(path);
+    }
+
+    /**
+     * Query the database and return a list of files that match the request.
+     * @param table Database table
+     * @param keyword Keyword of the name of the file
+     * @param kind The mime of the file
+     * @param from This is equals to the sql 'limit by'. Is the index of the file of the complete result list
+     *             from which the returned list starts
+     * @param n This indicate how long can the list be
+     * @return The list of the files. Empty (but not null) if any file match the request
+     * @throws StorageException Database connection or query exception
+     */
+    public static List<GBFile> search(Dao<GBFile, Long> table, String keyword, String kind, long from, long n) throws SQLException {
+
+        // Build the query
+        QueryBuilder<GBFile, Long> stmt = table.queryBuilder();
+
+        stmt.where()
+                .like("name", '%' + keyword + '%')
+                .and()
+                .like("mime", '%' + kind + '%');
+        if(from > 0)
+            stmt.offset(from);
+        if(n > 0)
+            stmt.limit(n);
+
+        return stmt.query();
     }
 }

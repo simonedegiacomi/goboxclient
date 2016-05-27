@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
+import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
@@ -99,7 +100,14 @@ public class HttpsStorageServer {
         }
 
         // Add login handler
-        server.createContext("/directLogin", new DirectLoginHandler(temporaryTokens));
+        server.createContext("/directLogin", corsMiddleware.wrap(new DirectLoginHandler(temporaryTokens)));
+
+        // and a test handler
+        server.createContext("/test", httpExchange -> {
+            httpExchange.sendResponseHeaders(200, 0);
+            httpExchange.getResponseBody().write("<h1>It works!</h1>".getBytes());
+            httpExchange.close();
+        });
     }
 
     public WSQueryHandler getWSQueryHandler () {

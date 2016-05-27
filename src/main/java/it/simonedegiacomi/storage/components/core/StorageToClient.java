@@ -1,17 +1,17 @@
 package it.simonedegiacomi.storage.components.core;
 
 import com.google.common.collect.Range;
-import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.j256.ormlite.dao.Dao;
 import com.j256.ormlite.dao.DaoManager;
+import com.sun.net.httpserver.Headers;
+import com.sun.net.httpserver.HttpExchange;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.Sharing;
 import it.simonedegiacomi.goboxapi.authentication.GBAuth;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
-import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import it.simonedegiacomi.storage.EventEmitter;
 import it.simonedegiacomi.storage.StorageEnvironment;
@@ -20,17 +20,16 @@ import it.simonedegiacomi.storage.components.ComponentConfig;
 import it.simonedegiacomi.storage.components.GBComponent;
 import it.simonedegiacomi.storage.components.HttpRequest;
 import it.simonedegiacomi.storage.components.core.utils.DBCommonUtils;
-import it.simonedegiacomi.storage.components.core.utils.sender.HttpUrlConnectionDestination;
-import it.simonedegiacomi.storage.components.core.utils.sender.Sender;
-import it.simonedegiacomi.storage.components.core.utils.sender.SenderDestination;
+import it.simonedegiacomi.storage.components.core.utils.sender.*;
 import it.simonedegiacomi.storage.utils.MyRange;
+import it.simonedegiacomi.utils.MyHttpExchangeUtils;
 import org.apache.log4j.Logger;
 
 import javax.net.ssl.HttpsURLConnection;
-import javax.xml.ws.spi.http.HttpExchange;
 import java.io.IOException;
 import java.net.URL;
 import java.sql.SQLException;
+import java.util.Map;
 
 /**
  * This component sends a file received from bridge client to the storage
@@ -49,11 +48,6 @@ public class StorageToClient implements GBComponent {
      * Url builder
      */
     private final URLBuilder urls = URLBuilder.DEFAULT;
-
-    /**
-     * Gson
-     */
-    private final Gson gson = MyGsonBuilder.create();
 
     /**
      * File and folder sender
@@ -181,32 +175,19 @@ public class StorageToClient implements GBComponent {
             // Create the destination object
             SenderDestination dst = new HttpUrlConnectionDestination(conn);
 
-            if (dbFile.isDirectory()) {
-
-                // find the children
-                DBCommonUtils.findChildren(fileTable, dbFile);
-
-                // Then send the folder
-                sender.sendDirectory(dbFile, dst);
-            } else if (thumbnail) {
-                sender.sendPreview(dbFile, dst);
-            } else {
-                // Check if the client has specified the range
-                if(request.has("range") && request.get("range").getAsString().length() > 0) {
-
-                    // Parse the range from the string
-                    Range range = MyRange.parse(request.get("range").getAsString());
-
-                    sender.sendFile(dbFile, dst, range);
-                } else {
-
-                    // Just send the file
-                    sender.sendFile(dbFile, dst);
-                }
+            // Create and fill the send action
+            SendAction action = new SendAction();
+            action.setFileToSend(dbFile);
+            action.setThumbnail(thumbnail);
+            if(request.has("range") && request.get("range").getAsString().length() > 0) {
+                action.setRange(MyRange.parse(request.get("range").getAsString()));
             }
 
+            // Send the file
+            sender.send(action, dst);
+
             // Get the response
-            if (conn.getResponseCode() != 200 ) {
+            if (conn.getResponseCode() != 200) {
                 log.warn("File transfer from storage to client failed: " + conn.getResponseMessage());
                 response.addProperty("success", false);
                 response.addProperty("httpCode", 500);
@@ -243,8 +224,68 @@ public class StorageToClient implements GBComponent {
         return response;
     }
 
-    @HttpRequest(name = "", method = "GET")
-    public void onDirectDownloadRequest (HttpExchange req) {
+    @HttpRequest(name = "/fromStorage")
+    public void onDirectDownloadRequest (HttpExchange req) throws IOException {
 
+        log.info("New direct download request");
+
+        // Get the url query params
+        Map<String, String> params = MyHttpExchangeUtils.getQueryParams(req.getRequestURI());
+        Headers headers = req.getRequestHeaders();
+
+        // Id of the file
+        long fileId = Long.parseLong(params.get("ID"));
+
+        // Check if the client want a preview
+        boolean thumbnail = params.containsKey("preview") && Boolean.parseBoolean(params.get("preview"));
+
+        try {
+
+            // Check if the file exists
+            GBFile file = DBCommonUtils.getFileById(fileTable, fileId);
+
+            if (file == null) {
+                log.info("Requested file not found");
+                req.sendResponseHeaders(404, 0);
+                req.close();
+            }
+
+            // Find the path
+            DBCommonUtils.findPath(fileTable, file);
+            file.setPrefix(PATH);
+
+            // Create the sender destination
+            SenderDestination dst = new HttpExchangeDestination(req);
+
+            // Create and fill the send action
+            SendAction action = new SendAction();
+            action.setFileToSend(file);
+            action.setThumbnail(thumbnail);
+
+            // Check if the range is specified
+            if (headers.containsKey("Range")) {
+
+                // Parse and set the range
+                action.setRange(MyRange.parse(headers.getFirst("Range")));
+            }
+
+            // Send the file
+            sender.send(action, dst);
+
+            // Close the connection
+            req.close();
+
+            log.info("File send to the client");
+
+            // Register action
+            SyncEvent open = new SyncEvent(SyncEvent.EventKind.FILE_OPENED, file);
+            eventTable.create(open);
+
+        } catch (SQLException ex) {
+            log.warn(ex.toString(), ex);
+            req.sendResponseHeaders(500, 0);
+            req.getResponseBody().write(ex.toString().getBytes());
+            req.close();
+        }
     }
 }

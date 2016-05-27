@@ -1,2 +1,5 @@
 it.simonedegiacomi.storage.components.core.StorageToClient
+it.simonedegiacomi.storage.components.core.ClientToStorage
 it.simonedegiacomi.storage.components.core.FileInfo
+it.simonedegiacomi.storage.components.core.CreateFolder
+it.simonedegiacomi.storage.components.core.Search

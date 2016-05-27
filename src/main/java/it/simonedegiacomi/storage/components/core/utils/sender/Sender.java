@@ -27,12 +27,35 @@ public class Sender {
     private Previewer previewer = new CachedPreviewer();
 
     /**
+     * Send the file using the specific action
+     * @param action Action
+     * @param dst Destination
+     * @throws IOException
+     */
+    public void send (SendAction action, SenderDestination dst) throws IOException {
+
+        // Check if it's a folder
+        if (action.getFileToSend().isDirectory()) {
+            sendDirectory(action.getFileToSend(), dst);
+            return;
+        }
+
+        // Check if it's a thumbnail
+        if (action.isThumbnail()) {
+            sendThumbnail(action.getFileToSend(), dst);
+            return;
+        }
+
+        // Just send the file
+        sendFile(action.getFileToSend(), dst, action.getRange());
+    }
+
+    /**
      * Send the zipped version of a directory.
      * NOTE that this method doesn't close the connection stream
      * @param file Directory to send
      * @param dst Connection which body will be filled with the zipped folder
-     * @throws IOException Exception while zipping the folder or writing to the
-     *  connection ouput stream
+     * @throws IOException Exception while zipping the folder or writing to the connection output stream
      */
     public void sendDirectory (GBFile file, SenderDestination dst) throws IOException {
 
@@ -47,13 +70,13 @@ public class Sender {
     }
 
     /**
-     *
+     * Send a thumbnail of the file
      * NOTE that this method doesn't close the connection stream
-     * @param file
-     * @param dst
-     * @throws IOException
+     * @param file File to which send the thumbnail
+     * @param dst Destination
+     * @throws IOException Error while sending the thumbnail
      */
-    public void sendPreview (GBFile file, SenderDestination dst) throws IOException {
+    public void sendThumbnail(GBFile file, SenderDestination dst) throws IOException {
 
         // Check if the previewer can handle this file
         if(!previewer.canHandle(file))

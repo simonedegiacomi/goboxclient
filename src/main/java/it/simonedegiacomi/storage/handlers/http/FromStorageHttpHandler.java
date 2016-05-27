@@ -76,7 +76,7 @@ public class FromStorageHttpHandler implements HttpHandler {
                 sender.sendDirectory(gbFile, dst);
             } else if (preview) {
 
-                sender.sendPreview(gbFile, dst);
+                sender.sendThumbnail(gbFile, dst);
             } else {
 
                 Headers headers = httpExchange.getRequestHeaders();

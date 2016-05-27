@@ -132,6 +132,7 @@ public class Storage {
 
         // Create the https server
         httpServer = new HttpsStorageServer(address);
+        mainServer.addQueryHandler(httpServer.getWSQueryHandler());
 
         // Create a new internal client and set it in the environment
         env.setInternalClient(new InternalClient(env));
@@ -252,6 +253,10 @@ public class Storage {
      * Stop the storage
      */
     public void shutdown () {
+
+        // Detach all the components
+        components.forEach(GBComponent::onDetach);
+
         httpServer.shutdown();
 
         // Disconnect from the main server
