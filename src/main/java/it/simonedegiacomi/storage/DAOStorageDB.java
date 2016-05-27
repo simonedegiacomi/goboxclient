@@ -27,6 +27,7 @@ import java.util.List;
  *
  * Created on 23/12/2015
  * @author Degiacomi Simone
+ * @deprecated
  */
 public class DAOStorageDB extends StorageDB {
 
@@ -66,20 +67,15 @@ public class DAOStorageDB extends StorageDB {
      * @throws Exception Exception in case there are some problem with the connection or with the
      * initialization. If any exception are trowed, the object shouldn't be used
      */
-    public DAOStorageDB(String path) throws StorageException {
-
-        // assert that the path is valid
-        if (path == null || path.length() <= 0)
-            throw new InvalidParameterException("Invalid path string");
-
+    public DAOStorageDB(ConnectionSource conn) throws StorageException {
         try {
 
             // Connect to the database
-            connectionSource = new JdbcConnectionSource("jdbc:h2:" + path);
+            connectionSource = conn;
 
             // Get a connection for the raw queries
-            db = ((JdbcDatabaseConnection) connectionSource.getReadWriteConnection()).getInternalConnection();
-            db.setAutoCommit(true);
+            //db = ((JdbcDatabaseConnection) connectionSource.getReadWriteConnection()).getInternalConnection();
+            //db.setAutoCommit(true);
 
             // Create the DAO object. I'll use this object to simplify the insertion of the GBFiles
             fileTable = DaoManager.createDao(connectionSource, GBFile.class);

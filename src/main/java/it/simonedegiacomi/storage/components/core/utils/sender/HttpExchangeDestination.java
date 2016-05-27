@@ -1,4 +1,4 @@
-package it.simonedegiacomi.storage.sender;
+package it.simonedegiacomi.storage.components.core.utils.sender;
 
 import com.sun.net.httpserver.HttpExchange;
 

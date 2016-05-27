@@ -4,9 +4,11 @@ import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.configuration.LoginTool;
 import it.simonedegiacomi.goboxapi.authentication.GBAuth;
 import it.simonedegiacomi.goboxapi.client.ClientException;
+import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.goboxapi.client.StandardGBClient;
 import it.simonedegiacomi.goboxclient.ui.*;
 import it.simonedegiacomi.storage.Storage;
+import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
 import it.simonedegiacomi.sync.Sync;
 import it.simonedegiacomi.sync.fs.MyFileSystemWatcher;
@@ -15,6 +17,7 @@ import org.apache.log4j.Logger;
 
 import java.awt.*;
 import java.io.IOException;
+import java.sql.SQLException;
 
 /**
  * This class load the config, let the user log in and start the client, the sync and the storage
@@ -216,17 +219,26 @@ public class Main {
 
         try {
 
+            // Create a new storage environment
+            StorageEnvironment env = new StorageEnvironment();
+
+            // Create the file system watcher
+            MyFileSystemWatcher fsWatcher = MyFileSystemWatcher.getDefault(config.getProperty("path", "files/"));
+            env.setFileSystemWatcher(fsWatcher);
+
             // Create the storage
-            Storage storage = new Storage(auth);
-            facade.setStorage(storage);
-            facade.setClient(storage.getInternalClient());
+            Storage storage = new Storage(auth, env);
+
+            // Get the internal client
+            GBClient client = env.getInternalClient();
 
             // Create the sync object
-            Sync sync = new Sync(storage.getInternalClient(), MyFileSystemWatcher.getDefault(config.getProperty("path", "files/")));
-            facade.setSync(sync);
+            Sync sync = new Sync(client, fsWatcher);
 
-            // Set the sync object to the storage environment
-            storage.getEnvironment().setSync(sync);
+            // Update facade
+            facade.setStorage(storage);
+            facade.setClient(client);
+            facade.setSync(sync);
 
             // Add a listener for the storage disconnection
             storage.onDisconnected(() -> {
@@ -248,6 +260,9 @@ public class Main {
             logger.warn(e);
             disconnected();
         } catch (IOException e) {
+            logger.warn(e);
+            disconnected();
+        } catch (SQLException e) {
             logger.warn(e);
             disconnected();
         }

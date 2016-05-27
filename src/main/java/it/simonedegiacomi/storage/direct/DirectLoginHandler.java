@@ -1,4 +1,4 @@
-package it.simonedegiacomi.storage.handlers.http;
+package it.simonedegiacomi.storage.direct;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;

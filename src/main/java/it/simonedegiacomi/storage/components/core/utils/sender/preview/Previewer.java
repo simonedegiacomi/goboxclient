@@ -1,4 +1,4 @@
-package it.simonedegiacomi.storage.sender.preview;
+package it.simonedegiacomi.storage.components.core.utils.sender.preview;
 
 import it.simonedegiacomi.goboxapi.GBFile;
 

@@ -10,6 +10,7 @@ import java.util.List;
  * Interface of the database used by the storage
  * Created on 22/04/16.
  * @author Degiacomi Simone
+ * @deprecated
  */
 public abstract class StorageDB {
 

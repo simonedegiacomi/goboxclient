@@ -7,9 +7,9 @@ import com.sun.net.httpserver.HttpHandler;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.storage.StorageDB;
-import it.simonedegiacomi.storage.sender.HttpExchangeDestination;
-import it.simonedegiacomi.storage.sender.Sender;
-import it.simonedegiacomi.storage.sender.SenderDestination;
+import it.simonedegiacomi.storage.components.core.utils.sender.HttpExchangeDestination;
+import it.simonedegiacomi.storage.components.core.utils.sender.Sender;
+import it.simonedegiacomi.storage.components.core.utils.sender.SenderDestination;
 import it.simonedegiacomi.storage.utils.MyRange;
 import it.simonedegiacomi.utils.MyHttpExchangeUtils;
 
@@ -20,6 +20,7 @@ import java.util.Map;
  * Handler that send to the client (connected in direct mode) the files
  * @author Degiacomi Simone
  * Created on 22/02/16.
+ * @deprecated
  */
 public class FromStorageHttpHandler implements HttpHandler {
 

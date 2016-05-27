@@ -1,7 +1,7 @@
-package it.simonedegiacomi.storage.sender.preview;
+package it.simonedegiacomi.storage.components.core.utils.sender.preview;
 
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.storage.sender.preview.annotations.PreviewerKind;
+import it.simonedegiacomi.storage.components.core.utils.sender.preview.annotations.PreviewerKind;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
 

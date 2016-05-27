@@ -1,4 +1,4 @@
-package it.simonedegiacomi.storage.sender.preview;
+package it.simonedegiacomi.storage.components.core.utils.sender.preview;
 
 import com.google.common.io.Files;
 import it.simonedegiacomi.configuration.Config;

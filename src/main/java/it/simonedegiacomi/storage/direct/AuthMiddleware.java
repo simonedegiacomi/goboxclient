@@ -1,4 +1,4 @@
-package it.simonedegiacomi.storage.handlers.http;
+package it.simonedegiacomi.storage.direct;
 
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;

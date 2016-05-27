@@ -8,6 +8,7 @@ import java.io.IOException;
 /**
  * Created on 15/04/16.
  * @author Degiacomi Simone
+ * @deprecated
  */
 public class TestHandler implements HttpHandler {
 

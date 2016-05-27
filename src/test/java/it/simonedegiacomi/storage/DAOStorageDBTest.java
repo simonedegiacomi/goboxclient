@@ -21,7 +21,7 @@ public class DAOStorageDBTest {
 
     @Before
     public void setUp() throws StorageException {
-        storageDB = new DAOStorageDB("./config/testdb");
+        //storageDB = new DAOStorageDB("./config/testdb");
     }
 
     @After

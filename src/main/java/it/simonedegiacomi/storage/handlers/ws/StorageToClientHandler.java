@@ -12,9 +12,9 @@ import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
-import it.simonedegiacomi.storage.sender.HttpUrlConnectionDestination;
-import it.simonedegiacomi.storage.sender.Sender;
-import it.simonedegiacomi.storage.sender.SenderDestination;
+import it.simonedegiacomi.storage.components.core.utils.sender.HttpUrlConnectionDestination;
+import it.simonedegiacomi.storage.components.core.utils.sender.Sender;
+import it.simonedegiacomi.storage.components.core.utils.sender.SenderDestination;
 import it.simonedegiacomi.storage.utils.MyRange;
 import org.apache.log4j.Logger;
 
@@ -28,6 +28,7 @@ import java.security.InvalidParameterException;
  *
  * @author Degiacomi Simone
  * Created on 07/02/16.
+ * @deprecated
  */
 public class StorageToClientHandler implements WSQueryHandler {
 
@@ -138,8 +139,9 @@ public class StorageToClientHandler implements WSQueryHandler {
             // Authorize the connection
             auth.authorize(conn);
 
-            // Create the dst object
+            // Create the destination object
             SenderDestination dst = new HttpUrlConnectionDestination(conn);
+
 
             // Send the file in the right way
             if(dbFile.isDirectory()) { // If it's a directory

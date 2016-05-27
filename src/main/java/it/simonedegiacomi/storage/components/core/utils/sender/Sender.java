@@ -1,10 +1,10 @@
-package it.simonedegiacomi.storage.sender;
+package it.simonedegiacomi.storage.components.core.utils.sender;
 
 import com.google.common.collect.Range;
 import com.google.common.io.ByteStreams;
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.storage.sender.preview.CachedPreviewer;
-import it.simonedegiacomi.storage.sender.preview.Previewer;
+import it.simonedegiacomi.storage.components.core.utils.sender.preview.CachedPreviewer;
+import it.simonedegiacomi.storage.components.core.utils.sender.preview.Previewer;
 import it.simonedegiacomi.storage.utils.MyZip;
 import org.h2.store.LimitInputStream;
 

@@ -1,6 +1,7 @@
 package it.simonedegiacomi.configuration.loginui;
 
 import it.simonedegiacomi.configuration.Config;
+import it.simonedegiacomi.utils.EasyProxy;
 
 import javax.swing.*;
 import java.awt.event.ActionEvent;
@@ -84,6 +85,8 @@ public class GUIConnectionTool {
 
 
         visible = false;
+
+        EasyProxy.manageProxy(config);
     }
 
     private static void updateFromConfig () {

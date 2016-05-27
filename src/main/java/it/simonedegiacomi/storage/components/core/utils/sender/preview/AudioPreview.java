@@ -1,4 +1,4 @@
-package it.simonedegiacomi.storage.sender.preview;
+package it.simonedegiacomi.storage.components.core.utils.sender.preview;
 
 import com.google.common.io.ByteStreams;
 import com.mpatric.mp3agic.ID3v2;
@@ -6,7 +6,7 @@ import com.mpatric.mp3agic.InvalidDataException;
 import com.mpatric.mp3agic.Mp3File;
 import com.mpatric.mp3agic.UnsupportedTagException;
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.storage.sender.preview.annotations.PreviewerKind;
+import it.simonedegiacomi.storage.components.core.utils.sender.preview.annotations.PreviewerKind;
 
 import java.io.IOException;
 import java.io.OutputStream;

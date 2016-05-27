@@ -1,8 +1,8 @@
-package it.simonedegiacomi.storage.sender.preview;
+package it.simonedegiacomi.storage.components.core.utils.sender.preview;
 
 import com.madgag.gif.fmsware.AnimatedGifEncoder;
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.storage.sender.preview.annotations.PreviewerKind;
+import it.simonedegiacomi.storage.components.core.utils.sender.preview.annotations.PreviewerKind;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.FrameGrabber;
 import org.bytedeco.javacv.Java2DFrameConverter;

@@ -24,6 +24,7 @@ import java.util.Map;
 /**
  * @author Degiacomi Simone
  * Created on 22/02/16.
+ * @deprecated
  */
 public class ToStorageHttpHandler implements HttpHandler {
 

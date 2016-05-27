@@ -12,7 +12,6 @@ import it.simonedegiacomi.storage.EventEmitter;
 import it.simonedegiacomi.storage.StorageDB;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.StorageException;
-import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.Sync;
 import org.apache.log4j.Logger;
 
