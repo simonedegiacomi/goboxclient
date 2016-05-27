@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import com.j256.ormlite.dao.Dao;
 import com.j256.ormlite.dao.DaoManager;
 import it.simonedegiacomi.goboxapi.GBFile;
+import it.simonedegiacomi.goboxapi.Sharing;
 import it.simonedegiacomi.goboxapi.authentication.GBAuth;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
@@ -28,6 +29,7 @@ import org.apache.log4j.Logger;
 import javax.net.ssl.HttpsURLConnection;
 import javax.xml.ws.spi.http.HttpExchange;
 import java.io.IOException;
+import java.net.URL;
 import java.sql.SQLException;
 
 /**
@@ -79,6 +81,11 @@ public class StorageToClient implements GBComponent {
     private Dao<SyncEvent, Long> eventTable;
 
     /**
+     * Database sharing table
+     */
+    private Dao<Sharing, Long> shareTable;
+
+    /**
      * Event emitter
      */
     private EventEmitter eventEmitter;
@@ -91,6 +98,7 @@ public class StorageToClient implements GBComponent {
         try {
             fileTable = DaoManager.createDao(env.getDbConnection(), GBFile.class);
             eventTable = DaoManager.createDao(env.getDbConnection(), SyncEvent.class);
+            shareTable = DaoManager.createDao(env.getDbConnection(), Sharing.class);
         } catch (SQLException ex) {
             log.warn(ex.toString(), ex);
             throw new AttachFailException("Unable to create dao");
@@ -106,7 +114,7 @@ public class StorageToClient implements GBComponent {
      * This method is called when a new download request is made by a client in bridge mode
      * @param data
      */
-    @WSQuery(name = "comeToGetTheFile")
+    @WSQuery(name = "sendMeTheFile")
     public JsonElement onBridgeDownloadRequest (JsonElement data) {
 
         log.info("New download bridge request");
@@ -115,7 +123,8 @@ public class StorageToClient implements GBComponent {
         JsonObject response = new JsonObject();
 
         // Assert that the request is valid
-        if (!request.has("uploadKey") || !request.has("id")) {
+        if (!request.has("downloadKey") || !request.has("ID")) {
+            log.warn("Client request miss parameters");
             response.addProperty("success", false);
             response.addProperty("error", "missing parameters");
             response.addProperty("httpCode", 400);
@@ -123,29 +132,44 @@ public class StorageToClient implements GBComponent {
         }
 
         boolean thumbnail = request.has("preview") && request.get("preview").getAsBoolean();
-
-        // Create the file representation
-        GBFile file = gson.fromJson(data, GBFile.class);
+        boolean authorized = request.has("authorized") && request.get("authorized").getAsBoolean();
 
         try {
 
             // Check in the database if the file exists
-            GBFile dbFile = DBCommonUtils.getFile(fileTable, file);
+            GBFile dbFile = DBCommonUtils.getFileById(fileTable, request.get("ID").getAsLong());
 
+            // Check if the file exists
             if (dbFile == null) {
+                log.warn("File not found");
                 response.addProperty("success", false);
                 response.addProperty("error", "File not found");
                 response.addProperty("success", 404);
                 return response;
             }
 
+            // Check if the client is authorized to access the file
+            if (!authorized && !DBCommonUtils.isFileSharedByFileId(shareTable, dbFile.getID())) {
+                log.info("Unauthorized download");
+                response.addProperty("success", false);
+                response.addProperty("error", "Unauthorized");
+                response.addProperty("httpCode", 401);
+                return response;
+            }
+
+            // Find the path
+            DBCommonUtils.findPath(fileTable, dbFile);
+
             // Set the environment path
             dbFile.setPrefix(PATH);
 
             // Create a connection from the url with the upload key as parameter
-            JsonObject params = new JsonObject();
-            params.addProperty("uploadKey", request.get("uploadKey").getAsString());
-            HttpsURLConnection conn = (HttpsURLConnection) urls.get("sendFileToClient", params).openConnection();
+
+            // TODO: Fix url parameters builder
+            //JsonObject params = new JsonObject();
+            //params.addProperty("downloadKey", request.get("downloadKey").getAsString());
+            //HttpsURLConnection conn = (HttpsURLConnection) urls.get("sendFileToClient", params).openConnection();
+            HttpsURLConnection conn = (HttpsURLConnection) new URL(urls.get("sendFileToClient").toString() + "?downloadKey=" + request.get("downloadKey").getAsString()).openConnection();
 
             // Configure the connection
             conn.setDoOutput(true);
@@ -157,10 +181,15 @@ public class StorageToClient implements GBComponent {
             // Create the destination object
             SenderDestination dst = new HttpUrlConnectionDestination(conn);
 
-            if (file.isDirectory()) {
-                sender.sendDirectory(file, dst);
+            if (dbFile.isDirectory()) {
+
+                // find the children
+                DBCommonUtils.findChildren(fileTable, dbFile);
+
+                // Then send the folder
+                sender.sendDirectory(dbFile, dst);
             } else if (thumbnail) {
-                sender.sendPreview(file, dst);
+                sender.sendPreview(dbFile, dst);
             } else {
                 // Check if the client has specified the range
                 if(request.has("range") && request.get("range").getAsString().length() > 0) {
@@ -176,6 +205,23 @@ public class StorageToClient implements GBComponent {
                 }
             }
 
+            // Get the response
+            if (conn.getResponseCode() != 200 ) {
+                log.warn("File transfer from storage to client failed: " + conn.getResponseMessage());
+                response.addProperty("success", false);
+                response.addProperty("httpCode", 500);
+                response.addProperty("error", conn.getResponseMessage());
+
+                // Close the connection
+                conn.disconnect();
+                return response;
+            }
+
+            log.info("File sent to the client");
+
+            // Close the connection
+            conn.disconnect();
+
             /// Create the view event
             if (!thumbnail) {
                 SyncEvent view = new SyncEvent(SyncEvent.EventKind.FILE_OPENED, dbFile);
@@ -183,7 +229,8 @@ public class StorageToClient implements GBComponent {
                 eventTable.create(view);
             }
 
-
+            // Complete the response
+            response.addProperty("success", true);
         } catch (SQLException ex) {
             log.warn(ex.toString(), ex);
             response.addProperty("success", false);
@@ -193,7 +240,6 @@ public class StorageToClient implements GBComponent {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        response.addProperty("success", true);
         return response;
     }
 

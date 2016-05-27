@@ -212,7 +212,7 @@ public class Config {
      */
     public void setAuth(GBAuth auth) {
         this.auth.setUsername(auth.getUsername());
-        this.auth.setToken(auth.getToken());
         this.auth.setMode(auth.getMode());
+        this.auth.setToken(auth.getToken());
     }
 }
