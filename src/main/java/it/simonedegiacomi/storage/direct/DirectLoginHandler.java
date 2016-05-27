@@ -9,7 +9,6 @@ import io.jsonwebtoken.SignatureAlgorithm;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.Random;
 import java.util.Set;
 
 /**
@@ -22,10 +21,10 @@ public class DirectLoginHandler implements HttpHandler {
 
     private Set<String> temporaryTokens;
 
-    private byte[] jwtSecret = new byte[256];
+    private final byte[] jwtSecret;
 
-    public DirectLoginHandler(Set<String> temporaryTokens) {
-        new Random().nextBytes(jwtSecret);
+    public DirectLoginHandler(byte[] jwtSecret, Set<String> temporaryTokens) {
+        this.jwtSecret = jwtSecret;
         this.temporaryTokens = temporaryTokens;
     }
 

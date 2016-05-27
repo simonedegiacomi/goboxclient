@@ -254,9 +254,6 @@ public class StorageToClient implements GBComponent {
             DBCommonUtils.findPath(fileTable, file);
             file.setPrefix(PATH);
 
-            // Create the sender destination
-            SenderDestination dst = new HttpExchangeDestination(req);
-
             // Create and fill the send action
             SendAction action = new SendAction();
             action.setFileToSend(file);
@@ -270,7 +267,7 @@ public class StorageToClient implements GBComponent {
             }
 
             // Send the file
-            sender.send(action, dst);
+            sender.send(action, new HttpExchangeDestination(req));
 
             // Close the connection
             req.close();

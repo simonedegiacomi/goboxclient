@@ -100,7 +100,7 @@ public class HttpsStorageServer {
         }
 
         // Add login handler
-        server.createContext("/directLogin", corsMiddleware.wrap(new DirectLoginHandler(temporaryTokens)));
+        server.createContext("/directLogin", corsMiddleware.wrap(new DirectLoginHandler(jwtSecret, temporaryTokens)));
 
         // and a test handler
         server.createContext("/test", httpExchange -> {

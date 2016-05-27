@@ -5,3 +5,4 @@ it.simonedegiacomi.storage.components.core.CreateFolder
 it.simonedegiacomi.storage.components.core.Search
 it.simonedegiacomi.storage.components.core.Recent
 it.simonedegiacomi.storage.components.core.Share
+it.simonedegiacomi.storage.components.core.Move

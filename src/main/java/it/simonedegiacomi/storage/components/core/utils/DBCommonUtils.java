@@ -93,7 +93,7 @@ public class DBCommonUtils {
             // Query the database
             GBFile res = table.queryBuilder()
                     .where()
-                    .eq("fatherID", fatherIDOfSomeone)
+                    .eq("father_ID", fatherIDOfSomeone)
                     .and()
                     .eq("name", ancestor.getName())
                     .queryForFirst();
