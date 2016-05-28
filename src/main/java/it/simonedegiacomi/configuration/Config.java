@@ -1,7 +1,6 @@
 package it.simonedegiacomi.configuration;
 
 import it.simonedegiacomi.goboxapi.authentication.GBAuth;
-import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
@@ -212,7 +211,7 @@ public class Config {
      */
     public void setAuth(GBAuth auth) {
         this.auth.setUsername(auth.getUsername());
-        this.auth.setToken(auth.getToken());
         this.auth.setMode(auth.getMode());
+        this.auth.setToken(auth.getToken());
     }
 }

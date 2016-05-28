@@ -1,15 +1,21 @@
 package it.simonedegiacomi.configuration.loginui;
 
+import org.apache.log4j.Logger;
+
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.IOException;
 
 /**
  * Created on 23/04/16.
  * @author Degiacomi Simone
  */
 public class SwingLoginView implements LoginView {
+
+    private final Logger log = Logger.getLogger(SwingLoginView.class);
 
     private LoginPresenterInterface presenter;
 
@@ -32,6 +38,14 @@ public class SwingLoginView implements LoginView {
         window.setTitle("GoBox - Login");
         window.setLocationRelativeTo(null); // Center the window
         window.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        // Load icon
+        new Thread(() -> {
+            try {
+                window.setIconImage(ImageIO.read(SwingLoginView.class.getResourceAsStream("/icon.png")));
+            } catch (IOException ex) {
+                log.info("Cannot load icon", ex);
+            }
+        }).start();
 
         // Create the pane
         JPanel mainPanel = new JPanel();

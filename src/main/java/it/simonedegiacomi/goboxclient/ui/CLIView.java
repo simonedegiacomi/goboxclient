@@ -3,9 +3,11 @@ package it.simonedegiacomi.goboxclient.ui;
 import com.google.gson.*;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
+import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
 import it.simonedegiacomi.sync.Work;
+import it.simonedegiacomi.utils.EasyProxy;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -96,6 +98,10 @@ public class CLIView implements View {
             case "stop":
                 presenter.exitProgram();
                 res.addProperty("out", "Closed");
+                break;
+            case "proxy":
+                res.addProperty("out", setProxy(args));
+                break;
             default:
                 res.addProperty("out", getHelp());
                 break;
@@ -109,6 +115,32 @@ public class CLIView implements View {
                 "help) Show this list;\n" +
                 "stop) Stop the main GoBox instance;\n" +
                 "reset) Reset the GoBox environment;\n" +
+                "proxy) Set the http proxy" +
                 "status) Get the current status;\n";
+    }
+
+    private String setProxy (String[] args) {
+        if (args.length <= 1) {
+            return "Proxy usage:" +
+                    "gobox proxy ENABLED [HOST] [PORT]\n" +
+                    " - ENABLED: Enable or no the http proxy ('enable' or 'disable'))\n" +
+                    " - HOST: Host address of the http proxy\n" +
+                    " - PORT: Port of the http proxy" ;
+        }
+
+        if (args.length == 2) {
+            if(args[1].equalsIgnoreCase("disable")) {
+                return "Proxy disabled";
+            }
+            return "Type 'gobox proxy' to get the proxy settings help";
+        }
+
+        Config.getInstance().setProperty("useProxy", "true");
+        Config.getInstance().setProperty("proxyIP", args[2]);
+        Config.getInstance().setProperty("proxyPort", args[3]);
+
+        EasyProxy.handleProxy(Config.getInstance());
+
+        return "Proxy set: http://" + args[2] + ":" + args[3];
     }
 }

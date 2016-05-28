@@ -17,7 +17,7 @@ public class EasyProxy {
     /**
      * Apply the proxy configuration from the Config class.
      **/
-    public static void manageProxy(final Config config) {
+    public static void handleProxy(final Config config) {
 
         // Check if the proxy is set
         if(!Boolean.parseBoolean(config.getProperty("useProxy")))

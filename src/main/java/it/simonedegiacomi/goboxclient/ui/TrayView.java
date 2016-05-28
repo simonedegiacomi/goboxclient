@@ -1,6 +1,5 @@
 package it.simonedegiacomi.goboxclient.ui;
 
-import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.configuration.loginui.GUIConnectionTool;
 import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;

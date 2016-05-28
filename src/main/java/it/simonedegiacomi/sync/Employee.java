@@ -10,8 +10,6 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.LinkedList;
-import java.util.List;
 
 /**
  * The Employee object do works. He need the sync and the file system watcher to

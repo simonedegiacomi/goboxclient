@@ -6,6 +6,9 @@ import it.simonedegiacomi.goboxapi.client.SyncEventListener;
 import it.simonedegiacomi.goboxapi.myws.MyWSClient;
 import org.apache.log4j.Logger;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Created on 07/02/16.
  * @author Degiacomi Simone
@@ -22,7 +25,7 @@ public class EventEmitter {
      */
     private final MyWSClient clients;
 
-    private SyncEventListener internalListener;
+    private final Set<SyncEventListener> internalListeners = new HashSet<>();
 
     /**
      * Gson used to serialize events
@@ -43,12 +46,12 @@ public class EventEmitter {
         // Send the event to all the clients
         clients.sendEventBroadcast("syncEvent", gson.toJsonTree(eventToEmit, SyncEvent.class));
 
-        if (internalListener != null) {
-            internalListener.on(eventToEmit);
+        for (SyncEventListener listener : internalListeners) {
+            listener.on(eventToEmit);
         }
     }
 
-    public void setInternalListener(SyncEventListener internalListener) {
-        this.internalListener = internalListener;
+    public void addInternalListener(SyncEventListener internalListener) {
+        internalListeners.add(internalListener);
     }
 }

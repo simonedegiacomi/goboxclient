@@ -1,9 +1,14 @@
 package it.simonedegiacomi.storage;
 
 import com.google.common.io.ByteStreams;
+import com.j256.ormlite.dao.Dao;
+import com.j256.ormlite.dao.DaoManager;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.client.*;
+import it.simonedegiacomi.storage.components.core.utils.DBCommonUtils;
+import it.simonedegiacomi.storage.utils.MyFileUtils;
 import org.apache.log4j.Logger;
+import org.bytedeco.javacv.DC1394FrameGrabber;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -11,6 +16,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
 import java.security.InvalidParameterException;
+import java.sql.SQLException;
 import java.util.List;
 
 /**
@@ -27,27 +33,24 @@ public class InternalClient extends GBClient {
     private static final Logger log = Logger.getLogger(InternalClient.class.getName());
 
     /**
-     * Database of the GoBox Storage
-     */
-    private final StorageDB db;
-
-    /**
      * Event emitter
      */
     private final EventEmitter emitter;
+
+    private Dao<GBFile, Long> fileTable;
+
+    private Dao<SyncEvent, Long> eventTable;
 
     /**
      * Create a new internal client using the environment
      * @param env Environment to use
      */
-    public InternalClient (StorageEnvironment env) {
-        if (env.getDB() == null)
-            throw new InvalidParameterException("environment without db");
-
+    public InternalClient (StorageEnvironment env) throws SQLException {
         if (env.getEmitter() == null)
             throw new InvalidParameterException("environment without emitter");
 
-        this.db = env.getDB();
+        fileTable = DaoManager.createDao(env.getDbConnection(), GBFile.class);
+        eventTable = DaoManager.createDao(env.getDbConnection(), SyncEvent.class);
         this.emitter = env.getEmitter();
     }
 
@@ -68,8 +71,11 @@ public class InternalClient extends GBClient {
             throw new InvalidParameterException("File is null");
 
         try {
-            return db.getFile(file, true, true);
-        } catch (StorageException ex) {
+            file = DBCommonUtils.getFile(fileTable, file);
+            DBCommonUtils.findPath(fileTable, file);
+            DBCommonUtils.findChildren(fileTable, file);
+            return file;
+        } catch (SQLException ex) {
             log.warn(ex.toString(), ex);
             throw new ClientException(ex.toString());
         }
@@ -90,8 +96,8 @@ public class InternalClient extends GBClient {
     public void getFile(GBFile file) throws ClientException {
         // Just add to the recent
         try {
-            db.addToRecent(file);
-        } catch (StorageException ex) {
+            eventTable.create(new SyncEvent(SyncEvent.EventKind.FILE_OPENED, file));
+        } catch (SQLException ex) {
             throw new ClientException(ex.toString());
         }
     }
@@ -120,9 +126,14 @@ public class InternalClient extends GBClient {
     @Override
     public void createDirectory(GBFile newDir) throws ClientException {
         try {
-            SyncEvent event = db.insertFile(newDir);
+
+            // Update the database
+            fileTable.create(newDir);
+
+            SyncEvent event = new SyncEvent(SyncEvent.EventKind.FILE_CREATED, newDir);
+            eventTable.create(event);
             emitter.emitEvent(event);
-        } catch (StorageException ex) {
+        } catch (SQLException ex) {
             log.warn(ex.toString(), ex);
             throw new ClientException(ex.toString());
         }
@@ -132,9 +143,26 @@ public class InternalClient extends GBClient {
     public void uploadFile(GBFile file, InputStream inputStream) throws ClientException, IOException {
         try {
             // Just insert the file into the database, the file is already here
-            SyncEvent event = db.insertFile(file);
+            GBFile old = DBCommonUtils.getFile(fileTable, file);
+
+            SyncEvent event;
+
+            if (old != null) {
+                file.setID(old.getID());
+                MyFileUtils.loadFileAttributes(file);
+                fileTable.update(file);
+
+                event = new SyncEvent(SyncEvent.EventKind.FILE_MODIFIED, file);
+            } else {
+                MyFileUtils.loadFileAttributes(file);
+                fileTable.create(file);
+
+                event = new SyncEvent(SyncEvent.EventKind.FILE_CREATED, file);
+            }
+
+            eventTable.create(event);
             emitter.emitEvent(event);
-        } catch (StorageException ex) {
+        } catch (SQLException ex) {
             log.warn(ex.toString(), ex);
             throw new ClientException(ex.toString());
         }
@@ -151,9 +179,12 @@ public class InternalClient extends GBClient {
     public void removeFile(GBFile file) {
         try {
             // Just remove the file, it's already gone...
-            SyncEvent event = db.removeFile(file);
+            fileTable.delete(file);
+
+            SyncEvent event = new SyncEvent(SyncEvent.EventKind.FILE_DELETED, file);
+            eventTable.create(event);
             emitter.emitEvent(event);
-        } catch (Exception ex) {
+        } catch (SQLException ex) {
             log.warn(ex.toString(), ex);
         }
     }
@@ -229,9 +260,14 @@ public class InternalClient extends GBClient {
     @Override
     public void move (GBFile src, GBFile dst, boolean copy) throws ClientException {
         try {
-            SyncEvent syncEvent = db.move(src, dst,  copy);
-            emitter.emitEvent(syncEvent);
-        } catch (StorageException ex) {
+
+            // TODO: implement
+
+            SyncEvent event = new SyncEvent(copy ? SyncEvent.EventKind.FILE_COPIED : SyncEvent.EventKind.FILE_MOVED,dst);
+            event.setBefore(src);
+            eventTable.create(event);
+            emitter.emitEvent(event);
+        } catch (SQLException ex) {
 
         }
     }

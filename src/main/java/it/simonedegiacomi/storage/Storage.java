@@ -1,22 +1,29 @@
 package it.simonedegiacomi.storage;
 
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.j256.ormlite.jdbc.JdbcConnectionSource;
+import com.sun.net.httpserver.HttpExchange;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.authentication.GBAuth;
-import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.goboxapi.myws.MyWSClient;
 import it.simonedegiacomi.goboxapi.myws.WSException;
-import it.simonedegiacomi.goboxapi.myws.WSQueryHandler;
+import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import it.simonedegiacomi.storage.components.AttachFailException;
+import it.simonedegiacomi.storage.components.ComponentConfig;
+import it.simonedegiacomi.storage.components.GBComponent;
+import it.simonedegiacomi.storage.components.HttpRequest;
 import it.simonedegiacomi.storage.direct.HttpsStorageServer;
-import it.simonedegiacomi.storage.direct.UDPStorageServer;
-import it.simonedegiacomi.storage.handlers.ws.*;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
+import java.sql.SQLException;
+import java.util.HashSet;
+import java.util.ServiceLoader;
+import java.util.Set;
 
 /**
  * Storage works like a server, saving the incoming file from the other clients
@@ -47,8 +54,6 @@ public class Storage {
      */
     private final static Config config = Config.getInstance();
 
-    private final String PATH = config.getProperty("path", "files/");
-
     /**
      * The environment is a singleton class that contains the object used by the storage
      */
@@ -64,22 +69,31 @@ public class Storage {
      */
     private MyWSClient mainServer;
 
+    /**
+     * Disconnect listener
+     */
     private DisconnectedListener disconnectedListener;
 
-    public Storage (GBAuth auth) throws StorageException {
-        this(auth, new StorageEnvironment());
-    }
+    /**
+     * Https server
+     */
+    private final HttpsStorageServer httpServer;
+
+    /**
+     * Srt of attached components
+     */
+    private final Set<GBComponent> components = new HashSet<>();
 
     /**
      * Create a new storage given the Auth object for the appropriate account.
      * @param auth Authentication to use with the main server
      * @throws StorageException
      */
-    public Storage (final GBAuth auth, StorageEnvironment env) throws StorageException {
+    public Storage (final GBAuth auth, StorageEnvironment env) throws StorageException, SQLException {
         this.env = env;
 
         // Connect to the local database
-        env.setDB(new DAOStorageDB(DEFAULT_DB_LOCATION));
+        env.setDbConnection(new JdbcConnectionSource("jdbc:h2:" + config.getProperty("database", DEFAULT_DB_LOCATION)));
 
         try {
 
@@ -106,41 +120,24 @@ public class Storage {
         auth.authorize(mainServer);
 
         // Create the event emitter
-        if (env.getEmitter() == null ) {
-            env.setEmitter(new EventEmitter(mainServer));
-        }
-
-        try {
-            // Create the local UDP server
-            UDPStorageServer udp = new UDPStorageServer(Integer.parseInt(config.getProperty("udpDirectConnectionPort", String.valueOf(UDPStorageServer.DEFAULT_PORT))));
-            udp.init();
-            env.setUdpServer(udp);
-        } catch (UnknownHostException ex) {
-            log.warn(ex.toString());
-        } catch (IOException ex) {
-            log.warn(ex.toString());
-        }
-
+        env.setEmitter(new EventEmitter(mainServer));
 
         // Create the http(s) storage server that is used for direct transfers
         int directPort = Integer.parseInt(config.getProperty("directConnectionPort", String.valueOf(DIRECT_CONNECTION_DEFAULT_PORT)));
         String strAddress = config.getProperty("directConnectionListenAddress", "0.0.0.0");
 
-        try {
+        // Create the inet address (the broadcast
+        InetSocketAddress address = new InetSocketAddress(strAddress, directPort);
 
-            // Create the inet address (the broadcast
-            InetSocketAddress address = new InetSocketAddress(strAddress, directPort);
-
-            // Create the https server
-            HttpsStorageServer https = new HttpsStorageServer(address, env);
-            https.init();
-            env.setHttpsServer(https);
-        } catch (IOException ex) {
-            log.warn(ex.toString());
-        }
+        // Create the https server
+        httpServer = new HttpsStorageServer(address);
+        mainServer.addQueryHandler(httpServer.getWSQueryHandler());
 
         // Create a new internal client and set it in the environment
         env.setInternalClient(new InternalClient(env));
+
+        // Load all the components
+        loadComponents();
     }
 
     /**
@@ -159,84 +156,88 @@ public class Storage {
             throw new StorageException("Cannot connect to main server");
         }
 
-        // Start the UDP server
-        if(env.getUdpServer() != null)
-            env.getUdpServer().start();
-
-        // Start the local http(s) server
-        if(env.getHttpsServer() != null)
-            env.getHttpsServer().serve();
-
-        // Assign event handler from the ws client
-        assignEvent();
-
+        // Start the http server
+        httpServer.serve();
         log.info("Storage started");
     }
 
-    /**
-     * Assign the events listener for the incoming events and incoming query from the main
-     * server and the other clients trough handlers sockets.
-     */
-    private void assignEvent () {
 
-        // Handler for the file list query
-        mainServer.addQueryHandler(new FileInfoHandler(env));
+    private void loadComponents () {
 
-        // Handler that create new directory
-        mainServer.addQueryHandler(new CreateFolderHandler(env));
+        // Create the service loader
+        ServiceLoader<GBComponent> loader = ServiceLoader.load(GBComponent.class);
+        log.info("GBComponents loaded");
 
-        // Handler that send a file to a client
-        mainServer.addQueryHandler(new StorageToClientHandler(env));
+        // Iterate each component
+        for (GBComponent component : loader) {
 
-        // Handler that receive the incoming file from a client
-        mainServer.addQueryHandler(new ClientToStorageHandler(env));
+            log.info("Analyzing component " + component.getClass().getName());
 
-        // Handler for the trash
-        TrashHandler trashHandler = new TrashHandler(env);
-        mainServer.addQueryHandler(trashHandler.getDeleteHandler());
-        mainServer.addQueryHandler(trashHandler.getTrashedHandler());
-        mainServer.addQueryHandler(trashHandler.getTrashHandler());
-        mainServer.addQueryHandler(trashHandler.getEmptyTrashHandler());
+            // Get the class of the component
+            Class componentClass = component.getClass();
 
-        // Rename handler
-        mainServer.addQueryHandler(new RenameFileHandler(env));
+            // Get all the methods of the class
+            Method[] methods = componentClass.getMethods();
 
-        // Handler that copy or cut files
-        mainServer.addQueryHandler(new MoveHandler(env));
+            // Analyze every method
+            for (Method method : methods) {
 
-        // Search handler
-        mainServer.addQueryHandler(new SearchHandler(env));
+                // Check if this method is a query listener
+                if (method.getParameterCount() == 1 && method.getParameters()[0].getType().equals(JsonElement.class)) {
 
-        // Share handler
-        mainServer.addQueryHandler(new ShareListHandler(env));
-        mainServer.addQueryHandler(new ShareHandler(env));
+                    log.info("Found " + method.getName() + " (query handler)");
 
-        // Recent files
-        mainServer.addQueryHandler(new RecentHandler(env));
+                    // Find the query name
+                    WSQuery annotation = method.getAnnotation(WSQuery.class);
 
-        // The http server that manage direct transfers also has an integrated WSQueryHandler
-        if (env.getHttpsServer() != null)
-            mainServer.addQueryHandler(env.getHttpsServer().getWSComponent());
+                    // Attach the query handler
+                    mainServer.onQuery(annotation.name(), (data) -> {
+                        try {
+                            return (JsonElement) method.invoke(component, data);
+                        } catch (IllegalAccessException ex) {
+                            log.warn("Method in GBComponent with wrong access restriction", ex);
+                        } catch (InvocationTargetException ex) {
+                            log.warn("GBComponent method invocation exception", ex);
+                        }
+                        return null;
+                    });
 
-        // Add a simple ping handler
-        mainServer.onQuery("ping", new WSQueryHandler() {
-            @Override
-            public JsonElement onQuery(JsonElement data) {
-                return new JsonObject();
+                    continue;
+                }
+
+                // check if this method is a http handler
+                if (method.getParameterCount() == 1 && method.getParameters()[0].getType().equals(HttpExchange.class)) {
+
+                    log.info("Found " + method.getName() + " (http handler)");
+
+                    // Find the http method and name
+                    HttpRequest annotation = method.getAnnotation(HttpRequest.class);
+
+                    httpServer.addHandler(annotation.method(), annotation.name(), (httpExchange) -> {
+                        try {
+                            method.invoke(component, httpExchange);
+                        } catch (IllegalAccessException ex) {
+                            log.warn("Method in GBComponent with wrong access restriction", ex);
+                        } catch (InvocationTargetException ex) {
+                            log.warn("GBComponent method invocation exception", ex);
+                        }
+                    });
+                }
             }
-        });
-    }
 
-    /**
-     * Create a new InternalClient that can be used to create a new Sync object.
-     * This client is used to keep in sync the fs when the client is run in the
-     * same machine of the storage. It doesn't need to communicate with the main
-     * server, and just talk with the same database used by the storage.
-     *
-     * @return The internal client instance.
-     */
-    public GBClient getInternalClient () {
-        return env.getInternalClient();
+            // Call the attach method
+            try {
+                component.onAttach(env, new ComponentConfig(config));
+
+                // Add the component to the components list
+                components.add(component);
+            } catch (AttachFailException ex) {
+                log.warn("Method attaching failed", ex);
+
+                // TODO: implement handlers removal
+            }
+        }
+
     }
 
     public interface DisconnectedListener {
@@ -251,17 +252,11 @@ public class Storage {
      * Stop the storage
      */
     public void shutdown () {
-        try {
-            // Stop the udp server
-            if(env.getUdpServer() != null)
-                env.getUdpServer().shutdown();
-        } catch (InterruptedException ex) {
-            log.warn(ex.toString());
-        }
 
-        // Stop the https server
-        if (env.getHttpsServer() != null)
-            env.getHttpsServer().shutdown();
+        // Detach all the components
+        components.forEach(GBComponent::onDetach);
+
+        httpServer.shutdown();
 
         // Disconnect from the main server
         mainServer.disconnect();
