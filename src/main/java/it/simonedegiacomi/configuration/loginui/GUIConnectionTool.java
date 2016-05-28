@@ -86,7 +86,7 @@ public class GUIConnectionTool {
 
         visible = false;
 
-        EasyProxy.manageProxy(config);
+        EasyProxy.handleProxy(config);
     }
 
     private static void updateFromConfig () {

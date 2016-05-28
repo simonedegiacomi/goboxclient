@@ -56,7 +56,7 @@ public class GoBoxFacade {
 
             @Override
             public void onChange() {
-                EasyProxy.manageProxy(config);
+                EasyProxy.handleProxy(config);
             }
         });
     }

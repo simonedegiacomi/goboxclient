@@ -68,14 +68,14 @@ public class Main {
         GoBoxInstance instance = new GoBoxInstance();
 
         // Otherwise start the CLI interface
-//        if(!instance.isSingle()) {
-//            try {
-//                instance.sendToMainInstance(args);
-//            } catch (IOException ex) {
-//                logger.warn("GoBox CLI is not available", ex);
-//            }
-//            return;
-//        }
+        if(!instance.isSingle()) {
+            try {
+                instance.sendToMainInstance(args);
+            } catch (IOException ex) {
+                logger.warn("GoBox CLI is not available", ex);
+            }
+            return;
+        }
 
         // Set the presenter to this instance
         instance.setPresenter(presenter);

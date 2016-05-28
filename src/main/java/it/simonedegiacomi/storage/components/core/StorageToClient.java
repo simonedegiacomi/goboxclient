@@ -85,6 +85,7 @@ public class StorageToClient implements GBComponent {
 
     @Override
     public void onAttach(StorageEnvironment env, ComponentConfig componentConfig) throws AttachFailException {
+
         eventEmitter = env.getEmitter();
         auth = env.getGlobalConfig().getAuth();
         PATH = env.getGlobalConfig().getProperty("path", "files/");
