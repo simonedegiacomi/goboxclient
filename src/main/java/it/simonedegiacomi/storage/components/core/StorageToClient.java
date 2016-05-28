@@ -1,6 +1,5 @@
 package it.simonedegiacomi.storage.components.core;
 
-import com.google.common.collect.Range;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.j256.ormlite.dao.Dao;

@@ -4,8 +4,6 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
-
 /**
  * Created on 30/04/16.
  * @author Degiacomi Simone

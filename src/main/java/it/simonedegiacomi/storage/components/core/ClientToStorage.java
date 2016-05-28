@@ -6,6 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.j256.ormlite.dao.Dao;
 import com.j256.ormlite.dao.DaoManager;
+import com.sun.net.httpserver.HttpsExchange;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.authentication.GBAuth;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
@@ -17,18 +18,22 @@ import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.components.AttachFailException;
 import it.simonedegiacomi.storage.components.ComponentConfig;
 import it.simonedegiacomi.storage.components.GBComponent;
+import it.simonedegiacomi.storage.components.HttpRequest;
 import it.simonedegiacomi.storage.components.core.utils.DBCommonUtils;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.fs.MyFileSystemWatcher;
+import it.simonedegiacomi.utils.MyHttpExchangeUtils;
 import org.apache.log4j.Logger;
 
 import javax.net.ssl.HttpsURLConnection;
 import java.io.DataOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URL;
 import java.sql.SQLException;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -259,5 +264,100 @@ public class ClientToStorage implements GBComponent {
         }
 
         return response;
+    }
+
+    @HttpRequest(name = "toStorage", method = "POST")
+    public void onDirectUploadRequest (HttpsExchange req) throws IOException {
+
+        log.info("New direct upload request");
+
+        // Get the query string parameters
+        Map<String, String> params = MyHttpExchangeUtils.getQueryParams(req.getRequestURI());
+
+        if (!params.containsKey("json")) {
+            req.sendResponseHeaders(400, 0);
+            req.getResponseBody().write("missing parameters".getBytes());
+            req.close();
+            return;
+        }
+
+        // Get the json string that describe the upload
+        String jsonString = params.get("json");
+
+        // Parse the string
+        GBFile incomingFile = gson.fromJson(jsonString, GBFile.class);
+
+        try {
+
+            // Get an old version of the file
+            GBFile old = DBCommonUtils.getFile(fileTable, incomingFile);
+
+            boolean replace = old != null;
+
+            if (replace) {
+
+                // Find path of the old file
+                DBCommonUtils.findPath(fileTable, old);
+                incomingFile = old;
+            } else {
+
+                // Get the father
+                GBFile father = DBCommonUtils.getFile(fileTable, incomingFile.getFather());
+
+                // Check if the file exists
+                if (father == null) {
+                    log.warn("Father not found");
+                    req.sendResponseHeaders(404, 0);
+                    req.getResponseBody().write("Father not found".getBytes());
+                    req.close();
+                }
+
+                // Find the path
+                DBCommonUtils.findPath(fileTable, father);
+                father.setPrefix(PATH);
+
+                incomingFile = father.generateChild(incomingFile.getName(), false);
+            }
+
+            // Ignore the file
+            fileSystemWatcher.startIgnoring(incomingFile.toFile());
+
+            OutputStream toFile = new FileOutputStream(incomingFile.toFile());
+
+            ByteStreams.copy(req.getRequestBody(), toFile);
+
+            toFile.close();
+
+            // Update the database
+            MyFileUtils.loadFileAttributes(incomingFile);
+            fileTable.create(incomingFile);
+
+            // Register and emit event
+            SyncEvent event;
+            if (replace) {
+
+                // Update the old file
+                fileTable.update(incomingFile);
+                event = new SyncEvent(SyncEvent.EventKind.FILE_MODIFIED, incomingFile);
+            } else {
+
+                // Insert the new file
+                fileTable.create(incomingFile);
+                event = new SyncEvent(SyncEvent.EventKind.FILE_CREATED, incomingFile);
+            }
+
+            // The notification will contain the new file information
+            eventEmitter.emitEvent(event);
+            eventTable.create(event);
+
+            log.info("New file received");
+
+            req.sendResponseHeaders(200, 0);
+            req.close();
+        } catch (SQLException ex) {
+            log.warn(ex.toString(), ex);
+            req.sendResponseHeaders(500, 0);
+            req.close();
+        }
     }
 }

@@ -4,7 +4,6 @@ import com.j256.ormlite.dao.Dao;
 import com.j256.ormlite.stmt.QueryBuilder;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.Sharing;
-import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.storage.StorageException;
 
 import java.security.InvalidParameterException;

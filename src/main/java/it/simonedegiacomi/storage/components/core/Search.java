@@ -10,7 +10,6 @@ import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
 import it.simonedegiacomi.storage.StorageEnvironment;
-import it.simonedegiacomi.storage.StorageException;
 import it.simonedegiacomi.storage.components.AttachFailException;
 import it.simonedegiacomi.storage.components.ComponentConfig;
 import it.simonedegiacomi.storage.components.GBComponent;

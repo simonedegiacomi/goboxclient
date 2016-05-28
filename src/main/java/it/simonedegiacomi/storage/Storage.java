@@ -94,7 +94,6 @@ public class Storage {
 
         // Connect to the local database
         env.setDbConnection(new JdbcConnectionSource("jdbc:h2:" + config.getProperty("database", DEFAULT_DB_LOCATION)));
-        env.setDB(new DAOStorageDB(env.getDbConnection()));
 
         try {
 

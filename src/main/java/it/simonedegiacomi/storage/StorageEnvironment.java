@@ -18,11 +18,6 @@ public class StorageEnvironment {
     private final Config globalConfig = Config.getInstance();
 
     /**
-     * @deprecated
-     */
-    private StorageDB db;
-
-    /**
      * Event emitter
      */
     private EventEmitter emitter;
@@ -44,13 +39,6 @@ public class StorageEnvironment {
     private MyFileSystemWatcher fileSystemWatcher;
 
     /**
-     * @deprecated
-     */
-    public StorageDB getDB() {
-        return db;
-    }
-
-    /**
      * Return the database connection
      * @return Database connection
      */
@@ -64,13 +52,6 @@ public class StorageEnvironment {
      */
     public void setDbConnection(ConnectionSource dbConnection) {
         this.dbConnection = dbConnection;
-    }
-
-    /**
-     * @deprecated
-     */
-    public void setDB(StorageDB db) {
-        this.db = db;
     }
 
     /**

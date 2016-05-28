@@ -11,8 +11,6 @@ import it.simonedegiacomi.sync.Work;
 import it.simonedegiacomi.utils.EasyProxy;
 import org.apache.log4j.Logger;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Set;
 

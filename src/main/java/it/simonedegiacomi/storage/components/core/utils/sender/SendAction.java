@@ -2,7 +2,6 @@ package it.simonedegiacomi.storage.components.core.utils.sender;
 
 import com.google.common.collect.Range;
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.storage.utils.MyRange;
 
 /**
  * Created on 27/05/16.

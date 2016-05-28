@@ -1,7 +1,6 @@
 package it.simonedegiacomi.configuration;
 
 import it.simonedegiacomi.goboxapi.authentication.GBAuth;
-import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
