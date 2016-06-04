@@ -72,6 +72,8 @@ public class InternalClient extends GBClient {
 
         try {
             file = DBCommonUtils.getFile(fileTable, file);
+            if (file == null)
+                return null;
             DBCommonUtils.findPath(fileTable, file);
             DBCommonUtils.findChildren(fileTable, file);
             return file;
@@ -126,6 +128,13 @@ public class InternalClient extends GBClient {
     @Override
     public void createDirectory(GBFile newDir) throws ClientException {
         try {
+
+            // TODO: move the code to find the father somewhere else
+            if (newDir.getFatherID() == GBFile.UNKNOWN_ID) {
+                GBFile father = DBCommonUtils.getFile(fileTable, newDir.getFather());
+                DBCommonUtils.findPath(fileTable, father);
+                newDir.setFatherID(father.getID());
+            }
 
             // Update the database
             fileTable.create(newDir);

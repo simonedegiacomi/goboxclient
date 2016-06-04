@@ -15,13 +15,6 @@ public class GoBoxPresenter implements Presenter {
 
     public GoBoxPresenter(Model model) {
         this.model = model;
-        model.addOnUpdateListener(new Runnable() {
-
-            @Override
-            public void run() {
-                refreshView();
-            }
-        });
     }
 
     @Override
@@ -50,31 +43,26 @@ public class GoBoxPresenter implements Presenter {
     }
 
     @Override
-    public void connectClient() {
-        model.connect();
-    }
-
-    @Override
     public void exitProgram() {
         model.shutdown();
-    }
-
-    @Override
-    public void setSync(boolean state) {
-        model.setSyncing(state);
     }
 
     /**
      * Call this method to refresh the view with the data from the model
      */
-    public void refreshView () {
+    @Override
+    public void updateView () {
         for (View view : views) {
-            view.setClientState(model.getClientState());
+            view.setClient(model.getClient());
             view.setMessage(model.getFlashMessage());
-            view.setSyncState(model.isSyncing());
             view.setCurrentWorks(model.getCurrentWorks());
             if(model.getError() != null)
                 view.showError(model.getError());
         }
+    }
+
+    @Override
+    public boolean isStorage() {
+        return true;
     }
 }

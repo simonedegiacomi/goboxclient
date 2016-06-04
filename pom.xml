@@ -79,6 +79,7 @@
                     </execution>
                 </executions>
             </plugin>
+
         </plugins>
     </build>
 
@@ -182,7 +183,7 @@
         <dependency>
             <groupId>it.simonedegiacomi.goboxjavaapi</groupId>
             <artifactId>goboxjavaapi</artifactId>
-            <version>0.1.9.4</version>
+            <version>0.2.1.1</version>
         </dependency>
 
         <dependency>
@@ -192,6 +193,11 @@
             <scope>test</scope>
         </dependency>
 
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>1.4.192</version>
+        </dependency>
 
     </dependencies>
 </project>

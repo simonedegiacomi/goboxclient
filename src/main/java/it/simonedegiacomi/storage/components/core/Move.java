@@ -145,12 +145,14 @@ public class Move implements GBComponent {
                 Files.move(dbSrc.toFile().toPath(), dst.toFile().toPath());
 
                 // Update the database
-                dst.setFatherID(dst.getFatherID());
-                dbSrc.setName(dst.getName());
-                dbSrc.setLastUpdateDate(System.currentTimeMillis());
-                fileTable.update(dbSrc);
+//                dbSrc.setFatherID(dst.getFatherID());
+//                dbSrc.setName(dst.getName());
+//                dbSrc.setLastUpdateDate(System.currentTimeMillis());
+                dst.setID(dbSrc.getID());
+                dst.setLastUpdateDate(System.currentTimeMillis());
+                fileTable.update(dst);
 
-                event = new SyncEvent(SyncEvent.EventKind.FILE_MOVED, dbSrc);
+                event = new SyncEvent(SyncEvent.EventKind.FILE_MOVED, dst);
                 event.setBefore(dbSrc);
             }
 

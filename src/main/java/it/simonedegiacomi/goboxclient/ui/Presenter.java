@@ -43,18 +43,15 @@ public interface Presenter {
     Model getModel ();
 
     /**
-     * This method can be called by the view and proxy the action to the model
-     */
-    void connectClient ();
-
-    /**
      * This method can be called by the view to exit the program (the Model method will be called).
      */
     void exitProgram ();
 
     /**
-     * This method is also called by the view and call the right model method
-     * @param state New state of the model
+     * Force the presenter to update the view using the model information.
+     * Call this method when the model is updated
      */
-    void setSync (boolean state);
+    void updateView();
+
+    boolean isStorage();
 }

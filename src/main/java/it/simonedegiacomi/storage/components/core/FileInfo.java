@@ -110,6 +110,7 @@ public class FileInfo implements GBComponent {
             response.addProperty("found", true);
             response.add("file", gson.toJsonTree(dbFile, GBFile.class));
         } catch (SQLException ex) {
+            log.warn(ex.toString(), ex);
             response.addProperty("success", false);
             response.addProperty("found", false);
             response.addProperty("error", ex.toString());

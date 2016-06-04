@@ -7,6 +7,10 @@ import java.util.Map;
 
 public abstract class MyFileSystemWatcher {
 
+    public final static long CONTINUE_IGNORE_TIME = -1;
+
+    public final static long FORESEE_FAKE_TIME = -2;
+
     /**
      * Map of files to ignore
      */
@@ -58,8 +62,15 @@ public abstract class MyFileSystemWatcher {
                 // Get the time
                 long time = toIgnore.getValue();
 
+                if (time == FORESEE_FAKE_TIME) {
+
+                    // Ignore ONLY this time
+                    filesToIgnore.remove(toIgnore);
+                    return true;
+                }
+
                 // If the file was ignored before the file event, ignore it
-                if (time <= 0 || time >= file.lastModified()) {
+                if (time < 0 || time >= file.lastModified()) {
                     return true;
                 } else {
 
@@ -79,7 +90,7 @@ public abstract class MyFileSystemWatcher {
      * @param file File to ignore
      */
     public void startIgnoring (File file) {
-        filesToIgnore.put(file.getPath(), -1L);
+        filesToIgnore.put(file.getPath(), CONTINUE_IGNORE_TIME);
     }
 
     /**
@@ -90,9 +101,17 @@ public abstract class MyFileSystemWatcher {
      * @param file File to stop ignoring
      */
     public void stopIgnoring (File file) {
-        filesToIgnore.put(file.getPath(), System.currentTimeMillis());
+        filesToIgnore.put(file.getPath(), System.currentTimeMillis() + 25);
     }
 
+    /**
+     * Ignore only the first event of the file. If you use this method, you can call stopIgnoring anyway.
+     * In yuu need to ignore the incoming events of the file, see {@link #startIgnoring(File)}.
+     * @param file File to which ignore ONLY the first event
+     */
+    public void foresee (File file) {
+        filesToIgnore.put(file.getPath(), FORESEE_FAKE_TIME);
+    }
 
     public interface FileSystemEventListener {
 

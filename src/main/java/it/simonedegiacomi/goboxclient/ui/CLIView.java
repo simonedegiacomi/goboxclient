@@ -70,10 +70,9 @@ public class CLIView implements View {
     }
 
     @Override
-    public void setClientState(GBClient.ClientState state) { }
+    public void setClient(GBClient client) {
 
-    @Override
-    public void setSyncState(boolean enabled) { }
+    }
 
     @Override
     public void setCurrentWorks(Set<Work> worksQueue) { }

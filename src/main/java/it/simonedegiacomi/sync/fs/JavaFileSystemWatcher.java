@@ -73,6 +73,8 @@ public class JavaFileSystemWatcher extends MyFileSystemWatcher {
                 // add the key to the map
                 keys.put(pathKey, path);
 
+                logger.info("Start watching " + path);
+
                 return FileVisitResult.CONTINUE;
             }
         });
@@ -108,6 +110,8 @@ public class JavaFileSystemWatcher extends MyFileSystemWatcher {
      * Start a new thread and watch for changes ont he filesystem
      */
     private void startWatching() {
+
+        // TODO: clean code, too many if!!!!
         Thread listenerThread = new Thread(() -> {
             while (shutdown.getCount() >= 2) {
 
@@ -120,13 +124,34 @@ public class JavaFileSystemWatcher extends MyFileSystemWatcher {
                 }
 
                 List<WatchEvent<?>> events = currentKey.pollEvents();
+                logger.info("Acquired new events: " + events.size());
 
-                for (WatchEvent<?> event : events) {
+                // Create a new list
+                LinkedList<WatchEvent<?>> orderedEvents = new LinkedList<>(events);
+
+                // Sort it
+                Collections.sort(orderedEvents, new Comparator<WatchEvent<?>>() {
+                    @Override
+                    public int compare(WatchEvent<?> a, WatchEvent<?> b) {
+                        return a.kind().equals(StandardWatchEventKinds.ENTRY_DELETE) ? -1 : 1;
+                    }
+                });
+
+                for (WatchEvent<?> event : orderedEvents) {
+                    logger.info("Event " + event.kind());
+                }
+
+                Path deletedFile = null;
+
+                for (WatchEvent<?> event : orderedEvents) {
+
+
 
                     // Get the event
                     WatchEvent.Kind kind = event.kind();
 
                     if (kind == StandardWatchEventKinds.OVERFLOW) {
+                        logger.warn("Event overflow! possible lost of events!");
                         continue;
                     }
 
@@ -136,77 +161,72 @@ public class JavaFileSystemWatcher extends MyFileSystemWatcher {
                     Path filePath = keys.get(currentKey).resolve(name);
 
 
-                    System.out.println(kind + " " + filePath + "(" + events.size());
+
+                    logger.info("Event " + event.kind() + " file " + filePath + " at " + filePath.toFile().lastModified());
 
 
-                    if (shouldIgnore(filePath.toFile())) {
-                        continue;
+
+
+
+                    // Start watching if it is a folder
+                    if (kind == StandardWatchEventKinds.ENTRY_CREATE && filePath.toFile().isDirectory()) {
+                        try {
+                            watch(filePath);
+                        } catch (IOException ex) {
+                            logger.warn("Can't start watching the new folder! possible lost of events!");
+                        }
                     }
 
-
-                    // File created
-                    if (kind == StandardWatchEventKinds.ENTRY_CREATE) {
-
-                        // If is  a folder, watch the folder
-                        if (filePath.toFile().isDirectory()) {
-                            try {
-
-                                // But first check  if the folder was moved
-                                Path oldPath = isMoved(filePath);
-
-                                if (oldPath != null) {
-                                    logger.info("file moved from " + oldPath + " to " + filePath);
-
-                                    for (FileSystemEventListener listener : listeners) {
-                                        listener.onFileMoved(oldPath.toFile(), filePath.toFile());
-                                    }
-                                }
-
-                                // Watch the new folder
-                                watch(filePath);
-
-                                if (oldPath != null)
-                                    continue;
-                            } catch (IOException ex) {
-                                logger.warn("cannot watch new file", ex);
-                            }
-                        }
-
-                        if (!filePath.toFile().isDirectory() && events.size() == 2) {
-                            WatchEvent<Path> oldEventFile = (WatchEvent<Path>) events.get(1);
-                            Path oldName = oldEventFile.context();
-                            Path oldFilePath = keys.get(currentKey).resolve(oldName);
-                            for (FileSystemEventListener listener : listeners)
-                                listener.onFileMoved(oldFilePath.toFile(), filePath.toFile());
-                            continue;
-                        }
-
-                        // Nope, new file
-                        logger.info("File created " + filePath);
-                        for (FileSystemEventListener listener : listeners) {
-                            listener.onFileCreated(filePath.toFile());
-                        }
+                    // Check if i should ignore the event
+                    if (shouldIgnore(filePath.toFile())) {
+                        logger.info("Event " + kind + " on " + filePath + " ignored");
                         continue;
                     }
 
                     // File deleted
                     if (kind == StandardWatchEventKinds.ENTRY_DELETE) {
-                        logger.info("File deleted " + filePath);
-                        for (FileSystemEventListener listener : listeners) {
-                            listener.onFileDeleted(filePath.toFile());
-                        }
+                        logger.info("Deleted event " + filePath);
+                        deletedFile = filePath;
                         continue;
                     }
 
-                    logger.info("File modified " + filePath);
+                    // File created
+                    if (kind == StandardWatchEventKinds.ENTRY_CREATE) {
+
+                        // Not a folder? check if the file is moved
+                        if (events.size() == 2 && deletedFile != null) {
+                            for (FileSystemEventListener listener : listeners)
+                                listener.onFileMoved(deletedFile.toFile(), filePath.toFile());
+                            deletedFile = null;
+                            break;
+                        }
+
+                        // New file
+                        logger.info("File created " + filePath);
+
+                        // notify the creation of the file/folder
+                        for (FileSystemEventListener listener : listeners) {
+                            listener.onFileCreated(filePath.toFile());
+                        }
+
+                        continue;
+                    }
+
                     // File modified
+                    logger.info("File modified " + filePath);
                     for (FileSystemEventListener listener : listeners) {
                         listener.onFileModified(filePath.toFile());
                     }
                 }
 
+                if (deletedFile != null) {
+                    for (FileSystemEventListener listener : listeners)
+                        listener.onFileDeleted(deletedFile.toFile());
+                }
+
+                // Is the key still valid?
                 if (!currentKey.reset()) {
-                    logger.warn("invalid watch key");
+                    logger.warn("Invalid watch key");
                 }
             }
         });

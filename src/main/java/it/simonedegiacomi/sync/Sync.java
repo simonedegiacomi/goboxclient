@@ -99,6 +99,19 @@ public class Sync {
                 // Wrap the java File into a GoBoxFile
                 GBFile wrappedFile = new GBFile(modifiedFile, PATH);
 
+                if (wrappedFile.isDirectory()) {
+                    try {
+                        GBFile detailed = client.getInfo(wrappedFile);
+                        if (detailed != null && detailed.equals(modifiedFile)) {
+                            // Fake event
+                            log.info("Ignore modified folder event");
+                            return;
+                        }
+                    } catch (ClientException ex) {
+                        log.warn(ex.toString(), ex);
+                    }
+                }
+
                 // Create the new work
                 workManager.addWork(new Work(wrappedFile, Work.WorkKind.UPLOAD));
             }
@@ -170,7 +183,7 @@ public class Sync {
 
         // Check if i have this file
         if (!detailedFile.toFile().exists()) {
-            workManager.addWork(new Work(file, Work.WorkKind.DOWNLOAD));
+            workManager.addWork(new Work(detailedFile, Work.WorkKind.DOWNLOAD));
             return;
         }
 

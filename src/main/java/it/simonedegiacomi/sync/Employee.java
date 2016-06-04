@@ -73,7 +73,9 @@ public class Employee {
 
                 case MOVE_IN_CLIENT:
 
+                    watcher.startIgnoring(workToDo.getBefore().toFile());
                     Files.move(workToDo.getBefore().toFile().toPath(), workToDo.getFile().toFile().toPath());
+                    watcher.stopIgnoring(workToDo.getBefore().toFile());
                     break;
 
                 case MOVE_IN_STORAGE:
@@ -83,6 +85,7 @@ public class Employee {
 
                 case REMOVE_IN_CLIENT:
 
+                    watcher.foresee(workToDo.getFile().toFile());
                     MyFileUtils.delete(workToDo.getFile());
                     break;
 
@@ -92,6 +95,7 @@ public class Employee {
                     break;
             }
 
+            watcher.stopIgnoring(workToDo.getFile().toFile());
             workToDo.setState(Work.WorkState.END);
             return true;
         } catch (Exception ex) {
@@ -117,10 +121,17 @@ public class Employee {
         // If the file is a directory
         if (detailedFile.isDirectory()) {
 
+            // Create subdirectories
+            watcher.startIgnoring(detailedFile.toFile());
+            detailedFile.toFile().mkdirs();
+            watcher.stopIgnoring(detailedFile.toFile());
+
             // Download each file
             for (GBFile child : detailedFile.getChildren()) {
                 manager.addWork(new Work(child, Work.WorkKind.DOWNLOAD));
             }
+
+            return;
         }
 
         // Otherwise just download the file

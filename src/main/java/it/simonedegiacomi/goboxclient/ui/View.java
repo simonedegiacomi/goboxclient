@@ -29,18 +29,7 @@ public interface View {
      */
     Presenter getPresenter ();
 
-    /**
-     * Set the state of the client.
-     *
-     * @param state Current state of the client
-     */
-    void setClientState (GBClient.ClientState state);
-
-    /**
-     * Set if the sync is running
-     * @param enabled Is the sync running?
-     */
-    void setSyncState (boolean enabled);
+    void setClient (GBClient client);
 
     /**
      * Set the current works

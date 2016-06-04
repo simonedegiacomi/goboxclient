@@ -167,12 +167,13 @@ public class Main {
 
         // Create the client
         StandardGBClient client = new StandardGBClient(auth);
+        client.setEchoFilter(true);
         facade.setClient(client);
 
         try {
 
             // Create the sync object
-            Sync sync = new Sync(client, MyFileSystemWatcher.getDefault(config.getProperty("path")));
+            Sync sync = new Sync(client, MyFileSystemWatcher.getDefault(config.getProperty("path", "files/")));
             facade.setSync(sync);
 
             client.onDisconnect(() -> {
@@ -200,11 +201,8 @@ public class Main {
             sync.syncAndStart();
 
             goboxModel.setFlashMessage("Ready");
-        } catch (ClientException ex) {
-            logger.warn(ex);
-            disconnected();
-        } catch (IOException ex) {
-            logger.warn(ex);
+        } catch (ClientException | IOException ex) {
+            logger.warn(ex.toString(), ex);
             disconnected();
         }
     }
@@ -254,16 +252,10 @@ public class Main {
             // Sync the folders and files
             sync.syncAndStart();
         } catch (StorageException e) {
-            logger.warn(e);
+            logger.warn(e.toString(), e);
             disconnected();
-        } catch (ClientException e) {
-            logger.warn(e);
-            disconnected();
-        } catch (IOException e) {
-            logger.warn(e);
-            disconnected();
-        } catch (SQLException e) {
-            logger.warn(e);
+        } catch (ClientException | IOException | SQLException e) {
+            logger.warn(e.toString(), e);
             disconnected();
         }
 

@@ -1,10 +1,17 @@
 package it.simonedegiacomi.storage;
 
 import com.google.gson.JsonElement;
+import com.j256.ormlite.dao.Dao;
+import com.j256.ormlite.dao.DaoManager;
 import com.j256.ormlite.jdbc.JdbcConnectionSource;
+import com.j256.ormlite.support.ConnectionSource;
+import com.j256.ormlite.table.TableUtils;
 import com.sun.net.httpserver.HttpExchange;
 import it.simonedegiacomi.configuration.Config;
+import it.simonedegiacomi.goboxapi.GBFile;
+import it.simonedegiacomi.goboxapi.Sharing;
 import it.simonedegiacomi.goboxapi.authentication.GBAuth;
+import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.myws.MyWSClient;
 import it.simonedegiacomi.goboxapi.myws.WSException;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
@@ -93,7 +100,7 @@ public class Storage {
         this.env = env;
 
         // Connect to the local database
-        env.setDbConnection(new JdbcConnectionSource("jdbc:h2:" + config.getProperty("database", DEFAULT_DB_LOCATION)));
+        initDatabase();
 
         try {
 
@@ -140,6 +147,26 @@ public class Storage {
         loadComponents();
     }
 
+    private void initDatabase () throws SQLException {
+        ConnectionSource connectionSource = new JdbcConnectionSource("jdbc:h2:" + config.getProperty("database", DEFAULT_DB_LOCATION));
+        env.setDbConnection(connectionSource);
+        // Create the file table
+        TableUtils.createTableIfNotExists(connectionSource, GBFile.class);
+
+        // Create the event table
+        TableUtils.createTableIfNotExists(connectionSource, SyncEvent.class);
+
+        // Create the sharing table
+        TableUtils.createTableIfNotExists(connectionSource, Sharing.class);
+
+        Dao<GBFile, Long> fileTable = DaoManager.createDao(connectionSource, GBFile.class);
+
+        // Check if the root file is already in the database
+        if(fileTable.queryForId(GBFile.ROOT_ID) == null) {
+            fileTable.create(GBFile.ROOT_FILE);
+        }
+    }
+
     /**
      * Start listening and serving.
      * @throws StorageException
@@ -166,7 +193,7 @@ public class Storage {
 
         // Create the service loader
         ServiceLoader<GBComponent> loader = ServiceLoader.load(GBComponent.class);
-        log.info("GBComponents loaded");
+        log.info("GBComponents list loaded");
 
         // Iterate each component
         for (GBComponent component : loader) {

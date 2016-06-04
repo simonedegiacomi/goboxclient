@@ -17,38 +17,15 @@ import java.util.Set;
 public interface Model {
 
     /**
-     * Return the current state of the client
-     * @return
+     * Return the used client
+     * @return Used client
      */
-    GBClient.ClientState getClientState ();
-
-    /**
-     * This method connects the client
-     */
-    void connect ();
+    GBClient getClient ();
 
     /**
      * This method stops the sync, client and if in the appropriate state, the storage
      */
     void shutdown ();
-
-    /**
-     * Return true if the storage is connected
-     * @return Connection of the storage
-     */
-    boolean isStorageConnected ();
-
-    /**
-     * Check if the sync object is syncing
-     * @return
-     */
-    boolean isSyncing ();
-
-    /**
-     * Start or stop the sync action
-     * @param sync Sync on or off
-     */
-    void setSyncing (boolean sync);
 
     /**
      * Return the list of the running works
@@ -61,7 +38,6 @@ public interface Model {
      */
     boolean isStorageMode ();
 
-
     /**
      * Set the message of the current action
      * @param s Message of current action
@@ -73,6 +49,4 @@ public interface Model {
     void setError (String error);
 
     String getError();
-
-    void addOnUpdateListener(Runnable runnable);
 }

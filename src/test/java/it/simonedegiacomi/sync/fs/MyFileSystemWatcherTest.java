@@ -256,6 +256,7 @@ public class MyFileSystemWatcherTest {
             @Override
             public void onFileMoved(File before, File movedFile) {
                 assertEquals(moveFile, movedFile);
+                System.out.print("File moved!");
                 latch.countDown();
                 stop();
             }
@@ -274,6 +275,8 @@ public class MyFileSystemWatcherTest {
         watcher.addListener(new MyFileSystemWatcher.FileSystemEventListener() {
             @Override
             public void onFileCreated(File newFile) {
+                if (newFile.toString().equals(moveFile.toString()))
+                    return;
                 assertEquals(testFile, newFile);
                 latch.countDown();
 
@@ -281,18 +284,20 @@ public class MyFileSystemWatcherTest {
                 try {
                     Files.move(newFile, moveFile);
                 } catch (Exception ex) {
+                    ex.printStackTrace();
                     fail();
                 }
             }
 
             @Override
             public void onFileModified(File modifiedFile) {
-                fail();
+                assertEquals(moveFile, modifiedFile);
             }
 
             @Override
             public void onFileDeleted(File deletedFile) {
-                fail();
+
+                assertEquals(testFile, deletedFile);
             }
 
             @Override
@@ -306,6 +311,47 @@ public class MyFileSystemWatcherTest {
         testFile.mkdir();
     }
 
+    @Test
+    public void createFileInsideNewFolder () {
+        latch = new CountDownLatch(2);
+
+        File f = new File(folder + "cartella");
+        File file = new File(f.toString() + "/file.txt");
+
+        watcher.addListener(new MyFileSystemWatcher.FileSystemEventListener() {
+            @Override
+            public void onFileCreated(File newFile) {
+                if (newFile.equals(file)) {
+                    latch.countDown();
+                    return;
+                }
+                assertEquals(f, newFile);
+                try {
+                    Files.touch(file);
+                    System.out.println("File inside folder created " + file);
+                } catch (IOException e) {
+                    fail();
+                }
+                latch.countDown();
+            }
+
+            @Override
+            public void onFileModified(File modifiedFile) {
+
+            }
+
+            @Override
+            public void onFileDeleted(File deletedFile) {
+
+            }
+
+            @Override
+            public void onFileMoved(File before, File movedFile) {
+
+            }
+        });
+        f.mkdir();
+    }
 
     @After
     public void clear () throws InterruptedException {

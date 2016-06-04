@@ -20,6 +20,7 @@ import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.fs.MyFileSystemWatcher;
 import org.apache.log4j.Logger;
 
+import java.io.File;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.List;
@@ -66,8 +67,10 @@ public class Trash implements GBComponent {
     @Override
     public void onAttach(StorageEnvironment env, ComponentConfig componentConfig) throws AttachFailException {
         eventEmitter = env.getEmitter();
+        fileSystemWatcher = env.getFileSystemWatcher();
         PATH = env.getGlobalConfig().getProperty("path", "files/");
         TRASH_PATH = env.getGlobalConfig().getProperty("trash", "trash/");
+        new File(TRASH_PATH).mkdirs();
         try {
             fileTable = DaoManager.createDao(env.getDbConnection(), GBFile.class);
             eventTable = DaoManager.createDao(env.getDbConnection(), SyncEvent.class);
@@ -136,9 +139,8 @@ public class Trash implements GBComponent {
             eventTable.create(event);
             eventEmitter.emitEvent(event);
 
-        } catch (SQLException ex) {
-            // Complete the response
             response.addProperty("success", true);
+        } catch (SQLException ex) {
             response.addProperty("success", false);
             response.addProperty("error", ex.toString());
         } catch (IOException ex) {
@@ -176,7 +178,7 @@ public class Trash implements GBComponent {
         return response;
     }
 
-    @WSQuery(name = "removeFile")
+    @WSQuery(name = "delete")
     public JsonElement onRemoveQuery(JsonElement data) {
 
         log.info("New remove query");
@@ -289,6 +291,7 @@ public class Trash implements GBComponent {
 
             response.addProperty("success", true);
         } catch (SQLException ex) {
+            log.warn(ex.toString(), ex);
             response.addProperty("success", false);
             response.addProperty("error", ex.toString());
         }

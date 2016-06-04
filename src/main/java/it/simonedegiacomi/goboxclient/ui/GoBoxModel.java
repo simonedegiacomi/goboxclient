@@ -18,7 +18,6 @@ public class GoBoxModel implements Model {
      */
     private final GoBoxFacade facade;
 
-    private Runnable listener;
 
     private String flashMessage, error;
 
@@ -27,32 +26,13 @@ public class GoBoxModel implements Model {
     }
 
     @Override
-    public GBClient.ClientState getClientState() {
-        return facade.getClient().getState();
-    }
-
-    @Override
-    public void connect() {
-        facade.connect();
+    public GBClient getClient() {
+        return facade.getClient();
     }
 
     @Override
     public void shutdown() {
         facade.shutdown();
-    }
-    @Override
-    public boolean isStorageConnected() {
-        return facade.isStorageConnected();
-    }
-
-    @Override
-    public boolean isSyncing() {
-        return facade.isSyncing();
-    }
-
-    @Override
-    public void setSyncing(boolean sync) {
-        facade.setSyncing(sync);
     }
 
     @Override
@@ -82,14 +62,5 @@ public class GoBoxModel implements Model {
 
     public String getError () {
         return error;
-    }
-
-    private void refresh() {
-        listener.run();
-    }
-
-    @Override
-    public void addOnUpdateListener(Runnable runnable) {
-        this.listener = runnable;
     }
 }

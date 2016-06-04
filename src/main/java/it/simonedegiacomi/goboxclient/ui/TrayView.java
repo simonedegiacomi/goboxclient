@@ -2,22 +2,20 @@ package it.simonedegiacomi.goboxclient.ui;
 
 import it.simonedegiacomi.configuration.loginui.GUIConnectionTool;
 import it.simonedegiacomi.goboxapi.client.GBClient;
+import it.simonedegiacomi.goboxapi.client.StandardGBClient;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
 import it.simonedegiacomi.sync.Work;
 import org.apache.log4j.Logger;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.ItemEvent;
-import java.awt.event.ItemListener;
+import java.awt.event.*;
 import java.io.IOException;
 import java.net.URL;
 import java.util.Set;
 
 /**
- *
+ * this view add an icon tray
  * Created on 20/01/16.
  * @author Degiacomi Simone
  */
@@ -57,16 +55,21 @@ public class TrayView implements View {
     private PopupMenu trayMenu = new PopupMenu();
 
     /**
-     * Menu items
+     * Mode item
      */
-    private MenuItem messageItem, stateItem, modeItem, exitItem, connSettingsItem;
+    private MenuItem modeItem;
 
-    private CheckboxMenuItem syncCheck;
+    /**
+     * Works count item
+     */
+    private MenuItem worksCountItem;
+
+    private MenuItem exitItem, connSettingsItem;
 
     /**
      * Create a new tray controller without showing anything
      */
-    public TrayView (Presenter presenter) {
+    public TrayView(Presenter presenter) {
         this.presenter = presenter;
         desktop = Desktop.getDesktop();
         trayMenu.setName("GoBox");
@@ -107,42 +110,22 @@ public class TrayView implements View {
         // Sync option
         trayMenu.addSeparator();
 
-        // Checkbox that user use to start and stop the cynchronization
-        syncCheck = new CheckboxMenuItem();
-        syncCheck.setLabel("Sync folders");
-        syncCheck.addItemListener(new ItemListener() {
-
-            @Override
-            public void itemStateChanged(ItemEvent e) {
-                presenter.setSync(syncCheck.getState());
-            }
-        });
-        syncCheck.setEnabled(false);
-        syncCheck.setState(true);
-
-        trayMenu.add(syncCheck);
-
         modeItem = new MenuItem();
+        modeItem.setLabel("Starting...");
+        modeItem.setEnabled(false);
         trayMenu.add(modeItem);
 
-        messageItem = new MenuItem();
-        trayMenu.add(messageItem);
-
-        stateItem = new MenuItem();
-        trayMenu.add(stateItem);
+        worksCountItem = new MenuItem();
+        worksCountItem.setLabel("Starting...");
+        worksCountItem.setEnabled(false);
+        trayMenu.add(worksCountItem);
 
         trayMenu.addSeparator();
 
         // Exit button
         exitItem = new MenuItem();
         exitItem.setLabel("Exit");
-        exitItem.addActionListener(new ActionListener() {
-
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                presenter.exitProgram();
-            }
-        });
+        exitItem.addActionListener((event) -> presenter.exitProgram());
         trayMenu.add(exitItem);
 
         // Load the icon
@@ -153,6 +136,27 @@ public class TrayView implements View {
 
         // Attach the menu to the icon
         icon.setPopupMenu(trayMenu);
+
+        // Add the mouse listener
+        icon.addMouseListener(new MouseListener() {
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                presenter.updateView();
+            }
+
+            @Override
+            public void mousePressed(MouseEvent e) { }
+
+            @Override
+            public void mouseReleased(MouseEvent e) { }
+
+            @Override
+            public void mouseEntered(MouseEvent e) { }
+
+            @Override
+            public void mouseExited(MouseEvent e) { }
+        });
 
         // Add the icon to the system tray
         SwingUtilities.invokeLater(() -> {
@@ -175,47 +179,29 @@ public class TrayView implements View {
     }
 
     @Override
-    public void setClientState(GBClient.ClientState state) {
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                stateItem.setName("State: " + state);
+    public void setClient(GBClient client) {
+        SwingUtilities.invokeLater(() -> {
+            if (presenter.isStorage()) {
+                modeItem.setLabel("Storage");
+                return;
             }
-        });
-    }
-
-    @Override
-    public void setSyncState(boolean enabled) {
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                syncCheck.setState(enabled);
-            }
+            modeItem.setLabel(((StandardGBClient) client).getCurrentTransferProfile().getMode().toString());
         });
     }
 
     @Override
     public void setCurrentWorks(Set<Work> worksQueue) {
-        // TODO: Implement works count or list
+        SwingUtilities.invokeLater(() -> worksCountItem.setLabel("Works: " + worksQueue.size()));
     }
 
     @Override
     public void setMessage(String message) {
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                messageItem.setName(message);
-            }
-        });
+        System.out.println(message);
     }
+
 
     @Override
     public void showError(String error) {
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                JOptionPane.showMessageDialog(null, error, "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        });
+        SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, error, "Error", JOptionPane.ERROR_MESSAGE));
     }
 }

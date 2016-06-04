@@ -23,13 +23,8 @@ public class LogView implements View {
     }
 
     @Override
-    public void setClientState(GBClient.ClientState state) {
-        log.info("Client state: " + state);
-    }
+    public void setClient(GBClient client) {
 
-    @Override
-    public void setSyncState(boolean enabled) {
-        log.info(enabled ? "Sync enabled" : "Sync disabled");
     }
 
     @Override

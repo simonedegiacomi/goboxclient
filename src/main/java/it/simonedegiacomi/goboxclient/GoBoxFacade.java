@@ -115,10 +115,8 @@ public class GoBoxFacade {
             if(storage != null) {
                 storage.shutdown();
             }
-        } catch (ClientException ex) {
-            logger.warn(ex);
-        } catch (InterruptedException ex) {
-            logger.warn(ex);
+        } catch (ClientException | InterruptedException ex) {
+            logger.warn(ex.toString(), ex);
         }
     }
 
