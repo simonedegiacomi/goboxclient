@@ -6,6 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.j256.ormlite.dao.Dao;
 import com.j256.ormlite.dao.DaoManager;
+import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpsExchange;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.authentication.GBAuth;
@@ -266,8 +267,8 @@ public class ClientToStorage implements GBComponent {
         return response;
     }
 
-    @HttpRequest(name = "toStorage", method = "POST")
-    public void onDirectUploadRequest (HttpsExchange req) throws IOException {
+    @HttpRequest(name = "/toStorage", method = "POST")
+    public void onDirectDownloadRequest (HttpExchange req) throws IOException {
 
         log.info("New direct upload request");
 

@@ -177,16 +177,16 @@ public class JavaFileSystemWatcher extends MyFileSystemWatcher {
                         }
                     }
 
-                    // Check if i should ignore the event
-                    if (shouldIgnore(filePath.toFile())) {
-                        logger.info("Event " + kind + " on " + filePath + " ignored");
-                        continue;
-                    }
-
                     // File deleted
                     if (kind == StandardWatchEventKinds.ENTRY_DELETE) {
                         logger.info("Deleted event " + filePath);
                         deletedFile = filePath;
+                        continue;
+                    }
+
+                    // Check if i should ignore the event
+                    if (shouldIgnore(filePath.toFile())) {
+                        logger.info("Event " + kind + " on " + filePath + " ignored");
                         continue;
                     }
 
@@ -219,7 +219,7 @@ public class JavaFileSystemWatcher extends MyFileSystemWatcher {
                     }
                 }
 
-                if (deletedFile != null) {
+                if (deletedFile != null && !shouldIgnore(deletedFile.toFile())) {
                     for (FileSystemEventListener listener : listeners)
                         listener.onFileDeleted(deletedFile.toFile());
                 }

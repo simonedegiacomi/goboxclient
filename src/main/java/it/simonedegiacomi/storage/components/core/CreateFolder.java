@@ -81,8 +81,9 @@ public class CreateFolder implements GBComponent {
         // Prepare the response
         JsonObject response = new JsonObject();
 
-        // Wrap the new directory
+        // Wrap and prepare the new directory
         GBFile newFolder = gson.fromJson(json, GBFile.class);
+        newFolder.setLastUpdateDate(System.currentTimeMillis());
         newFolder.setPrefix(PATH);
 
         try {

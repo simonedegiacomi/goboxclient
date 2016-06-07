@@ -131,11 +131,12 @@ public class Sync {
             public void onFileMoved(File before, File movedFile) {
                 log.info("file moved from " + before + " to " + movedFile);
 
-                // Wrap the file
-                GBFile wrappedFile = new GBFile(movedFile, PATH);
-
                 // Create the work
-                workManager.addWork(new Work(wrappedFile, Work.WorkKind.MOVE_IN_STORAGE));
+                Work work = new Work(new GBFile(movedFile, PATH), Work.WorkKind.MOVE_IN_STORAGE);
+                work.setBefore(new GBFile(before, PATH));
+
+                // And do it
+                workManager.addWork(work);
             }
         });
     }
@@ -218,13 +219,15 @@ public class Sync {
             storageFiles.clear();
         } else {
 
-            if (detailedFile.getLastUpdateDate() == file.getLastUpdateDate()) {
+            System.out.println("Local copy: " + detailedFile.toFile().lastModified() + " Remote copy: " + detailedFile.getLastUpdateDate());
+
+            if (detailedFile.getLastUpdateDate() == detailedFile.toFile().lastModified()) {
                 // Already up to date
                 return;
             }
 
             // If it's not a directory but it's a file check who have the latest version
-            Work.WorkKind action = detailedFile.getLastUpdateDate() > file.getLastUpdateDate() ? Work.WorkKind.UPLOAD : Work.WorkKind.DOWNLOAD;
+            Work.WorkKind action = detailedFile.getLastUpdateDate() > detailedFile.toFile().lastModified() ? Work.WorkKind.UPLOAD : Work.WorkKind.DOWNLOAD;
             workManager.addWork(new Work(detailedFile, action));
         }
     }
@@ -244,12 +247,10 @@ public class Sync {
             public void on(SyncEvent event) {
 
                 // Get the GBFile of this event
-                GBFile file = event.getRelativeFile();
-                file.setPrefix(PATH);
+                event.getRelativeFile().setPrefix(PATH);
 
-                GBFile before = event.getBefore();
-                if (before != null)
-                    before.setPrefix(PATH);
+                if (event.getBefore() != null)
+                    event.getBefore().setPrefix(PATH);
 
                 // Queue work
                 workManager.addWork(new Work(event));

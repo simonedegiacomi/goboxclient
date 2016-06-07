@@ -183,7 +183,9 @@ public class Main {
             });
 
             // Connect the client to the server and the storage
-            client.init();
+            if (!client.init()) {
+                disconnected();
+            }
 
             // Try to switch to direct mode
             try {

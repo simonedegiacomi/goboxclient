@@ -113,14 +113,14 @@ public class Work {
             case FILE_MOVED:
 
                 // Rename the file
-                kind = WorkKind.DOWNLOAD;
+                kind = WorkKind.MOVE_IN_CLIENT;
                 before = event.getBefore();
                 break;
 
             case FILE_MODIFIED:
 
                 // Download the new version
-                kind = WorkKind.MOVE_IN_CLIENT;
+                kind = WorkKind.DOWNLOAD;
                 before = event.getBefore();
                 break;
 

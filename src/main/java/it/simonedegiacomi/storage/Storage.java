@@ -225,6 +225,8 @@ public class Storage {
                             log.warn("Method in GBComponent with wrong access restriction", ex);
                         } catch (InvocationTargetException ex) {
                             log.warn("GBComponent method invocation exception", ex);
+                        } catch (Exception ex) {
+                            log.warn(ex.toString(), ex);
                         }
                         return null;
                     });
