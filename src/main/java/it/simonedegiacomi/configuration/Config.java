@@ -1,6 +1,7 @@
 package it.simonedegiacomi.configuration;
 
 import it.simonedegiacomi.goboxapi.authentication.GBAuth;
+import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
@@ -27,12 +28,7 @@ public class Config {
     /**
      * Default configuration filename
      */
-    private static final String DEFAULT_LOCATION = "config/gobox.properties";
-
-    /**
-     * Default logger configuration file name
-     */
-    private static final String DEFAULT_LOG_CONFIG = "config/log.conf";
+    public static final String DEFAULT_CONFIG_FILE = "config/gobox.properties";
 
     /**
      * Singleton instance of the config
@@ -58,11 +54,11 @@ public class Config {
      * Private constructor to make this class a singleton
      */
     private Config() {
+
         // Add a listener to the auth object
         auth.addOnTokenChangeListener(() -> {
             try {
                 save();
-                log.info("config saved");
             } catch (IOException ex) {
                 log.warn(ex.toString(), ex);
             }
@@ -79,13 +75,6 @@ public class Config {
     }
 
     /**
-     * Load the default logger config
-     */
-    public static void loadLoggerConfig() {
-        PropertyConfigurator.configure(DEFAULT_LOG_CONFIG);
-    }
-
-    /**
      * Load from file the configuration
      *
      * @param File file with the configuration
@@ -95,6 +84,11 @@ public class Config {
         FileInputStream in = new FileInputStream(file);
         properties.load(in);
         in.close();
+
+        // If the log configuration file is present, load it
+        if (properties.containsKey("logConfiguration")) {
+            PropertyConfigurator.configure(properties.getProperty("logConfiguration"));
+        }
 
         // If the auth object was serialized, reload it
         if (properties.containsKey("username")) {
@@ -110,7 +104,7 @@ public class Config {
      * @throws Exception
      */
     public void load() throws IOException {
-        load(new File(DEFAULT_LOCATION));
+        load(new File(DEFAULT_CONFIG_FILE));
     }
 
     /**
@@ -120,6 +114,11 @@ public class Config {
      * @throws IOException
      */
     public void save(File file) throws IOException {
+
+        // If the file doesn't exists, assert that the father exists
+        if (!file.exists()) {
+            file.getParentFile().mkdirs();
+        }
 
         // Update the properties with the auth
         if (auth.getToken() != null) {
@@ -140,7 +139,7 @@ public class Config {
      * This method is just an alias for {@link #save(File)}
      */
     public void save() throws IOException {
-        save(new File(DEFAULT_LOCATION));
+        save(new File(DEFAULT_CONFIG_FILE));
     }
 
     /**
@@ -150,15 +149,6 @@ public class Config {
     public void apply() {
         for (OnConfigChangeListener listener : listeners)
             listener.onChange();
-    }
-
-    /**
-     * Return the specified property, null if the key doesn't exist
-     * @param key Name of the property
-     * @return Value of the property, null if not found
-     */
-    public String getProperty (String key) {
-        return properties.getProperty(key);
     }
 
     /**
@@ -173,7 +163,29 @@ public class Config {
             properties.put(key, defaultValue);
         }
 
-        return getProperty(key);
+        return properties.getProperty(key);
+    }
+
+    /**
+     * Return the directory for the specified purpose. If the directory doesn't exist is created and if he key doesn't
+     * exist the specified default value is returned
+     * @param forWhat Purpose of the folder
+     * @param defaultValue Default value to use of the folder is not specified
+     * @return Existing folder
+     */
+    public File getFolder (String forWhat, String defaultValue) {
+
+        // Get from properties
+        File folder = new File(getProperty(forWhat, defaultValue));
+
+        if (!folder.exists()) {
+
+            // Create the directory
+            folder.mkdirs();
+            log.info("Created folder " + folder.toString());
+        }
+
+        return folder;
     }
 
     public void setProperty(String key, String value) {
@@ -190,6 +202,10 @@ public class Config {
 
     public boolean hasProperty(String key) {
         return properties.containsKey(key);
+    }
+
+    public String getProperty(String key) {
+        return properties.getProperty(key);
     }
 
     public interface OnConfigChangeListener {

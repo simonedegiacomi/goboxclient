@@ -33,7 +33,7 @@ public abstract class MyFileSystemWatcher {
     protected final boolean shouldIgnore (File file) {
 
         // Get the path of the file
-        String[] path = file.getPath().split("/");
+        String[] path = file.getAbsolutePath().split("/");
 
         // Iterate every file to ignore
         for (Map.Entry<String, Long> toIgnore : filesToIgnore.entrySet()) {
@@ -90,7 +90,7 @@ public abstract class MyFileSystemWatcher {
      * @param file File to ignore
      */
     public void startIgnoring (File file) {
-        filesToIgnore.put(file.getPath(), CONTINUE_IGNORE_TIME);
+        filesToIgnore.put(file.getAbsolutePath(), CONTINUE_IGNORE_TIME);
     }
 
     /**

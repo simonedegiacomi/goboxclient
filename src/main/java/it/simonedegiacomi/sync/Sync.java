@@ -6,6 +6,8 @@ import it.simonedegiacomi.goboxapi.client.ClientException;
 import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
 import it.simonedegiacomi.goboxapi.client.SyncEventListener;
+import it.simonedegiacomi.goboxclient.GoBoxEnvironment;
+import it.simonedegiacomi.goboxclient.GoBoxFacade;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.fs.MyFileSystemWatcher;
 import org.apache.log4j.Logger;
@@ -54,7 +56,7 @@ public class Sync {
     /**
      * Path of the files folder
      */
-    private final String PATH = config.getProperty("path");
+    private final String PATH = config.getFolder("path", "files/").getAbsolutePath();
 
     private volatile boolean syncState;
 
@@ -64,21 +66,25 @@ public class Sync {
      * the storage
      * @throws IOException Exception thrown assigning the file system watcher
      */
-    public Sync (GBClient client, MyFileSystemWatcher watcher) throws IOException {
-        this.client = client;
-        this.watcher = watcher;
+    public Sync (GoBoxEnvironment env) {
+        this.client = env.getClient();
+        this.watcher = env.getFileSystemWatcher();
 
+        // Add listener to watcher
         prepareWatcher();
 
+        // Update environment
+        env.setSync(this);
+
         // Create a new work
-        workManager = new WorkManager(client, this, WorkManager.DEFAULT_THREADS);
+        workManager = new WorkManager(env, WorkManager.DEFAULT_THREADS);
     }
 
     /**
      * create the file system watcher
      * @throws IOException
      */
-    private void prepareWatcher () throws IOException {
+    private void prepareWatcher () {
         watcher.addListener(new MyFileSystemWatcher.FileSystemEventListener() {
 
             @Override

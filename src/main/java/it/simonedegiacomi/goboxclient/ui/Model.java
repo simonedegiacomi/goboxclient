@@ -1,6 +1,7 @@
 package it.simonedegiacomi.goboxclient.ui;
 
 import it.simonedegiacomi.goboxapi.client.GBClient;
+import it.simonedegiacomi.goboxclient.GoBoxFacade;
 import it.simonedegiacomi.sync.Work;
 
 import java.util.Set;
@@ -17,28 +18,6 @@ import java.util.Set;
 public interface Model {
 
     /**
-     * Return the used client
-     * @return Used client
-     */
-    GBClient getClient ();
-
-    /**
-     * This method stops the sync, client and if in the appropriate state, the storage
-     */
-    void shutdown ();
-
-    /**
-     * Return the list of the running works
-     * @return ist of current works
-     */
-    Set<Work> getCurrentWorks();
-
-    /**
-     * Return true if the program is running in storage mode
-     */
-    boolean isStorageMode ();
-
-    /**
      * Set the message of the current action
      * @param s Message of current action
      */
@@ -49,4 +28,15 @@ public interface Model {
     void setError (String error);
 
     String getError();
+
+    /**
+     * Add a new listener that will be called when the modle updates
+     * @param runnable Runnable to execute
+     */
+    void addOnUpdateListener (Runnable runnable);
+
+    /**
+     * Thi method clear the flash message and error
+     */
+    void clearFlashMessageAndError();
 }

@@ -19,7 +19,7 @@ public class MyFileUtils {
     /**
      * Path of the trash folder
      */
-    private final static String TRASH = Config.getInstance().getProperty("trash");
+    private final static String TRASH = Config.getInstance().getFolder("trash", "trash/").getAbsolutePath();
 
     /**
      * Copy a file from the source to the destination. If the file is a directory,
@@ -56,6 +56,9 @@ public class MyFileUtils {
                 delete(child);
             }
         }
+
+        // Create the needed directories
+        file.getParentFile().mkdirs();
 
         // Finally the file
         file.delete();
@@ -123,17 +126,14 @@ public class MyFileUtils {
             file.setPrefix(oldPrefix);
         }
 
+        // Create the needed directories
+        trashFile.getParentFile().mkdirs();
+
         // Move the file
         Files.move(file.toFile().toPath(), trashFile.toPath());
 
         if (file.isTrashed()) {
             file.setPrefix(oldPrefix);
         }
-    }
-
-    private static void prepareDestination (File file, File dst) {
-        String[] filePieces = file.toString().split("/");
-        String[] dstPieces = file.toString().split("/");
-        //for (int i = dstPieces.length - 1;i < filePieces; )
     }
 }

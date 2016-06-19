@@ -111,7 +111,6 @@ public class JavaFileSystemWatcher extends MyFileSystemWatcher {
      */
     private void startWatching() {
 
-        // TODO: clean code, too many if!!!!
         Thread listenerThread = new Thread(() -> {
             while (shutdown.getCount() >= 2) {
 
@@ -130,22 +129,11 @@ public class JavaFileSystemWatcher extends MyFileSystemWatcher {
                 LinkedList<WatchEvent<?>> orderedEvents = new LinkedList<>(events);
 
                 // Sort it
-                Collections.sort(orderedEvents, new Comparator<WatchEvent<?>>() {
-                    @Override
-                    public int compare(WatchEvent<?> a, WatchEvent<?> b) {
-                        return a.kind().equals(StandardWatchEventKinds.ENTRY_DELETE) ? -1 : 1;
-                    }
-                });
-
-                for (WatchEvent<?> event : orderedEvents) {
-                    logger.info("Event " + event.kind());
-                }
+                Collections.sort(orderedEvents, (a, b) -> a.kind().equals(StandardWatchEventKinds.ENTRY_DELETE) ? -1 : 1);
 
                 Path deletedFile = null;
 
                 for (WatchEvent<?> event : orderedEvents) {
-
-
 
                     // Get the event
                     WatchEvent.Kind kind = event.kind();
@@ -155,18 +143,11 @@ public class JavaFileSystemWatcher extends MyFileSystemWatcher {
                         continue;
                     }
 
-                    // Find the path of the change file
+                    // Find the path of the changed file
                     WatchEvent<Path> eventFile = (WatchEvent<Path>) event;
                     Path name = eventFile.context();
                     Path filePath = keys.get(currentKey).resolve(name);
-
-
-
-                    logger.info("Event " + event.kind() + " file " + filePath + " at " + filePath.toFile().lastModified());
-
-
-
-
+                    logger.info("Event " + event.kind() + " " + filePath + " at " + filePath.toFile().lastModified());
 
                     // Start watching if it is a folder
                     if (kind == StandardWatchEventKinds.ENTRY_CREATE && filePath.toFile().isDirectory()) {

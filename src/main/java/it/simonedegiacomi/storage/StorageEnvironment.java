@@ -2,10 +2,11 @@ package it.simonedegiacomi.storage;
 
 import com.j256.ormlite.support.ConnectionSource;
 import it.simonedegiacomi.configuration.Config;
+import it.simonedegiacomi.goboxclient.GoBoxEnvironment;
 import it.simonedegiacomi.sync.Sync;
 import it.simonedegiacomi.sync.fs.MyFileSystemWatcher;
 
-public class StorageEnvironment {
+public class StorageEnvironment extends GoBoxEnvironment {
 
     /**
      * Database connection
@@ -22,21 +23,9 @@ public class StorageEnvironment {
      */
     private EventEmitter emitter;
 
-    /**
-     * Internal client
-     */
-    private InternalClient internalClient;
-
-    /**
-     * Sync object
-     * @deprecated
-     */
-    private Sync sync;
-
-    /**
-     * File system watcher
-     */
-    private MyFileSystemWatcher fileSystemWatcher;
+    public StorageEnvironment (GoBoxEnvironment env) {
+        super(env);
+    }
 
     /**
      * Return the database connection
@@ -70,47 +59,9 @@ public class StorageEnvironment {
         this.emitter = emitter;
     }
 
-    /**
-     * Return the internal client
-     * @return Internal client
-     */
-    public InternalClient getInternalClient() {
-        return internalClient;
-    }
-
-    /**
-     * Set the internal client
-     * @param internalClient Internal client
-     */
-    public void setInternalClient(InternalClient internalClient) {
-        this.internalClient = internalClient;
-    }
-
-    /**
-     * Return the sync object
-     * @return Sync object
-     */
-    public Sync getSync() {
-        return sync;
-    }
-
-    /**
-     * Set the sync object
-     * @param sync sync object
-     */
-    public void setSync(Sync sync) {
-        this.sync = sync;
-    }
 
     public Config getGlobalConfig() {
         return globalConfig;
     }
 
-    public MyFileSystemWatcher getFileSystemWatcher() {
-        return fileSystemWatcher;
-    }
-
-    public void setFileSystemWatcher(MyFileSystemWatcher fileSystemWatcher) {
-        this.fileSystemWatcher = fileSystemWatcher;
-    }
 }

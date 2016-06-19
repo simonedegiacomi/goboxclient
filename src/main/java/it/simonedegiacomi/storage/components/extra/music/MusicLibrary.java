@@ -6,12 +6,10 @@ import com.mpatric.mp3agic.InvalidDataException;
 import com.mpatric.mp3agic.Mp3File;
 import com.mpatric.mp3agic.UnsupportedTagException;
 import it.simonedegiacomi.goboxapi.GBFile;
-import it.simonedegiacomi.goboxapi.client.SyncEvent;
-import it.simonedegiacomi.goboxapi.client.SyncEventListener;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.components.AttachFailException;
 import it.simonedegiacomi.storage.components.ComponentConfig;
-import it.simonedegiacomi.storage.components.GBComponent;
+import it.simonedegiacomi.storage.components.GBModule;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
@@ -20,7 +18,7 @@ import java.sql.SQLException;
 /**
  * Created by simone on 28/05/16.
  */
-public class MusicLibrary implements GBComponent {
+public class MusicLibrary implements GBModule {
 
     private final Logger log = Logger.getLogger(MusicLibrary.class);
 

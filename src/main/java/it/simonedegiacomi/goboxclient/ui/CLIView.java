@@ -6,6 +6,7 @@ import com.google.gson.stream.JsonWriter;
 import it.simonedegiacomi.configuration.Config;
 import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
+import it.simonedegiacomi.goboxclient.GoBoxEnvironment;
 import it.simonedegiacomi.sync.Work;
 import it.simonedegiacomi.utils.EasyProxy;
 
@@ -70,18 +71,20 @@ public class CLIView implements View {
     }
 
     @Override
-    public void setClient(GBClient client) {
+    public void setEnvironment(GoBoxEnvironment env) {
 
     }
-
-    @Override
-    public void setCurrentWorks(Set<Work> worksQueue) { }
 
     @Override
     public void setMessage(String message) { }
 
     @Override
     public void showError(String error) { }
+
+    @Override
+    public void updateViewFromEnvironment() {
+
+    }
 
     private JsonObject answer (String[] args) {
 

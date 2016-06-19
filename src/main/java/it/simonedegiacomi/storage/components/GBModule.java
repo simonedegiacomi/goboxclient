@@ -8,7 +8,7 @@ import it.simonedegiacomi.storage.StorageEnvironment;
  * Created on 25/05/16.
  * @author Degiacomi Simone
  */
-public interface GBComponent {
+public interface GBModule {
 
     /**
      * This method is called when the component is activated in the storage

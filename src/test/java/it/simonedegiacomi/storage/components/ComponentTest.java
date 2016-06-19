@@ -38,14 +38,14 @@ public abstract class ComponentTest {
     public void init () throws IOException, SQLException, StorageException, ClientException {
         org.apache.log4j.BasicConfigurator.configure();
 
-        GBAuth storageAuth = PropertiesAuthLoader.loadAndLoginFromFile(new File(getClass().getResource("/storage_auth.properties").getFile()));
-        Config.getInstance().setAuth(storageAuth);
-        env = new StorageEnvironment();
-        storage = new Storage(storageAuth, env);
-        storage.startStoraging();
-
-        client = new StandardGBClient(PropertiesAuthLoader.loadAndLoginFromFile(new File(getClass().getResource("/client_auth.properties").getFile())));
-        client.init();
+//        GBAuth storageAuth = PropertiesAuthLoader.loadAndLoginFromFile(new File(getClass().getResource("/storage_auth.properties").getFile()));
+//        Config.getInstance().setAuth(storageAuth);
+//        env = new StorageEnvironment();
+//        storage = new Storage(storageAuth, env);
+//        storage.startStoraging();
+//
+//        client = new StandardGBClient(PropertiesAuthLoader.loadAndLoginFromFile(new File(getClass().getResource("/client_auth.properties").getFile())));
+//        client.init();
     }
 
 

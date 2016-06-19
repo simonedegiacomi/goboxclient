@@ -44,9 +44,6 @@ public class Employee {
      */
     private final WorkManager manager;
 
-    private final String PATH = Config.getInstance().getProperty("path");
-
-
     public Employee(GBClient client, Sync sync, WorkManager workManager) {
         this.client = client;
         this.sync = sync;

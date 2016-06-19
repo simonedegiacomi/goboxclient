@@ -1,6 +1,8 @@
 package it.simonedegiacomi.sync;
 
 import it.simonedegiacomi.goboxapi.client.GBClient;
+import it.simonedegiacomi.goboxclient.GoBoxEnvironment;
+import it.simonedegiacomi.goboxclient.GoBoxFacade;
 import org.apache.log4j.Logger;
 
 import java.util.HashSet;
@@ -9,6 +11,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * @author Degiacomi Simone
@@ -30,26 +33,18 @@ public class WorkManager {
      * Real java executor.
      * (yes, this is just another wrapper...)
      */
-    private final ExecutorService executor;
+    private final ThreadPoolExecutor executor;
 
-    /**
-     * List of running works
-     */
-    private final Set<Work> currentWorks = new HashSet<>();
-
-    /**
-     * List of failed works
-     */
-    private final List<Work> failedWorks = new LinkedList<>();
+    private WorkStateListener workStateListener;
 
     /**
      * Employee that do the works. This employee is thread-safe so one in enough
      */
     private final Employee employee;
 
-    public WorkManager(GBClient client, Sync sync, int threads){
-        executor = Executors.newFixedThreadPool(threads);
-        employee = new Employee(client, sync, this);
+    public WorkManager(GoBoxEnvironment env, int threads){
+        executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(threads);
+        employee = new Employee(env.getClient(), env.getSync(), this);
     }
 
     /**
@@ -60,15 +55,17 @@ public class WorkManager {
         executor.submit(() -> {
             log.info("running work " + newWork);
 
-            // Add to the current works set
-            currentWorks.add(newWork);
+            // Call the listener
+            workStateListener.onStartWork(newWork);
 
             if (!employee.submit(newWork)) {
                 log.warn("work failed " + newWork);
-                failedWorks.add(newWork);
+                workStateListener.onFailWork(newWork);
             }
+
+            // Call the listener
             log.info("work completed " + newWork);
-            currentWorks.remove(newWork);
+            workStateListener.onCompleteWork(newWork);
         });
     }
 
@@ -80,10 +77,20 @@ public class WorkManager {
     }
 
     /**
-     * Return the set with the running works
-     * @return Set of current works
+     * Return the size of the queue
+     * @return Number of queued works
      */
-    public Set<Work> getCurrentWorks () {
-        return currentWorks;
+    public int getQueueSize () {
+        return executor.getQueue().size();
+    }
+
+    public void setWorkStateListener(WorkStateListener workStateListener) {
+        this.workStateListener = workStateListener;
+    }
+
+    public interface WorkStateListener {
+        public void onStartWork (Work startedWork);
+        public void onFailWork (Work startedWork);
+        public void onCompleteWork (Work startedWork);
     }
 }

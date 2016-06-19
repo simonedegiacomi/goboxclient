@@ -16,6 +16,7 @@ import it.simonedegiacomi.utils.GoBoxInstance;
 import org.apache.log4j.Logger;
 
 import java.awt.*;
+import java.io.File;
 import java.io.IOException;
 import java.sql.SQLException;
 
@@ -34,35 +35,80 @@ public class Main {
     private static final Logger logger = Logger.getLogger(Main.class);
 
     /**
-     * Default delay to wait between the new connection attempt
-     */
-    private static final int DEFAULT_RESTART_DELAY = 5000;
-
-    /**
-     * Config instance
-     */
-    private static final Config config = Config.getInstance();
-
-    /**
      * Facade instance of this program (a sort of a control panel)
      */
     private static final GoBoxFacade facade = new GoBoxFacade();
 
-    /**
-     * Model instance of the program
-     */
-    private final static Model goboxModel = new GoBoxModel(facade);
+    private static Presenter presenter;
 
-    private final static Presenter presenter = new GoBoxPresenter(goboxModel);
+    private static final GoBoxModel model = new GoBoxModel();
 
     public static void main(String[] args) {
 
+        // Prepare the user interface
+        prepareUI();
+
+        // Load configuration file
+        loadConfig(args);
+
+        // Register shutdown listener
+        registerShutdown();
+
+        // Handle the case when this is not the first instance
+        handleSingleInstance(args);
+
+        // Start the client program
+        facade.start();
+    }
+
+    /**
+     * Load the configuration
+     * @param args CLI arguments
+     */
+    private static void loadConfig (String[] args) {
         try {
-            facade.initializeEnvironment();
+            facade.initialize(new File(args.length == 1 ? args[1] : Config.DEFAULT_CONFIG_FILE));
         } catch (IOException ex) {
-            ex.printStackTrace();
             logger.warn("Environment not initialized correctly.", ex);
+            model.setError("Environment initialization Failed");
+            System.exit(-1);
         }
+    }
+
+    /**
+     * Register the shutdown listener
+     */
+    private static void registerShutdown () {
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                facade.shutdown();
+            }
+        });
+    }
+
+    /**
+     * Prepare the UI object
+     */
+    private static void prepareUI() {
+
+        // Create the model
+        facade.getEnvironment().setModel(model);
+
+        // Create the presenter
+        presenter = new GoBoxPresenter(facade.getEnvironment());
+
+        // If there is a gui, create the TrayView
+        if (!GraphicsEnvironment.isHeadless()) {
+            TrayView view = new TrayView(presenter);
+            presenter.addView(view);
+        }
+
+        // Add the log view
+        presenter.addView(new LogView());
+    }
+
+    private static void handleSingleInstance (String[] args) {
 
         // Check if this is the only instance
         GoBoxInstance instance = new GoBoxInstance();
@@ -73,234 +119,12 @@ public class Main {
                 instance.sendToMainInstance(args);
             } catch (IOException ex) {
                 logger.warn("GoBox CLI is not available", ex);
+                System.exit(-1);
             }
-            return;
+            System.exit(0);
         }
 
         // Set the presenter to this instance
         instance.setPresenter(presenter);
-
-        // If there is a gui, create the tray view
-        if (!GraphicsEnvironment.isHeadless()) {
-            TrayView view = new TrayView(presenter);
-            presenter.addView(view);
-        }
-
-        // Add the log view
-        presenter.addView(new LogView());
-
-        // If the user is not logged (or if the configuration was not loaded) start the login wizard
-        if (config.isAuthDefined()) {
-            afterLogin();
-        } else {
-            startLogin();
-        }
-    }
-
-    /**
-     * Start the login wizard
-     */
-    private static void startLogin() {
-
-        // Get and start the right login tool
-        LoginTool.startLogin(() -> {
-            try {
-                config.save();
-            } catch (IOException ex) {
-                logger.warn("Cannot save auth credentials");
-            }
-            afterLogin();
-        }, () -> error("Login failed. Please restart GoBoxClient"));
-    }
-
-    /**
-     * After the login, resync and start the client/storage
-     */
-    private static void afterLogin() {
-
-        // Check if the auth token is still valid
-        GBAuth auth = config.getAuth();
-
-        try {
-
-            // Try to authenticate
-            goboxModel.setFlashMessage("Authenticating...");
-
-            if (!auth.check()) {
-
-                error("Invalid authentication token", false);
-
-                // If can't authenticate because the data is wrong, delete the auth information
-                config.deleteAuth();
-
-                // Restart the login procedure
-                startLogin();
-                return;
-            }
-        } catch (IOException ex) {
-
-            // If there was an error with the connection retry later
-            disconnected();
-            return;
-        }
-
-        // Start the right client
-        switch (auth.getMode()) {
-
-            case CLIENT:
-                startClientMode(auth);
-                break;
-
-            case STORAGE:
-                startStorageMode(auth);
-                break;
-        }
-    }
-
-    /**
-     * Start the client mode
-     *
-     * @param auth Auth object to use to instantiate the client
-     */
-    private static void startClientMode(GBAuth auth) {
-        goboxModel.setFlashMessage("Connecting as client ...");
-
-        // Create the client
-        StandardGBClient client = new StandardGBClient(auth);
-        client.setEchoFilter(true);
-        facade.setClient(client);
-
-        try {
-
-            // Create the sync object
-            Sync sync = new Sync(client, MyFileSystemWatcher.getDefault(config.getProperty("path", "files/")));
-            facade.setSync(sync);
-
-            client.onDisconnect(() -> {
-
-                // Shutdown and then restart
-                disconnected();
-            });
-
-            // Connect the client to the server and the storage
-            if (!client.init()) {
-                disconnected();
-            }
-
-            // Try to switch to direct mode
-            try {
-                client.switchMode(StandardGBClient.ConnectionMode.LOCAL_DIRECT_MODE);
-            } catch (ClientException ex) {
-                logger.warn("Direct connection failed. Fallback in direct remote", ex);
-                try {
-                    client.switchMode(StandardGBClient.ConnectionMode.DIRECT_MODE);
-                } catch (ClientException e) {
-                    logger.warn("Direct Remote connection failed. Fallback in bridge remote", e);
-                }
-            }
-
-            // Start sync
-            sync.syncAndStart();
-
-            goboxModel.setFlashMessage("Ready");
-        } catch (ClientException | IOException ex) {
-            logger.warn(ex.toString(), ex);
-            disconnected();
-        }
-    }
-
-    /**
-     * Called to start the storage
-     *
-     * @param auth Auth object to use
-     */
-    private static void startStorageMode(GBAuth auth) {
-        goboxModel.setFlashMessage("Connecting as storage...");
-
-        try {
-
-            // Create a new storage environment
-            StorageEnvironment env = new StorageEnvironment();
-
-            // Create the file system watcher
-            MyFileSystemWatcher fsWatcher = MyFileSystemWatcher.getDefault(config.getProperty("path", "files/"));
-            env.setFileSystemWatcher(fsWatcher);
-
-            // Create the storage
-            Storage storage = new Storage(auth, env);
-
-            // Get the internal client
-            GBClient client = env.getInternalClient();
-
-            // Create the sync object
-            Sync sync = new Sync(client, fsWatcher);
-
-            // Update facade
-            facade.setStorage(storage);
-            facade.setClient(client);
-            facade.setSync(sync);
-
-            // Add a listener for the storage disconnection
-            storage.onDisconnected(() -> {
-                facade.shutdown();
-
-                // Call the function that will try to reconnect soon
-                disconnected();
-            });
-
-            // Start event listener and http server
-            storage.startStoraging();
-
-            // Sync the folders and files
-            sync.syncAndStart();
-        } catch (StorageException e) {
-            logger.warn(e.toString(), e);
-            disconnected();
-        } catch (ClientException | IOException | SQLException e) {
-            logger.warn(e.toString(), e);
-            disconnected();
-        }
-
-        goboxModel.setFlashMessage("Ready");
-    }
-
-    /**
-     * Called when the client is disconnected
-     */
-    private static void disconnected() {
-
-        // Shutdown all the object
-        facade.shutdown();
-
-        // Advise the user
-        goboxModel.setFlashMessage("Disconnected. Retry soon...");
-
-        try {
-            // wait some seconds...
-            Thread.sleep(DEFAULT_RESTART_DELAY);
-        } catch (InterruptedException ex) {
-        }
-
-        goboxModel.setFlashMessage("New connection attempt");
-
-        // Restart
-        afterLogin();
-    }
-
-    /**
-     * Print the error message in the console or untrash an error dialog. Then
-     * exit the program
-     *
-     * @param message Error message to untrash
-     */
-    private static void error(String message) {
-        error(message, true);
-    }
-
-    private static void error(String message, boolean close) {
-        goboxModel.setError(message);
-
-        if (close)
-            facade.exit();
     }
 }

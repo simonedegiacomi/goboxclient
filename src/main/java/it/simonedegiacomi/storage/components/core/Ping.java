@@ -6,13 +6,13 @@ import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.components.AttachFailException;
 import it.simonedegiacomi.storage.components.ComponentConfig;
-import it.simonedegiacomi.storage.components.GBComponent;
+import it.simonedegiacomi.storage.components.GBModule;
 
 /**
  * Created on 5/28/16.
  * @author Degiacomi Simone
  */
-public class Ping implements GBComponent {
+public class Ping implements GBModule {
 
     @Override
     public void onAttach(StorageEnvironment env, ComponentConfig componentConfig) throws AttachFailException {

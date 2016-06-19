@@ -38,7 +38,6 @@ public class MyFileSystemWatcherTest {
 
     @Before
     public void initWatcher () throws IOException {
-        Config.loadLoggerConfig();
         new File(folder).mkdir();
         watcher = new JavaFileSystemWatcher(folder);
         //watcher = new JNotifyFileSystemWatcher(folder);

@@ -12,7 +12,7 @@ import it.simonedegiacomi.goboxapi.utils.MyGsonBuilder;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.components.AttachFailException;
 import it.simonedegiacomi.storage.components.ComponentConfig;
-import it.simonedegiacomi.storage.components.GBComponent;
+import it.simonedegiacomi.storage.components.GBModule;
 import it.simonedegiacomi.storage.components.core.utils.DBCommonUtils;
 import org.apache.log4j.Logger;
 
@@ -22,12 +22,12 @@ import java.sql.SQLException;
  * Created on 27/05/16.
  * @author Degiacomi Simone
  */
-public class FileInfo implements GBComponent {
+public class FileInfo implements GBModule {
 
     /**
      * Logger of the class
      */
-    private final Logger log = Logger.getLogger(GBComponent.class);
+    private final Logger log = Logger.getLogger(GBModule.class);
 
     /**
      * Gson

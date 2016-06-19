@@ -7,7 +7,6 @@ import com.google.gson.JsonObject;
 import com.j256.ormlite.dao.Dao;
 import com.j256.ormlite.dao.DaoManager;
 import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpsExchange;
 import it.simonedegiacomi.goboxapi.GBFile;
 import it.simonedegiacomi.goboxapi.authentication.GBAuth;
 import it.simonedegiacomi.goboxapi.client.SyncEvent;
@@ -18,7 +17,7 @@ import it.simonedegiacomi.storage.EventEmitter;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.components.AttachFailException;
 import it.simonedegiacomi.storage.components.ComponentConfig;
-import it.simonedegiacomi.storage.components.GBComponent;
+import it.simonedegiacomi.storage.components.GBModule;
 import it.simonedegiacomi.storage.components.HttpRequest;
 import it.simonedegiacomi.storage.components.core.utils.DBCommonUtils;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
@@ -42,7 +41,7 @@ import java.util.Set;
  * Created on 27/05/16.
  * @author Degiacomi Simone
  */
-public class ClientToStorage implements GBComponent {
+public class ClientToStorage implements GBModule {
 
     /**
      * Logger of the class

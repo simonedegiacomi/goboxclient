@@ -17,7 +17,7 @@ import it.simonedegiacomi.storage.EventEmitter;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.components.AttachFailException;
 import it.simonedegiacomi.storage.components.ComponentConfig;
-import it.simonedegiacomi.storage.components.GBComponent;
+import it.simonedegiacomi.storage.components.GBModule;
 import it.simonedegiacomi.storage.components.core.utils.DBCommonUtils;
 import org.apache.log4j.Logger;
 
@@ -28,7 +28,7 @@ import java.util.List;
  * Created on 27/05/16.
  * @author Degiacomi Simone
  */
-public class Share implements GBComponent {
+public class Share implements GBModule {
 
     /**
      * Logger of the class

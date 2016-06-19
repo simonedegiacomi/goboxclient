@@ -98,7 +98,7 @@ public class GUIConnectionTool {
             portField.setText(config.getProperty("proxyPort"));
         }
 
-        boolean useProxy = config.hasProperty("useProxy") && Boolean.parseBoolean(config.getProperty("useProxy"));
+        boolean useProxy = config.hasProperty("useProxy") && Boolean.parseBoolean(config.getProperty("useProxy", "false"));
         proxyCheck.setSelected(useProxy);
         portField.setEnabled(useProxy);
         ipField.setEnabled(useProxy);

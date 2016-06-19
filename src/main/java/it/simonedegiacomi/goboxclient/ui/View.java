@@ -1,6 +1,8 @@
 package it.simonedegiacomi.goboxclient.ui;
 
 import it.simonedegiacomi.goboxapi.client.GBClient;
+import it.simonedegiacomi.goboxclient.GoBoxEnvironment;
+import it.simonedegiacomi.sync.Sync;
 import it.simonedegiacomi.sync.Work;
 
 import java.util.Set;
@@ -29,13 +31,11 @@ public interface View {
      */
     Presenter getPresenter ();
 
-    void setClient (GBClient client);
-
     /**
-     * Set the current works
-     * @param worksQueue Running works
+     * Set the client environment
+     * @param env
      */
-    void setCurrentWorks(Set<Work> worksQueue);
+    void setEnvironment (GoBoxEnvironment env);
 
     /**
      * Set the message the is always visible and indicate the state
@@ -49,4 +49,8 @@ public interface View {
      */
     void showError (String error);
 
+    /**
+     * Update the view from the environment
+     */
+    void updateViewFromEnvironment();
 }

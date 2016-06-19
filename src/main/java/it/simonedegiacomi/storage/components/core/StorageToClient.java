@@ -16,7 +16,7 @@ import it.simonedegiacomi.storage.EventEmitter;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.components.AttachFailException;
 import it.simonedegiacomi.storage.components.ComponentConfig;
-import it.simonedegiacomi.storage.components.GBComponent;
+import it.simonedegiacomi.storage.components.GBModule;
 import it.simonedegiacomi.storage.components.HttpRequest;
 import it.simonedegiacomi.storage.components.core.utils.DBCommonUtils;
 import it.simonedegiacomi.storage.components.core.utils.sender.*;
@@ -36,7 +36,7 @@ import java.util.Map;
  * Created on 26/05/16.
  * @author Degiacomi Simone
  */
-public class StorageToClient implements GBComponent {
+public class StorageToClient implements GBModule {
 
     /**
      * Logger of the class

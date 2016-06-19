@@ -1,5 +1,7 @@
 package it.simonedegiacomi.goboxclient.ui;
 
+import it.simonedegiacomi.goboxclient.GoBoxEnvironment;
+
 import java.util.HashSet;
 import java.util.Set;
 
@@ -11,10 +13,13 @@ public class GoBoxPresenter implements Presenter {
 
     private final Set<View> views = new HashSet<View>();
 
-    private Model model;
+    private final GoBoxEnvironment env;
 
-    public GoBoxPresenter(Model model) {
-        this.model = model;
+    private final Model model;
+
+    public GoBoxPresenter(GoBoxEnvironment env) {
+        this.env = env;
+        this.model = env.getModel();
     }
 
     @Override
@@ -33,18 +38,14 @@ public class GoBoxPresenter implements Presenter {
     }
 
     @Override
-    public void setModel(Model model) {
-        this.model = model;
-    }
-
-    @Override
     public Model getModel() {
         return model;
     }
 
     @Override
     public void exitProgram() {
-        model.shutdown();
+        env.shutdown();
+        System.exit(0);
     }
 
     /**
@@ -53,16 +54,22 @@ public class GoBoxPresenter implements Presenter {
     @Override
     public void updateView () {
         for (View view : views) {
-            view.setClient(model.getClient());
-            view.setMessage(model.getFlashMessage());
-            view.setCurrentWorks(model.getCurrentWorks());
-            if(model.getError() != null)
-                view.showError(model.getError());
-        }
-    }
 
-    @Override
-    public boolean isStorage() {
-        return true;
+            // Update view
+            view.updateViewFromEnvironment();
+
+            // Show messages
+            if (model.getFlashMessage() != null) {
+                view.setMessage(model.getFlashMessage());
+            }
+
+            // Show errors
+            if(model.getError() != null) {
+                view.showError(model.getError());
+            }
+        }
+
+        // clear messages
+        model.clearFlashMessageAndError();
     }
 }

@@ -31,12 +31,6 @@ public interface Presenter {
     void removeView (View viewToRemove);
 
     /**
-     * Set the model that will be used by this presenter
-     * @param model Model to use
-     */
-    void setModel (Model model);
-
-    /**
      * Get the current model used by this presenter
      * @return Current used model
      */
@@ -53,5 +47,4 @@ public interface Presenter {
      */
     void updateView();
 
-    boolean isStorage();
 }

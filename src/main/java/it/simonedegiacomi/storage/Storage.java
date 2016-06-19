@@ -16,9 +16,10 @@ import it.simonedegiacomi.goboxapi.myws.MyWSClient;
 import it.simonedegiacomi.goboxapi.myws.WSException;
 import it.simonedegiacomi.goboxapi.myws.annotations.WSQuery;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import it.simonedegiacomi.goboxclient.GoBoxEnvironment;
 import it.simonedegiacomi.storage.components.AttachFailException;
 import it.simonedegiacomi.storage.components.ComponentConfig;
-import it.simonedegiacomi.storage.components.GBComponent;
+import it.simonedegiacomi.storage.components.GBModule;
 import it.simonedegiacomi.storage.components.HttpRequest;
 import it.simonedegiacomi.storage.direct.HttpsStorageServer;
 import org.apache.log4j.Logger;
@@ -89,15 +90,16 @@ public class Storage {
     /**
      * Srt of attached components
      */
-    private final Set<GBComponent> components = new HashSet<>();
+    private final Set<GBModule> components = new HashSet<>();
 
     /**
      * Create a new storage given the Auth object for the appropriate account.
      * @param auth Authentication to use with the main server
      * @throws StorageException
      */
-    public Storage (final GBAuth auth, StorageEnvironment env) throws StorageException, SQLException {
-        this.env = env;
+    public Storage (GoBoxEnvironment simpleEnv) throws StorageException, SQLException {
+        this.env = new StorageEnvironment(simpleEnv);
+        GBAuth auth = env.getAuth();
 
         // Connect to the local database
         initDatabase();
@@ -127,7 +129,7 @@ public class Storage {
         auth.authorize(mainServer);
 
         // Create the event emitter
-        env.setEmitter(new EventEmitter(mainServer));
+        this.env.setEmitter(new EventEmitter(mainServer));
 
         // Create the http(s) storage server that is used for direct transfers
         int directPort = Integer.parseInt(config.getProperty("directConnectionPort", String.valueOf(DIRECT_CONNECTION_DEFAULT_PORT)));
@@ -141,7 +143,8 @@ public class Storage {
         mainServer.addQueryHandler(httpServer.getWSQueryHandler());
 
         // Create a new internal client and set it in the environment
-        env.setInternalClient(new InternalClient(env));
+        env.setClient(new InternalClient(env));
+        simpleEnv.setClient(env.getClient());
 
         // Load all the components
         loadComponents();
@@ -192,11 +195,11 @@ public class Storage {
     private void loadComponents () {
 
         // Create the service loader
-        ServiceLoader<GBComponent> loader = ServiceLoader.load(GBComponent.class);
+        ServiceLoader<GBModule> loader = ServiceLoader.load(GBModule.class);
         log.info("GBComponents list loaded");
 
         // Iterate each component
-        for (GBComponent component : loader) {
+        for (GBModule component : loader) {
 
             log.info("Analyzing component " + component.getClass().getName());
 
@@ -222,9 +225,9 @@ public class Storage {
                         try {
                             return (JsonElement) method.invoke(component, data);
                         } catch (IllegalAccessException ex) {
-                            log.warn("Method in GBComponent with wrong access restriction", ex);
+                            log.warn("Method in GBModule with wrong access restriction", ex);
                         } catch (InvocationTargetException ex) {
-                            log.warn("GBComponent method invocation exception", ex);
+                            log.warn("GBModule method invocation exception", ex);
                         } catch (Exception ex) {
                             log.warn(ex.toString(), ex);
                         }
@@ -246,9 +249,9 @@ public class Storage {
                         try {
                             method.invoke(component, httpExchange);
                         } catch (IllegalAccessException ex) {
-                            log.warn("Method in GBComponent with wrong access restriction", ex);
+                            log.warn("Method in GBModule with wrong access restriction", ex);
                         } catch (InvocationTargetException ex) {
-                            log.warn("GBComponent method invocation exception", ex);
+                            log.warn("GBModule method invocation exception", ex);
                         }
                     });
                 }
@@ -283,7 +286,7 @@ public class Storage {
     public void shutdown () {
 
         // Detach all the components
-        components.forEach(GBComponent::onDetach);
+        components.forEach(GBModule::onDetach);
 
         httpServer.shutdown();
 

@@ -20,16 +20,18 @@ public class EasyProxy {
     public static void handleProxy(final Config config) {
 
         // Check if the proxy is set
-        if(!Boolean.parseBoolean(config.getProperty("useProxy")))
+        if(!Boolean.parseBoolean(config.getProperty("useProxy", "false")))
             return ;
 
         // Set the proxy address and port
-        System.setProperty("http.proxyHost", config.getProperty("proxyIP"));
-        System.setProperty("http.proxyPort", config.getProperty("proxyPort"));
-        System.setProperty("https.proxyHost", config.getProperty("proxyIP"));
-        System.setProperty("https.proxyPort", config.getProperty("proxyPort"));
-        MyWSClient.setProxy(config.getProperty("proxyIP"), Integer.parseInt(config.getProperty("proxyPort")));
+        String proxyIP = config.getProperty("proxyIP", "127.0.0.1");
+        String proxyPort = config.getProperty("proxyPort", "3128");
+        System.setProperty("http.proxyHost", proxyIP);
+        System.setProperty("http.proxyPort", proxyPort);
+        System.setProperty("https.proxyHost", proxyIP);
+        System.setProperty("https.proxyPort", proxyPort);
+        MyWSClient.setProxy(proxyIP, Integer.parseInt(proxyPort));
 
-        log.info("Proxy: " + config.getProperty("proxyIP") + ':' + config.getProperty("proxyPort"));
+        log.info("Proxy: " + proxyIP+ ':' + proxyPort);
     }
 }

@@ -28,6 +28,8 @@ public class HttpsCertificateGenerator {
 
     private final Config config = Config.getInstance();
 
+    private final File KEYSTORE_FILE = new File(config.getProperty("keyStoreFile", "config/keystore.ks"));
+
     private static final int KEY_SIZE = 1024;
 
     private char[] password;
@@ -66,7 +68,7 @@ public class HttpsCertificateGenerator {
             keyStore.setKeyEntry(GOBOX_ALIAS, privateKey, password, new X509Certificate[]{certificate});
 
             try {
-                keyStore.store(new FileOutputStream(new File(config.getProperty("keyStoreFile"))), password);
+                keyStore.store(new FileOutputStream(KEYSTORE_FILE), password);
             } catch (IOException ex) {
                 logger.warn("Cannot save keystore");
             }
@@ -99,7 +101,7 @@ public class HttpsCertificateGenerator {
 
         // Check in the config
         if (config.hasProperty("keyStorePassword")) {
-            password = config.getProperty("keyStorePassword").toCharArray();
+            password = config.getProperty("keyStorePassword", String.valueOf(new Random().nextDouble())).toCharArray();
             return;
         }
 
@@ -126,11 +128,10 @@ public class HttpsCertificateGenerator {
         keyStore = KeyStore.getInstance("JKS");
 
         if (new File(config.getProperty("keyStoreFile", "keystore.ks")).exists()) {
-            try (FileInputStream in = new FileInputStream(new File(config.getProperty("keyStoreFile")))) {
+            try (FileInputStream in = new FileInputStream(KEYSTORE_FILE)) {
                 keyStore.load(in, password);
-            } catch (FileNotFoundException e) {
-                keyStore.load(null, null);
             } catch (IOException e) {
+                logger.info("No keystore found. Creating a new one");
                 keyStore.load(null, null);
             }
             return;

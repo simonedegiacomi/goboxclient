@@ -1,9 +1,11 @@
 package it.simonedegiacomi.goboxclient.ui;
 
 import it.simonedegiacomi.configuration.loginui.GUIConnectionTool;
+import it.simonedegiacomi.goboxapi.authentication.GBAuth;
 import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.goboxapi.client.StandardGBClient;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import it.simonedegiacomi.goboxclient.GoBoxEnvironment;
 import it.simonedegiacomi.sync.Work;
 import org.apache.log4j.Logger;
 
@@ -15,7 +17,7 @@ import java.net.URL;
 import java.util.Set;
 
 /**
- * this view add an icon tray
+ * this view add an trayIcon tray
  * Created on 20/01/16.
  * @author Degiacomi Simone
  */
@@ -27,7 +29,7 @@ public class TrayView implements View {
     private final static Logger logger = Logger.getLogger(TrayView.class);
 
     /**
-     * Default icon file name
+     * Default trayIcon file name
      */
     private static final String ICON_NAME = "/icon.png";
 
@@ -43,7 +45,7 @@ public class TrayView implements View {
     private Presenter presenter;
 
     /**
-     * System icon tray to add icons
+     * System trayIcon tray to add icons
      */
     private final static SystemTray tray = SystemTray.getSystemTray();
 
@@ -66,6 +68,11 @@ public class TrayView implements View {
 
     private MenuItem exitItem, connSettingsItem;
 
+    private TrayIcon trayIcon;
+
+    private GoBoxEnvironment env;
+
+
     /**
      * Create a new tray controller without showing anything
      */
@@ -77,7 +84,7 @@ public class TrayView implements View {
     }
 
     /**
-     * Add buttons and prepare labels for the menu icon tray
+     * Add buttons and prepare labels for the menu trayIcon tray
      */
     private void addButtons() {
         // Client settings, this open the connection window
@@ -128,17 +135,17 @@ public class TrayView implements View {
         exitItem.addActionListener((event) -> presenter.exitProgram());
         trayMenu.add(exitItem);
 
-        // Load the icon
+        // Load the trayIcon
         URL iconUrl = getClass().getResource(ICON_NAME);
-        final TrayIcon icon = new TrayIcon(new ImageIcon(iconUrl).getImage());
-        icon.setToolTip("GoBox");
-        icon.setImageAutoSize(true);
+        trayIcon = new TrayIcon(new ImageIcon(iconUrl).getImage());
+        trayIcon.setToolTip("GoBox");
+        trayIcon.setImageAutoSize(true);
 
-        // Attach the menu to the icon
-        icon.setPopupMenu(trayMenu);
+        // Attach the menu to the trayIcon
+        trayIcon.setPopupMenu(trayMenu);
 
         // Add the mouse listener
-        icon.addMouseListener(new MouseListener() {
+        trayIcon.addMouseListener(new MouseListener() {
 
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -158,10 +165,10 @@ public class TrayView implements View {
             public void mouseExited(MouseEvent e) { }
         });
 
-        // Add the icon to the system tray
+        // Add the trayIcon to the system tray
         SwingUtilities.invokeLater(() -> {
             try {
-                tray.add(icon);
+                tray.add(trayIcon);
             } catch (AWTException ex) {
                 logger.warn(ex);
             }
@@ -179,29 +186,29 @@ public class TrayView implements View {
     }
 
     @Override
-    public void setClient(GBClient client) {
-        SwingUtilities.invokeLater(() -> {
-            if (presenter.isStorage()) {
-                modeItem.setLabel("Storage");
-                return;
-            }
-            modeItem.setLabel(((StandardGBClient) client).getCurrentTransferProfile().getMode().toString());
-        });
-    }
-
-    @Override
-    public void setCurrentWorks(Set<Work> worksQueue) {
-        SwingUtilities.invokeLater(() -> worksCountItem.setLabel("Works: " + worksQueue.size()));
+    public void setEnvironment(GoBoxEnvironment env) {
+        this.env = env;
     }
 
     @Override
     public void setMessage(String message) {
-        System.out.println(message);
+        trayIcon.displayMessage(null, message, TrayIcon.MessageType.INFO);
     }
 
 
     @Override
     public void showError(String error) {
-        SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, error, "Error", JOptionPane.ERROR_MESSAGE));
+        JOptionPane.showMessageDialog(null, "GoBox - Error", error, JOptionPane.ERROR_MESSAGE);
+        trayIcon.displayMessage(null, error, TrayIcon.MessageType.ERROR);
+    }
+
+    @Override
+    public void updateViewFromEnvironment() {
+        String mode = env.getAuth().getMode().toString();
+        if (env.getAuth().getMode() == GBAuth.Modality.CLIENT && env.getClient() instanceof StandardGBClient) {
+            mode += " " + ((StandardGBClient)env.getClient()).getCurrentTransferProfile().getMode();
+        }
+        modeItem.setLabel(mode);
+        worksCountItem.setLabel("Works: " + env.getSync().getWorkManager().getQueueSize());
     }
 }

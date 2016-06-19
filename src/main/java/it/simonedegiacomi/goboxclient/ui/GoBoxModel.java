@@ -4,6 +4,7 @@ import it.simonedegiacomi.goboxapi.client.GBClient;
 import it.simonedegiacomi.goboxclient.GoBoxFacade;
 import it.simonedegiacomi.sync.Work;
 
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -14,40 +15,19 @@ import java.util.Set;
 public class GoBoxModel implements Model {
 
     /**
-     * Facade object to which delegate the actions
+     * Set of listener
      */
-    private final GoBoxFacade facade;
+    private final Set<Runnable> updateListeners = new HashSet<>();
 
-
+    /**
+     * Flash and error messages
+     */
     private String flashMessage, error;
-
-    public GoBoxModel (GoBoxFacade facade) {
-        this.facade = facade;
-    }
-
-    @Override
-    public GBClient getClient() {
-        return facade.getClient();
-    }
-
-    @Override
-    public void shutdown() {
-        facade.shutdown();
-    }
-
-    @Override
-    public Set<Work> getCurrentWorks() {
-        return facade.getRunningWorks();
-    }
-
-    @Override
-    public boolean isStorageMode() {
-        return facade.isStorageMode();
-    }
 
     @Override
     public void setFlashMessage(String message) {
         this.flashMessage = message;
+        update();
     }
 
     @Override
@@ -58,9 +38,25 @@ public class GoBoxModel implements Model {
     @Override
     public void setError(String error) {
         this.error = error;
+        update();
     }
 
     public String getError () {
         return error;
     }
+
+    @Override
+    public void addOnUpdateListener(Runnable runnable) {
+        updateListeners.add(runnable);
+    }
+
+    @Override
+    public void clearFlashMessageAndError() {
+        flashMessage = error = null;
+    }
+
+    private void update () {
+        updateListeners.forEach(Runnable::run);
+    }
+
 }

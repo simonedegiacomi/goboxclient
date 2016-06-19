@@ -14,13 +14,12 @@ import it.simonedegiacomi.storage.EventEmitter;
 import it.simonedegiacomi.storage.StorageEnvironment;
 import it.simonedegiacomi.storage.components.AttachFailException;
 import it.simonedegiacomi.storage.components.ComponentConfig;
-import it.simonedegiacomi.storage.components.GBComponent;
+import it.simonedegiacomi.storage.components.GBModule;
 import it.simonedegiacomi.storage.components.core.utils.DBCommonUtils;
 import it.simonedegiacomi.storage.utils.MyFileUtils;
 import it.simonedegiacomi.sync.fs.MyFileSystemWatcher;
 import org.apache.log4j.Logger;
 
-import java.io.File;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.List;
@@ -30,7 +29,7 @@ import java.util.List;
  *
  * @author Degiacomi Simone
  */
-public class Trash implements GBComponent {
+public class Trash implements GBModule {
 
     /**
      * Logger of the class
@@ -51,8 +50,6 @@ public class Trash implements GBComponent {
      */
     private String PATH;
 
-    private String TRASH_PATH;
-
     /**
      * Event emitter
      */
@@ -66,11 +63,18 @@ public class Trash implements GBComponent {
 
     @Override
     public void onAttach(StorageEnvironment env, ComponentConfig componentConfig) throws AttachFailException {
+
+        // Get the event emitter
         eventEmitter = env.getEmitter();
+
+        // Get the used file system watcher
         fileSystemWatcher = env.getFileSystemWatcher();
-        PATH = env.getGlobalConfig().getProperty("path", "files/");
-        TRASH_PATH = env.getGlobalConfig().getProperty("trash", "trash/");
-        new File(TRASH_PATH).mkdirs();
+
+        // Get the path of the files
+        PATH = env.getGlobalConfig().getFolder("path", "files/").getAbsolutePath();
+
+        // Create the trash directory
+        env.getGlobalConfig().getFolder("trash", "trash/").mkdirs();
         try {
             fileTable = DaoManager.createDao(env.getDbConnection(), GBFile.class);
             eventTable = DaoManager.createDao(env.getDbConnection(), SyncEvent.class);
@@ -122,6 +126,9 @@ public class Trash implements GBComponent {
 
             // Tell the fs watcher to ignore the file
             fileSystemWatcher.startIgnoring(file.toFile());
+
+
+            fileSystemWatcher.foresee(file.toFile());
 
             file.setTrashed(toTrash);
             MyFileUtils.moveTrash(file);

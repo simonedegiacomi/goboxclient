@@ -1,24 +1,36 @@
 package it.simonedegiacomi.goboxclient;
 
 import it.simonedegiacomi.configuration.Config;
+import it.simonedegiacomi.configuration.LoginTool;
 import it.simonedegiacomi.goboxapi.authentication.GBAuth;
 import it.simonedegiacomi.goboxapi.client.ClientException;
 import it.simonedegiacomi.goboxapi.client.GBClient;
+import it.simonedegiacomi.goboxapi.client.StandardGBClient;
 import it.simonedegiacomi.goboxapi.utils.URLBuilder;
+import it.simonedegiacomi.storage.InternalClient;
 import it.simonedegiacomi.storage.Storage;
+import it.simonedegiacomi.storage.StorageException;
 import it.simonedegiacomi.sync.Sync;
 import it.simonedegiacomi.sync.Work;
+import it.simonedegiacomi.sync.fs.MyFileSystemWatcher;
 import it.simonedegiacomi.utils.EasyProxy;
+import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Logger;
 
+import java.io.File;
 import java.io.IOException;
+import java.sql.SQLException;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * This facade class is some sort of control panel of the program instance. From here you
  * can get the status of the program instance, stop it and set other settings.
- *
+ * <p>
+ * TODO: Some method are used like if this is the GoBoxEnvironment. Restructure code
+ * <p>
  * Created on 20/04/16.
+ *
  * @author Degiacomi Simone
  */
 public class GoBoxFacade {
@@ -34,149 +46,229 @@ public class GoBoxFacade {
     private final Config config = Config.getInstance();
 
     /**
-     * Storage of the program instance
+     * Environment
      */
-    private Storage storage;
-
-    /**
-     * Client of the program instance
-     */
-    private GBClient client;
-
-    /**
-     * Sync of the instance
-     */
-    private Sync sync;
+    private final GoBoxEnvironment env = new GoBoxEnvironment();
 
     /**
      * Create a new gobox facade object, and add a listener to the config
      */
-    public  GoBoxFacade () {
-        config.addOnconfigChangeListener(new Config.OnConfigChangeListener() {
+    public GoBoxFacade() {
 
-            @Override
-            public void onChange() {
-                EasyProxy.handleProxy(config);
-            }
-        });
-    }
+        // Set the default log config
+        BasicConfigurator.configure();
 
-    /**
-     * Return the storage of the program instance if running in Storage mode
-     * @return Storage of the program instance
-     */
-    public Storage getStorage() {
-        return storage;
-    }
-
-    /**
-     * Set the current storage
-     * @param storage Current storage of the program instance
-     */
-    public void setStorage(Storage storage) {
-        this.storage = storage;
-    }
-
-    /**
-     * Return the client used in this program instance
-     * @return Instance of the client used in this program
-     */
-    public GBClient getClient() {
-        return client;
-    }
-
-    /**
-     * Set the client used in this program instance
-     * @param client Used client
-     */
-    public void setClient(GBClient client) {
-        this.client = client;
-    }
-
-    public Sync getSync() {
-        return sync;
-    }
-
-    public void setSync(Sync sync) {
-        this.sync = sync;
+        // When the configuration changes reload the proxy
+        config.addOnconfigChangeListener(() -> EasyProxy.handleProxy(config));
     }
 
     /**
      * Shutdown the sync, the client and the storage (if was running)
      */
-    public void shutdown () {
-        try {
-            if (sync != null) {
-                sync.shutdown();
-            }
-            if (client != null) {
-                client.shutdown();
-            }
-            if(storage != null) {
-                storage.shutdown();
-            }
-        } catch (ClientException | InterruptedException ex) {
-            logger.warn(ex.toString(), ex);
-        }
+    public void shutdown() {
+        env.shutdown();
     }
 
     /**
      * Call shutdown and then exit the program
      */
-    public void exit () {
+    public void exit() {
         shutdown();
         System.exit(0);
     }
 
     /**
      * This method load the urls and the config
+     *
      * @throws IOException File not found or invalid
      */
-    public void initializeEnvironment () throws IOException {
+    public void initialize(File configFile) throws IOException {
 
-        // Load logger config
-        Config.loadLoggerConfig();
+        if (configFile.exists()) {
+            config.load(configFile);
+        }
 
         // Load the urls
         URLBuilder.DEFAULT.init();
-
-        // Load the other config (such as auth credentials)
-        config.load();
 
         // Apply this config and reload the needed components with the new config
         config.apply();
     }
 
-    /**
-     * Return a set with the current running sync work
-     * @return Set of works
-     */
-    public Set<Work> getRunningWorks () { return sync.getWorkManager().getCurrentWorks(); }
+    public void start() {
 
-    /**
-     * Start or stop syncing
-     * @param syncState State of the sync object
-     */
-    public void setSyncing (boolean syncState) {
+        // Assert that the user is logged
+        assertLogged();
+
+        // Find the path to watch
+        File pathToWatch = config.getFolder("path", "files/");
+
         try {
-            sync.setSyncing(syncState);
-        } catch (Exception ex) {
-            // TODO: fix this
+            // Now create the FileSystemWatcher
+            MyFileSystemWatcher watcher = MyFileSystemWatcher.getDefault(pathToWatch.getAbsolutePath());
+            env.setFileSystemWatcher(watcher);
+        } catch (IOException ex) {
+            logger.warn("fileSystemWatcher initialization failed", ex);
+            System.exit(-1);
+        }
+
+        // Prepare the client
+        switch (env.getAuth().getMode()) {
+            case STORAGE:
+                prepareStorage();
+                break;
+            case CLIENT:
+                prepareClient();
+                swicthBestMode();
+                break;
+        }
+
+        // create Sync object
+        Sync sync = new Sync(env);
+        env.setSync(sync);
+
+        try {
+            // Start syncing
+            sync.syncAndStart();
+        } catch (ClientException | IOException ex) {
+            logger.warn("Synchronization failed", ex);
         }
     }
 
-    public boolean isSyncing() {
-        return sync.isSyncing();
+    /**
+     * Assert that the user is logged.
+     */
+    private void assertLogged() {
+        try {
+            if (env.getAuth().check()) {
+                logger.info("User successfully logged in");
+                return;
+            }
+        } catch (IOException ex) {
+            logger.warn("Can't communicate with th server to perform the authentication", ex);
+            System.exit(-1);
+        }
+
+        // Here the user is not logged, so try to login
+
+        // Login is asynchronous, so use a CountDownLatch
+        CountDownLatch countDownLatch = new CountDownLatch(1);
+
+        // Start the login
+        LoginTool.startLogin(() -> {
+            logger.info("Authentication procedure completed");
+            countDownLatch.countDown();
+        }, () -> {
+            logger.warn("Authentication procedure failed");
+            System.exit(-1);
+        });
+
+        // Wait for the login procedure
+        try {
+            countDownLatch.await();
+        } catch (InterruptedException ex) {
+            logger.warn(ex.toString(), ex);
+            System.exit(-1);
+        }
     }
 
-    public boolean isStorageConnected() {
-        return storage != null || client.isReady();
+    /**
+     * Prepare the storage
+     */
+    private void prepareStorage() {
+        try {
+            // Create the storage
+            Storage storage = new Storage(env);
+
+            // Set disconnection listener
+            storage.onDisconnected(() -> {
+                storage.shutdown();
+                restart();
+            });
+
+            // Start it
+            storage.startStoraging();
+
+            // Get the InternalClient
+            env.setClient(storage.getEnvironment().getClient());
+        } catch (SQLException ex) {
+            logger.warn("Storage database initialization failed", ex);
+            System.exit(-1);
+        } catch (StorageException ex) {
+            logger.warn("Storage initialization failed", ex);
+            System.exit(-1);
+        }
     }
 
-    public void connect() {
+    /**
+     * Prepare the client
+     */
+    private void prepareClient() {
+        // Create the StandardGBClient
+        StandardGBClient client = new StandardGBClient(env.getAuth());
+        env.setClient(client);
+
+        // Set the disconnection listener
+        client.onDisconnect(() -> restart());
+
+        try {
+            // Start the client
+            if (!client.init()) {
+                logger.warn("Client initialization failed");
+                System.exit(-1);
+            }
+        } catch (ClientException ex) {
+            logger.warn("Client initialization failed");
+            System.exit(-1);
+        }
     }
 
-    public boolean isStorageMode() {
-        return config.isAuthDefined() ? config.getAuth().getMode().equals(GBAuth.Modality.STORAGE) : false;
+    /**
+     * Return the authentication mode (client or storage)
+     *
+     * @return Current authentication mode
+     */
+    public GBAuth.Modality getAuthMode() {
+        return env.getAuth().getMode();
+    }
+
+    /**
+     * Switch the connection mode
+     *
+     * @param nextMode Next connection mode
+     * @throws ClientException Exception thrown while switching mode
+     */
+    public void switchClientMode(StandardGBClient.ConnectionMode nextMode) throws ClientException {
+        if (!(env.getClient() instanceof StandardGBClient)) {
+            throw new IllegalStateException("Current client is not a StandardGBClient");
+        }
+
+        // Just call the method
+        ((StandardGBClient) env.getClient()).switchMode(nextMode);
+    }
+
+    /**
+     * Shutdown and restart
+     */
+    public void restart() {
+        shutdown();
+        start();
+    }
+
+    public GoBoxEnvironment getEnvironment() {
+        return env;
+    }
+
+    private void swicthBestMode() {
+        // Switch to the best mode
+        StandardGBClient.ConnectionMode[] connectionModes = {StandardGBClient.ConnectionMode.LOCAL_DIRECT_MODE, StandardGBClient.ConnectionMode.DIRECT_MODE};
+        for (StandardGBClient.ConnectionMode mode : connectionModes) {
+            try {
+                switchClientMode(mode);
+                break;
+            } catch (ClientException ex) {
+
+            }
+        }
     }
 }
